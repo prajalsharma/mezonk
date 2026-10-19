@@ -131,7 +131,7 @@ contract Handler is Test {
         if (mk.stageOf(id) != IMezonkMarkets.Stage.Disputed) return;
         if (block.timestamp >= m.disputedAt + m.arbitrationWindow) return;
         vm.prank(arbitrator);
-        mk.arbitrate(id, IMezonkMarkets.Outcome(1 + (o % 3)));
+        mk.arbitrate(id, IMezonkMarkets.Outcome(1 + (o % 3)), keccak256("rationale"), "ipfs://rationale");
         everFinalized[id] = true;
     }
 

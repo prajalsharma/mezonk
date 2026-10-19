@@ -28,9 +28,10 @@ export function TxStatus({ state, onRetry }: { state: TxState; onRetry?: () => v
       </div>
       {state.error && <p className="mt-1 text-ink-2">{state.error}</p>}
       <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-        {state.hash && (
+        {state.hash && !explorerTx(state.hash) && <span className="font-mono text-xs text-ink-2">{state.hash.slice(0, 18)}…</span>}
+        {state.hash && explorerTx(state.hash) && (
           <a
-            href={explorerTx(state.hash)}
+            href={explorerTx(state.hash)!}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1 text-ink-2 underline decoration-line underline-offset-2 hover:text-ink"

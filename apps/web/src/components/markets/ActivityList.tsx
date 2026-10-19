@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
 import type { EventDto } from "@/lib/api/types";
-import { explorerTx } from "@/lib/chain/config";
+import { TxLink } from "@/components/ui/Address";
 import { formatMusd, formatShares, relativeTime, shortAddress } from "@/lib/format";
 import { FINALIZE_REASON, outcomeLabel } from "@/lib/market/stage";
 
@@ -59,9 +58,7 @@ export function ActivityList({ events, showMarket = false }: { events: EventDto[
             <time dateTime={e.blockTime} title={new Date(e.blockTime).toUTCString()}>
               {relativeTime(new Date(e.blockTime), now)}
             </time>
-            <a href={explorerTx(e.txHash)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-mono hover:text-ink">
-              {e.txHash.slice(0, 10)}… <ExternalLink className="size-3" aria-hidden />
-            </a>
+            <TxLink hash={e.txHash} />
           </div>
         </li>
       ))}

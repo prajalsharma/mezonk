@@ -125,7 +125,13 @@ interface IMezonkMarkets {
         uint64 arbitrationDeadline
     );
 
-    event DisputeArbitrated(uint256 indexed marketId, address indexed arbitrator, Outcome outcome);
+    event DisputeArbitrated(
+        uint256 indexed marketId,
+        address indexed arbitrator,
+        Outcome outcome,
+        bytes32 rationaleHash,
+        string rationaleURI
+    );
 
     event MarketFinalized(uint256 indexed marketId, Outcome outcome, FinalizeReason reason);
 

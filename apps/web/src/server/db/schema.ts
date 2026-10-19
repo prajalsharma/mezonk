@@ -173,6 +173,9 @@ export const disputes = pgTable("disputes", {
   evidenceUri: text("evidence_uri").notNull(),
   arbitrationDeadline: timestamp("arbitration_deadline", { withTimezone: true }).notNull(),
   ruling: integer("ruling"),
+  rulingRationaleHash: text("ruling_rationale_hash"),
+  rulingRationaleUri: text("ruling_rationale_uri"),
+  rulingTxHash: text("ruling_tx_hash"),
   txHash: text("tx_hash").notNull(),
 });
 
@@ -212,4 +215,22 @@ export const evidence = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("evidence_market").on(t.marketId)],
+);
+
+/**
+ * Canonical evidence documents (proposal, dispute, arbitration rationale). The keccak256 of `raw`
+ * is what gets committed on-chain, so any copy of this text can be verified against the chain.
+ * Storing a document here proves nothing by itself; it only matters once its hash appears in an event.
+ */
+export const evidenceDocuments = pgTable(
+  "evidence_documents",
+  {
+    hash: text("hash").primaryKey(),
+    raw: text("raw").notNull(),
+    kind: text("kind").notNull(),
+    marketId: integer("market_id").notNull(),
+    author: text("author").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("evidence_documents_market").on(t.marketId)],
 );

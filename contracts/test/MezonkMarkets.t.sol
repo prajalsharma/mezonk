@@ -286,10 +286,10 @@ contract MezonkMarketsTest is BaseTest {
 
         vm.prank(resolver);
         vm.expectRevert(IMezonkMarkets.NotArbitrator.selector);
-        mk.arbitrate(id, IMezonkMarkets.Outcome.Yes);
+        mk.arbitrate(id, IMezonkMarkets.Outcome.Yes, keccak256("rationale"), "ipfs://rationale");
 
         vm.prank(arbitrator);
-        mk.arbitrate(id, IMezonkMarkets.Outcome.No);
+        mk.arbitrate(id, IMezonkMarkets.Outcome.No, keccak256("rationale"), "ipfs://rationale");
         assertEq(mk.bondCredits(alice), 100 * ONE);
         assertEq(mk.bondCredits(resolver), 0);
         assertEq(uint8(mk.getMarket(id).finalOutcome), uint8(IMezonkMarkets.Outcome.No));
@@ -306,7 +306,7 @@ contract MezonkMarketsTest is BaseTest {
         vm.prank(bob);
         mk.dispute(id, keccak256("d"), "");
         vm.prank(arbitrator);
-        mk.arbitrate(id, IMezonkMarkets.Outcome.Yes);
+        mk.arbitrate(id, IMezonkMarkets.Outcome.Yes, keccak256("rationale"), "ipfs://rationale");
         assertEq(mk.bondCredits(resolver), 100 * ONE);
         assertEq(mk.bondCredits(bob), 0);
     }
@@ -345,7 +345,7 @@ contract MezonkMarketsTest is BaseTest {
         vm.warp(block.timestamp + 7 days);
         vm.prank(arbitrator);
         vm.expectRevert(IMezonkMarkets.WindowClosed.selector);
-        mk.arbitrate(id, IMezonkMarkets.Outcome.No);
+        mk.arbitrate(id, IMezonkMarkets.Outcome.No, keccak256("rationale"), "ipfs://rationale");
 
         mk.finalize(id);
         assertEq(uint8(mk.getMarket(id).finalOutcome), uint8(IMezonkMarkets.Outcome.Invalid));
@@ -373,7 +373,7 @@ contract MezonkMarketsTest is BaseTest {
         vm.expectRevert(
             abi.encodeWithSelector(IMezonkMarkets.WrongStage.selector, IMezonkMarkets.Stage.Finalized)
         );
-        mk.arbitrate(id, IMezonkMarkets.Outcome.Yes);
+        mk.arbitrate(id, IMezonkMarkets.Outcome.Yes, keccak256("rationale"), "ipfs://rationale");
     }
 
     function test_redeem_beforeFinal_reverts() public {

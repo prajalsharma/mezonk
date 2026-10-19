@@ -1,23 +1,28 @@
 import "server-only";
 import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
-import { parseEventLogs, type Hash } from "viem";
+import { BlockNotFoundError, parseEventLogs, type Address, type Hash, type PublicClient } from "viem";
 import { deployment, LOG_RANGE_LIMIT } from "@/lib/chain/config";
 import { mezonkMarketsAbi } from "@/lib/contracts/abi";
 import { publicClient } from "@/server/chain";
-import { getDb, schema } from "@/server/db/client";
+import { getDb, schema, type Db } from "@/server/db/client";
 import { replayMarket, type StoredEvent } from "./replay";
 import { toJson } from "./serialize";
 
 const { chainEvents, markets, trades, positions, resolutionProposals, disputes, indexerState } = schema;
 
-/** Blocks behind head to stay. Mezo (CometBFT) has instant finality; this is defence in depth. */
-const CONFIRMATIONS = BigInt(process.env.INDEXER_CONFIRMATIONS ?? "2");
+export interface IndexerDeps {
+  client: Pick<PublicClient, "getBlock" | "getBlockNumber" | "getLogs" | "readContract">;
+  db: () => Promise<Db>;
+  chainId: number;
+  address: Address | null;
+  deployBlock: bigint;
+  /** Blocks behind head to stay. Mezo (CometBFT) has instant finality; this is defence in depth. */
+  confirmations?: bigint;
+}
 /** How far back to rewind when a stored block hash no longer matches the chain. */
 const REORG_REWIND = 64n;
 const MAX_BLOCKS_PER_TICK = BigInt(process.env.INDEXER_MAX_BLOCKS_PER_TICK ?? "50000");
 const RECONCILE_EVERY_MS = 5 * 60_000;
-
-const stateKey = () => `${deployment.chainId}:${deployment.marketsAddress?.toLowerCase()}`;
 
 export interface TickResult {
   ok: boolean;
@@ -29,20 +34,35 @@ export interface TickResult {
   error?: string;
 }
 
-let running: Promise<TickResult> | null = null;
+export function createIndexer(deps: IndexerDeps) {
+  const { client: publicClient, chainId } = deps;
+  const CONFIRMATIONS = deps.confirmations ?? BigInt(process.env.INDEXER_CONFIRMATIONS ?? "2");
+  const stateKey = () => `${chainId}:${deps.address?.toLowerCase()}`;
+  const getDb = deps.db;
+  let running: Promise<TickResult> | null = null;
 
-/** Single-flight wrapper: concurrent callers share one run. */
-export function runIndexerTick(): Promise<TickResult> {
-  running ??= tick().finally(() => {
-    running = null;
-  });
-  return running;
-}
+  /** Single-flight wrapper: concurrent callers share one run. */
+  function runTick(): Promise<TickResult> {
+    running ??= tick().finally(() => {
+      running = null;
+    });
+    return running;
+  }
+
+  /** True when the stored block hash no longer matches the canonical chain (or the block vanished). */
+  async function hashChanged(block: bigint, hash: string) {
+    try {
+      return (await publicClient.getBlock({ blockNumber: block })).hash !== hash;
+    } catch (e) {
+      if (e instanceof BlockNotFoundError) return true;
+      throw e;
+    }
+  }
 
 async function tick(): Promise<TickResult> {
-  const address = deployment.marketsAddress;
-  if (!deployment.ready || !address) {
-    return { ok: false, eventsInserted: 0, marketsRebuilt: 0, reorg: false, error: deployment.reason };
+  const address = deps.address;
+  if (!address) {
+    return { ok: false, eventsInserted: 0, marketsRebuilt: 0, reorg: false, error: "no-deployment" };
   }
   const db = await getDb();
   const key = stateKey();
@@ -52,7 +72,7 @@ async function tick(): Promise<TickResult> {
   if (!state) {
     [state] = await db
       .insert(indexerState)
-      .values({ key, lastBlock: deployment.deployBlock > 0n ? deployment.deployBlock - 1n : 0n })
+      .values({ key, lastBlock: deps.deployBlock > 0n ? deps.deployBlock - 1n : 0n })
       .returning();
   }
   if (!state) throw new Error("indexer state missing");
@@ -64,13 +84,12 @@ async function tick(): Promise<TickResult> {
 
     // 1. Reorg check: the block we stopped at must still have the same hash.
     if (state.lastBlockHash && lastBlock > 0n) {
-      const blk = await publicClient.getBlock({ blockNumber: lastBlock });
-      if (blk.hash !== state.lastBlockHash) {
+      if (await hashChanged(lastBlock, state.lastBlockHash)) {
         reorg = true;
         const rewindTo = lastBlock > REORG_REWIND ? lastBlock - REORG_REWIND : 0n;
         const removed = await db
           .delete(chainEvents)
-          .where(and(eq(chainEvents.chainId, deployment.chainId), gte(chainEvents.blockNumber, rewindTo)))
+          .where(and(eq(chainEvents.chainId, chainId), gte(chainEvents.blockNumber, rewindTo)))
           .returning({ marketId: chainEvents.marketId });
         removed.forEach((r) => r.marketId != null && touched.add(r.marketId));
         lastBlock = rewindTo - 1n;
@@ -107,7 +126,7 @@ async function tick(): Promise<TickResult> {
           if (mid != null) touched.add(mid);
           const b = blocks.get(l.blockNumber!)!;
           return {
-            chainId: deployment.chainId,
+            chainId: chainId,
             contract: address.toLowerCase(),
             blockNumber: l.blockNumber!,
             blockHash: l.blockHash!,
@@ -167,17 +186,17 @@ async function tick(): Promise<TickResult> {
 }
 
 /** Recompute every derived row for one market from its raw events, atomically. */
-export async function rebuildMarket(marketId: number) {
+async function rebuildMarket(marketId: number) {
   const db = await getDb();
   const evs = await db
     .select()
     .from(chainEvents)
-    .where(and(eq(chainEvents.chainId, deployment.chainId), eq(chainEvents.marketId, marketId)))
+    .where(and(eq(chainEvents.chainId, chainId), eq(chainEvents.marketId, marketId)))
     .orderBy(asc(chainEvents.blockNumber), asc(chainEvents.logIndex));
 
   const result = replayMarket(marketId, evs as StoredEvent[], {
-    chainId: deployment.chainId,
-    contract: deployment.marketsAddress ?? "",
+    chainId: chainId,
+    contract: deps.address ?? "",
   });
 
   await db.transaction(async (tx) => {
@@ -221,8 +240,8 @@ export async function rebuildMarket(marketId: number) {
  * Compare indexed pools, collateral and finality against direct contract reads.
  * Mismatches are recorded for /api/indexer/status; they never overwrite chain data silently.
  */
-export async function reconcile(limit = 25) {
-  const address = deployment.marketsAddress;
+async function reconcile(limit = 25, onlyIds?: number[]) {
+  const address = deps.address;
   if (!address) return [];
   const db = await getDb();
   const rows = await db
@@ -234,6 +253,7 @@ export async function reconcile(limit = 25) {
       finalOutcome: markets.finalOutcome,
     })
     .from(markets)
+    .where(onlyIds?.length ? inArray(markets.marketId, onlyIds) : undefined)
     .orderBy(sql`${markets.updatedAt} desc`)
     .limit(limit);
 
@@ -261,10 +281,23 @@ export async function reconcile(limit = 25) {
 }
 
 /** Full backfill: clears this deployment's events and cursor so the next ticks re-index from deploy block. */
-export async function resetIndex() {
+async function resetIndex() {
   const db = await getDb();
   const ids = await db.select({ id: markets.marketId }).from(markets);
-  await db.delete(chainEvents).where(eq(chainEvents.chainId, deployment.chainId));
+  await db.delete(chainEvents).where(eq(chainEvents.chainId, chainId));
   if (ids.length) await db.delete(markets).where(inArray(markets.marketId, ids.map((i) => i.id)));
   await db.delete(indexerState).where(eq(indexerState.key, stateKey()));
 }
+
+  return { runTick, rebuildMarket, reconcile, resetIndex };
+}
+
+/** Production instance wired to the configured deployment. */
+export const indexer = createIndexer({
+  client: publicClient,
+  db: getDb,
+  chainId: deployment.chainId,
+  address: deployment.ready ? deployment.marketsAddress : null,
+  deployBlock: deployment.deployBlock,
+});
+export const runIndexerTick = indexer.runTick;

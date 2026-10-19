@@ -285,19 +285,25 @@ contract MezonkMarkets is IMezonkMarkets, Ownable2Step, Pausable, ReentrancyGuar
     }
 
     /// @notice Arbitrator ruling on a disputed proposal. The bond loser's bond goes to the winner.
-    function arbitrate(uint256 marketId, Outcome outcome) external nonReentrant {
+    /// @param rationaleHash keccak256 of the published rationale document (required, non-zero).
+    /// @param rationaleURI Where the rationale document can be read.
+    function arbitrate(uint256 marketId, Outcome outcome, bytes32 rationaleHash, string calldata rationaleURI)
+        external
+        nonReentrant
+    {
         Market storage m = _market(marketId);
         if (msg.sender != m.arbitrator) revert NotArbitrator();
         Stage s = _stage(m);
         if (s != Stage.Disputed) revert WrongStage(s);
         if (block.timestamp >= uint256(m.disputedAt) + m.arbitrationWindow) revert WindowClosed();
         if (outcome == Outcome.None) revert InvalidOutcome();
+        if (rationaleHash == bytes32(0)) revert InvalidParams();
 
         uint256 bonds = uint256(m.proposerBond) + m.disputeBond;
         address winner = outcome == m.proposedOutcome ? m.resolver : m.disputer;
         _creditBond(marketId, winner, bonds);
 
-        emit DisputeArbitrated(marketId, msg.sender, outcome);
+        emit DisputeArbitrated(marketId, msg.sender, outcome, rationaleHash, rationaleURI);
         _finalize(marketId, m, outcome, FinalizeReason.Arbitrated);
     }
 

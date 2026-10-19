@@ -189,6 +189,16 @@ export const mezonkMarketsAbi = [
         "name": "outcome",
         "type": "uint8",
         "internalType": "enum IMezonkMarkets.Outcome"
+      },
+      {
+        "name": "rationaleHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "rationaleURI",
+        "type": "string",
+        "internalType": "string"
       }
     ],
     "outputs": [],
@@ -1245,6 +1255,18 @@ export const mezonkMarketsAbi = [
         "type": "uint8",
         "indexed": false,
         "internalType": "enum IMezonkMarkets.Outcome"
+      },
+      {
+        "name": "rationaleHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "rationaleURI",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
       }
     ],
     "anonymous": false

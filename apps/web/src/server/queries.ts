@@ -2,9 +2,13 @@ import "server-only";
 import { and, desc, eq, gte, ilike, inArray, lt, or, sql } from "drizzle-orm";
 import { deployment } from "@/lib/chain/config";
 import { deriveStage } from "@/lib/market/stage";
+import { buildTimeline, type TimelineEventInput } from "@/lib/market/timeline";
+import { evidenceHash, parseEvidence } from "@/lib/market/evidence";
 import { getDb, schema } from "@/server/db/client";
+import { chainNowMs } from "@/server/chain";
 
-const { markets, trades, chainEvents, positions, resolutionProposals, disputes, indexerState, evidence } = schema;
+const { markets, trades, chainEvents, positions, resolutionProposals, disputes, indexerState, evidence, evidenceDocuments } =
+  schema;
 
 export type MarketRow = typeof markets.$inferSelect;
 
@@ -41,10 +45,10 @@ function initialPrice(m: MarketRow) {
   return m.initialYesProbBps / 10_000;
 }
 
-async function stats24h(ids: number[]) {
+async function stats24h(ids: number[], now: number) {
   if (!ids.length) return new Map<number, { vol: bigint; traders: number; price24h: number | null }>();
   const db = await getDb();
-  const since = new Date(Date.now() - 86_400_000);
+  const since = new Date(now - 86_400_000);
   const agg = await db
     .select({
       marketId: trades.marketId,
@@ -67,10 +71,10 @@ async function stats24h(ids: number[]) {
   return out;
 }
 
-function summarize(m: MarketRow, s: { vol: bigint; traders: number; price24h: number | null }): MarketSummary {
-  const stage = deriveStage(m);
+function summarize(m: MarketRow, s: { vol: bigint; traders: number; price24h: number | null }, now: number): MarketSummary {
+  const stage = deriveStage(m, now);
   // Before any trade older than 24h exists, compare against the opening price if the market is younger than 24h.
-  const youngerThan24h = Date.now() - m.createdAt.getTime() < 86_400_000;
+  const youngerThan24h = now - m.createdAt.getTime() < 86_400_000;
   const price24h = s.price24h ?? (youngerThan24h ? initialPrice(m) : m.priceYes);
   return {
     id: m.marketId,
@@ -114,9 +118,9 @@ export async function listMarkets(p: ListParams) {
   if (p.category) conds.push(eq(markets.category, p.category));
   if (p.creator) conds.push(eq(markets.creator, p.creator.toLowerCase()));
   const rows = await db.select().from(markets).where(and(...conds));
-  const s = await stats24h(rows.map((r) => r.marketId));
-  const now = Date.now();
-  let list = rows.map((r) => summarize(r, s.get(r.marketId)!));
+  const now = await chainNowMs();
+  const s = await stats24h(rows.map((r) => r.marketId), now);
+  let list = rows.map((r) => summarize(r, s.get(r.marketId)!, now));
 
   list = list.filter((m) => {
     const st = m.stage.stage;
@@ -159,8 +163,9 @@ export async function getMarket(id: number) {
     .from(markets)
     .where(and(eq(markets.chainId, deployment.chainId), eq(markets.marketId, id)));
   if (!m) return null;
-  const s = await stats24h([id]);
-  return { row: m, summary: summarize(m, s.get(id)!) };
+  const now = await chainNowMs();
+  const s = await stats24h([id], now);
+  return { row: m, summary: summarize(m, s.get(id)!, now) };
 }
 
 export async function getHistory(id: number) {
@@ -221,6 +226,7 @@ export async function getPortfolio(account: string) {
     .select()
     .from(markets)
     .where(and(eq(markets.chainId, deployment.chainId), eq(markets.creator, account.toLowerCase())));
+  const now = await chainNowMs();
   return {
     positions: rows.map(({ p, m }) => ({
       marketId: m.marketId,
@@ -231,7 +237,7 @@ export async function getPortfolio(account: string) {
       poolNo: m.poolNo,
       feeBps: m.feeBps,
       closeTime: m.closeTime.toISOString(),
-      stage: deriveStage(m),
+      stage: deriveStage(m, now),
       finalOutcome: m.finalOutcome,
       yesShares: p.yesShares,
       noShares: p.noShares,
@@ -246,7 +252,7 @@ export async function getPortfolio(account: string) {
     created: created.map((m) => ({
       marketId: m.marketId,
       question: m.question,
-      stage: deriveStage(m),
+      stage: deriveStage(m, now),
       initialLiquidity: m.initialLiquidity,
       volume: m.volume,
       finalOutcome: m.finalOutcome,
@@ -258,27 +264,71 @@ export async function getResolution(id: number) {
   const db = await getDb();
   const m = await getMarket(id);
   if (!m) return null;
-  const [props, disps, ev] = await Promise.all([
+  const [props, disps, community, evs] = await Promise.all([
     db.select().from(resolutionProposals).where(eq(resolutionProposals.marketId, id)),
     db.select().from(disputes).where(eq(disputes.marketId, id)),
     db.select().from(evidence).where(eq(evidence.marketId, id)).orderBy(desc(evidence.createdAt)).limit(50),
+    db
+      .select()
+      .from(chainEvents)
+      .where(and(eq(chainEvents.chainId, deployment.chainId), eq(chainEvents.marketId, id)))
+      .orderBy(chainEvents.blockNumber, chainEvents.logIndex),
   ]);
+
+  const timeline = buildTimeline(m.row, evs as TimelineEventInput[], await chainNowMs());
+
+  // Evidence documents referenced by on-chain hashes. Each is re-verified here: keccak256(raw) must equal the hash.
+  const hashes = [...new Set(timeline.flatMap((t) => (t.evidence ? [t.evidence.hash.toLowerCase()] : [])))];
+  const docs = hashes.length
+    ? await db.select().from(evidenceDocuments).where(inArray(evidenceDocuments.hash, hashes))
+    : [];
+  const documents = Object.fromEntries(
+    hashes.map((h) => {
+      const d = docs.find((x) => x.hash === h);
+      if (!d) return [h, { status: "missing" as const }];
+      const verified = evidenceHash(d.raw).toLowerCase() === h;
+      return [h, { status: verified ? ("verified" as const) : ("mismatch" as const), raw: d.raw, doc: parseEvidence(d.raw) }];
+    }),
+  );
+
   return {
     stage: m.summary.stage,
+    structured: m.row.structured,
     resolver: m.row.resolver,
     arbitrator: m.row.arbitrator,
+    creator: m.row.creator,
     proposerBond: m.row.proposerBond,
     disputeBond: m.row.disputeBond,
     challengeWindow: m.row.challengeWindow,
     proposalWindow: m.row.proposalWindow,
     arbitrationWindow: m.row.arbitrationWindow,
+    closeTime: m.row.closeTime.toISOString(),
     finalOutcome: m.row.finalOutcome,
     finalizeReason: m.row.finalizeReason,
     finalizedAt: m.row.finalizedAt?.toISOString() ?? null,
     proposals: props,
     disputes: disps,
-    userEvidence: ev,
+    timeline,
+    documents,
+    communityEvidence: community,
+    indexer: await getIndexerStatus(),
   };
+}
+
+export async function saveEvidenceDocument(raw: string, kind: string, marketId: number, author: string) {
+  const db = await getDb();
+  const hash = evidenceHash(raw).toLowerCase();
+  await db
+    .insert(evidenceDocuments)
+    .values({ hash, raw, kind, marketId, author })
+    .onConflictDoNothing({ target: evidenceDocuments.hash });
+  return hash;
+}
+
+export async function getEvidenceDocument(hash: string) {
+  const db = await getDb();
+  const [d] = await db.select().from(evidenceDocuments).where(eq(evidenceDocuments.hash, hash.toLowerCase()));
+  return d ?? null;
 }
 
 export async function getIndexerStatus() {

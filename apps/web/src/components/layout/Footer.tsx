@@ -32,9 +32,13 @@ export function Footer() {
             <dt className="text-ink-2">Market contract</dt>
             <dd className="font-mono text-xs">
               {deployment.marketsAddress ? (
-                <a className="underline decoration-line underline-offset-2" href={explorerAddress(deployment.marketsAddress)} target="_blank" rel="noreferrer">
-                  {shortAddress(deployment.marketsAddress)}
-                </a>
+                explorerAddress(deployment.marketsAddress) ? (
+                  <a className="underline decoration-line underline-offset-2" href={explorerAddress(deployment.marketsAddress)!} target="_blank" rel="noreferrer">
+                    {shortAddress(deployment.marketsAddress)}
+                  </a>
+                ) : (
+                  shortAddress(deployment.marketsAddress)
+                )
               ) : (
                 "Not deployed"
               )}
@@ -43,9 +47,13 @@ export function Footer() {
           <div className="flex justify-between gap-4">
             <dt className="text-ink-2">Collateral</dt>
             <dd className="font-mono text-xs">
-              <a className="underline decoration-line underline-offset-2" href={explorerAddress(deployment.musd)} target="_blank" rel="noreferrer">
-                MUSD {shortAddress(deployment.musd)}
-              </a>
+              {explorerAddress(deployment.musd) ? (
+                <a className="underline decoration-line underline-offset-2" href={explorerAddress(deployment.musd)!} target="_blank" rel="noreferrer">
+                  MUSD {shortAddress(deployment.musd)}
+                </a>
+              ) : (
+                `MUSD ${shortAddress(deployment.musd)}`
+              )}
             </dd>
           </div>
           {!deployment.ready && <p className="pt-2 text-warn">{readinessMessage[deployment.reason]}</p>}

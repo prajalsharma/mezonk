@@ -48,6 +48,9 @@ export function replayMarket(
   events: StoredEvent[],
   ctx: { chainId: number; contract: string },
 ): ReplayResult | null {
+  events = [...events].sort((a, b) =>
+    a.blockNumber === b.blockNumber ? a.logIndex - b.logIndex : a.blockNumber < b.blockNumber ? -1 : 1,
+  );
   const created = events.find((e) => e.eventName === "MarketCreated");
   if (!created) return null;
 
@@ -232,13 +235,21 @@ export function replayMarket(
           evidenceUri: String(x.evidenceURI ?? ""),
           arbitrationDeadline: new Date(Number(x.arbitrationDeadline) * 1000),
           ruling: null,
+          rulingRationaleHash: null,
+          rulingRationaleUri: null,
+          rulingTxHash: null,
           txHash: e.txHash,
         });
         break;
       }
       case "DisputeArbitrated": {
         const d = disputes[disputes.length - 1];
-        if (d) d.ruling = Number(x.outcome);
+        if (d) {
+          d.ruling = Number(x.outcome);
+          d.rulingRationaleHash = String(x.rationaleHash ?? "");
+          d.rulingRationaleUri = String(x.rationaleURI ?? "");
+          d.rulingTxHash = e.txHash;
+        }
         break;
       }
       case "MarketFinalized": {

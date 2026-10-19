@@ -11,7 +11,8 @@ contracts/cache/
 contracts/broadcast/*/31337/
 *.log
 .DS_Store
-.pglite/
+.pglite*/
 .vercel
 playwright-report/
 test-results/
+contracts/broadcast/

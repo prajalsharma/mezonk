@@ -1,4 +1,4 @@
-import { defineChain, getAddress, isAddress, type Address } from "viem";
+import { defineChain, getAddress, isAddress, type Address, type Chain } from "viem";
 
 /**
  * Single source of truth for networks, tokens and protocol deployments.
@@ -52,7 +52,7 @@ export type ReadinessReason =
   | "mainnet-disabled";
 
 export interface Deployment {
-  chain: typeof mezoTestnet | typeof mezoMainnet;
+  chain: Chain;
   chainId: number;
   rpcUrl: string;
   isLocalFork: boolean;
@@ -66,9 +66,11 @@ export interface Deployment {
 
 function readDeployment(): Deployment {
   const chainId = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? MEZO_TESTNET_ID);
-  const chain = chainId === MEZO_MAINNET_ID ? mezoMainnet : mezoTestnet;
   const rpcOverride = process.env.NEXT_PUBLIC_RPC_URL;
-  const rpcUrl = rpcOverride || chain.rpcUrls.default.http[0]!;
+  const baseChain = chainId === MEZO_MAINNET_ID ? mezoMainnet : mezoTestnet;
+  // With an RPC override (private provider or local fork), wallets and connectors must use it too.
+  const chain: Chain = rpcOverride ? { ...baseChain, rpcUrls: { default: { http: [rpcOverride] } } } : baseChain;
+  const rpcUrl = rpcOverride || baseChain.rpcUrls.default.http[0]!;
   const isLocalFork = !!rpcOverride && /localhost|127\.0\.0\.1/.test(rpcOverride);
   const rawAddress = process.env.NEXT_PUBLIC_MARKETS_ADDRESS ?? "";
   const base = {
@@ -78,7 +80,7 @@ function readDeployment(): Deployment {
     isLocalFork,
     deployBlock: BigInt(process.env.NEXT_PUBLIC_MARKETS_DEPLOY_BLOCK || "0"),
     musd: MUSD[chainId] ?? MUSD[MEZO_TESTNET_ID]!,
-    explorer: chain.blockExplorers.default.url,
+    explorer: baseChain.blockExplorers.default.url,
   };
 
   if (chainId !== MEZO_TESTNET_ID && chainId !== MEZO_MAINNET_ID) {
@@ -102,8 +104,14 @@ export const readinessMessage: Record<ReadinessReason, string> = {
   "mainnet-disabled": "Mainnet trading is not enabled. Use Mezo Testnet.",
 };
 
-export const explorerTx = (hash: string) => `${deployment.explorer}/tx/${hash}`;
-export const explorerAddress = (addr: string) => `${deployment.explorer}/address/${addr}`;
+/**
+ * Explorer links exist only for a verified public network. On a local fork the public explorer
+ * doesn't know these transactions, so links are suppressed (null) and hashes render as text.
+ */
+export const hasExplorer = deployment.ready && !deployment.isLocalFork;
+export const explorerTx = (hash: string): string | null => (hasExplorer ? `${deployment.explorer}/tx/${hash}` : null);
+export const explorerAddress = (addr: string): string | null =>
+  hasExplorer ? `${deployment.explorer}/address/${addr}` : null;
 
 /** Official routes to testnet funds (verified 2026-10-19). */
 export const TESTNET_FUNDING = {

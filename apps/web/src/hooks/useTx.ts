@@ -48,6 +48,7 @@ export function useTx() {
       label: string;
       validate?: () => Promise<void>;
       send: () => Promise<Hash>;
+      onSubmitted?: (hash: Hash) => void;
       onConfirmed?: (hash: Hash) => void;
     }): Promise<boolean> => {
       if (!isConnected) {
@@ -63,6 +64,7 @@ export function useTx() {
         setState({ phase: "awaiting-wallet", label: opts.label });
         const hash = await opts.send();
         setState({ phase: "confirming", hash, label: opts.label });
+        opts.onSubmitted?.(hash);
         let replacedBy: Hash | undefined;
         const receipt = await client!.waitForTransactionReceipt({
           hash,
