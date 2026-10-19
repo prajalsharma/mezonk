@@ -41,3 +41,16 @@ describe("FPMM math mirror", () => {
     expect(withSlippage(1000n, 100)).toBe(990n);
   });
 });
+
+import { initialPool } from "@/lib/market/math";
+describe("initialPool mirror", () => {
+  it("matches contract pricing and conservation", () => {
+    for (const p of [500, 3000, 5000, 7000, 9500]) {
+      const r = initialPool(1000n * 10n ** 18n, p);
+      expect(r.poolYes + r.lpYes).toBe(1000n * 10n ** 18n);
+      expect(r.poolNo + r.lpNo).toBe(1000n * 10n ** 18n);
+      const price = Number((r.poolNo * 10_000n) / (r.poolYes + r.poolNo));
+      expect(Math.abs(price - p)).toBeLessThanOrEqual(1);
+    }
+  });
+});

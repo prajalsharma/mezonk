@@ -41,3 +41,17 @@ describe("metadata review", () => {
     expect(metadataSchema.safeParse({ ...m, source: { name: "x", url: "http://x.com" } }).success).toBe(false);
   });
 });
+
+describe("market policy", () => {
+  it("blocks markets on violence or death", () => {
+    const harm = metadataSchema.parse({
+      v: 1,
+      question: "Will a named CEO be killed before 1 Jan 2027?",
+      category: "other",
+      rules: { yes: "Credible news reports confirm it before 1 Jan 2027.", no: "No such report exists by 1 Jan 2027 UTC.", invalid: "Reports are contradictory at the deadline." },
+      source: { name: "Reuters", url: "https://www.reuters.com" },
+      resolvesAt: "2027-01-01T00:00:00.000Z",
+    });
+    expect(reviewMetadata(harm, new Date("2026-12-01")).some((i) => i.field === "policy" && i.blocking)).toBe(true);
+  });
+});

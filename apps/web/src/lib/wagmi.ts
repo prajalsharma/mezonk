@@ -11,7 +11,7 @@ import {
 } from "@rainbow-me/rainbowkit/wallets";
 import { createConfig, createConnector, http } from "wagmi";
 import { mock } from "@wagmi/core";
-import type { Address } from "viem";
+import { UserRejectedRequestError, type Address } from "viem";
 import { deployment } from "@/lib/chain/config";
 
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
@@ -37,23 +37,41 @@ export const E2E_ACCOUNTS: Record<string, Address> = {
 };
 export const e2eEnabled = process.env.NEXT_PUBLIC_E2E_WALLET === "anvil" && deployment.isLocalFork;
 
-const testWallet = (role: string, account: Address): (() => Wallet) => () => ({
+const testWallet = (role: string, account: Address, rejectSends = false): (() => Wallet) => () => ({
   id: `e2e-${role}`,
   name: `Test wallet: ${role}`,
   iconUrl: "/mezonk-icon.svg",
   iconBackground: "#14110F",
   createConnector: (details) =>
-    createConnector((config) => ({
-      ...mock({ accounts: [account], features: { reconnect: true } })(config),
-      ...details,
-    })),
+    createConnector((config) => {
+      const base = mock({ accounts: [account], features: { reconnect: true } })(config);
+      if (!rejectSends) return { ...base, ...details };
+      // Behaves like a user pressing "Reject" on every transaction prompt.
+      return {
+        ...base,
+        ...details,
+        async getProvider(params?: { chainId?: number }) {
+          const provider = await base.getProvider(params);
+          return {
+            ...provider,
+            request: async (args: { method: string; params?: unknown }) => {
+              if (args.method === "eth_sendTransaction") throw new UserRejectedRequestError(new Error("User rejected the request."));
+              return provider.request(args as never);
+            },
+          } as typeof provider;
+        },
+      };
+    }),
 });
 
 const groups = [{ groupName: "Wallets", wallets }];
 if (e2eEnabled) {
   groups.unshift({
     groupName: "Local test wallets",
-    wallets: Object.entries(E2E_ACCOUNTS).map(([r, a]) => testWallet(r, a)) as typeof wallets,
+    wallets: [
+      ...Object.entries(E2E_ACCOUNTS).map(([r, a]) => testWallet(r, a)),
+      testWallet("rejects", E2E_ACCOUNTS.alice!, true),
+    ] as typeof wallets,
   });
 }
 

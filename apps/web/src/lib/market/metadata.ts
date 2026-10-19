@@ -115,6 +115,16 @@ export function reviewMetadata(m: MarketMetadata, closeTime: Date): QualityIssue
   if (m.rules.yes.trim().toLowerCase() === m.rules.no.trim().toLowerCase()) {
     issues.push({ field: "rules", message: "YES and NO conditions must differ.", blocking: true });
   }
+  // Market policy (docs/market-policy section of /docs): no markets on violence, death or harm to people.
+  const HARM = /\b(assassinat\w*|murder\w*|kill(s|ed|ing)?|suicide|terror(ist|ism)?\s+attack|bomb(ing|ed)?|death of|be (shot|killed|hurt|injured))\b/i;
+  const harmHit = [m.question, m.description, m.rules.yes, m.rules.no].find((t) => HARM.test(t));
+  if (harmHit) {
+    issues.push({
+      field: "policy",
+      message: "Markets on violence, death or harm to people are not allowed under the MEZONK market policy.",
+      blocking: true,
+    });
+  }
   if (new Date(m.resolvesAt).getTime() < closeTime.getTime()) {
     issues.push({
       field: "resolvesAt",

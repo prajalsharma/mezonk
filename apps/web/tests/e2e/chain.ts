@@ -96,7 +96,7 @@ export async function disputeDirect(id: bigint) {
 export const finalizeDirect = (id: bigint) => call("bob", "finalize", [id]);
 
 /** Connect one of the local test wallets through the real RainbowKit modal. */
-export async function connect(page: Page, role: Role | "visitor") {
+export async function connect(page: Page, role: Role | "visitor" | "rejects") {
   if (role === "visitor") return;
   // The mock test connector does not auto-reconnect after reload the way browser wallets do.
   if (await page.getByRole("button", { name: /Account / }).isVisible().catch(() => false)) return;
@@ -104,3 +104,23 @@ export async function connect(page: Page, role: Role | "visitor") {
   await page.getByRole("button", { name: `Test wallet: ${role}` }).click();
   await page.getByRole("button", { name: /Account / }).waitFor();
 }
+
+/** Send without waiting (for mempool ordering tests). */
+export async function sendNoWait(r: Role, functionName: string, args: unknown[], tipGwei: number) {
+  return w(r).writeContract({
+    address: MARKETS,
+    abi: mezonkMarketsAbi,
+    functionName,
+    args,
+    gas: 400_000n, // skip estimation: it would run against the pending block
+    maxPriorityFeePerGas: BigInt(tipGwei) * 10n ** 9n,
+    maxFeePerGas: BigInt(tipGwei + 50) * 10n ** 9n,
+  } as never);
+}
+export async function evidenceFor(id: bigint, r: Role) {
+  const d = { v: 1 as const, kind: "dispute" as const, marketId: Number(id), outcome: "no" as const, summary: "Racing challenge used to test a reverted transaction.", links: [{ url: "https://example.org/race", label: "" }], author: addr(r).toLowerCase(), createdAt: new Date().toISOString() };
+  const res = await fetch(`${API}/api/evidence-documents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(d) });
+  return (await res.json()) as { hash: `0x${string}`; uri: string };
+}
+export const setAutomine = (on: boolean) => client.setAutomine(on);
+export const chainNow = async () => Number((await client.getBlock()).timestamp) * 1000;

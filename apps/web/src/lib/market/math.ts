@@ -110,3 +110,14 @@ export function quoteSell(pool: Pool, side: "yes" | "no", sharesIn: bigint, feeB
 
 /** Minimum acceptable output after slippage tolerance (bps). */
 export const withSlippage = (amount: bigint, slippageBps: number) => (amount * (BPS - BigInt(slippageBps))) / BPS;
+
+/** Mirror of FPMMMath.initialPool: pool balances and the creator's outright shares for a seed. */
+export function initialPool(liquidity: bigint, yesProbBps: number) {
+  const p = BigInt(yesProbBps);
+  if (p >= 5000n) {
+    const poolYes = (liquidity * (10_000n - p)) / p;
+    return { poolYes, poolNo: liquidity, lpYes: liquidity - poolYes, lpNo: 0n };
+  }
+  const poolNo = (liquidity * p) / (10_000n - p);
+  return { poolYes: liquidity, poolNo, lpYes: 0n, lpNo: liquidity - poolNo };
+}
