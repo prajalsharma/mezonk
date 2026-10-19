@@ -96,7 +96,7 @@ export interface ListParams {
   q?: string;
   category?: string;
   status?: "open" | "closing" | "resolving" | "resolved" | "all";
-  sort?: "trending" | "volume" | "liquidity" | "newest" | "closing" | "movement";
+  sort?: "trending" | "volume" | "liquidity" | "thin" | "newest" | "closing" | "movement";
   minLiquidity?: bigint;
   closesWithinHours?: number;
   creator?: string;
@@ -143,6 +143,7 @@ export async function listMarkets(p: ListParams) {
     trending: (a, b) => b.trendingScore - a.trendingScore || cmpBig(big(a.volume), big(b.volume)),
     volume: (a, b) => cmpBig(big(a.volume), big(b.volume)),
     liquidity: (a, b) => cmpBig(big(a.liquidity), big(b.liquidity)),
+    thin: (a, b) => cmpBig(big(b.liquidity), big(a.liquidity)),
     newest: (a, b) => b.createdAt.localeCompare(a.createdAt),
     closing: (a, b) => a.closeTime.localeCompare(b.closeTime),
     movement: (a, b) => Math.abs(b.priceYes - b.priceYes24hAgo) - Math.abs(a.priceYes - a.priceYes24hAgo),
