@@ -1,0 +1,15 @@
+{
+  "name": "mezonk",
+  "private": true,
+  "packageManager": "pnpm@10.20.0",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "test": "pnpm test:contracts && pnpm --filter web test",
+    "test:contracts": "cd contracts && forge test",
+    "typecheck": "pnpm --filter web typecheck",
+    "lint": "pnpm --filter web lint",
+    "indexer": "pnpm --filter web indexer",
+    "abi": "node scripts/export-abi.mjs"
+  }
+}

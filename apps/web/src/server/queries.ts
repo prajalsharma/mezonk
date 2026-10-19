@@ -1,0 +1,304 @@
+import "server-only";
+import { and, desc, eq, gte, ilike, inArray, lt, or, sql } from "drizzle-orm";
+import { deployment } from "@/lib/chain/config";
+import { deriveStage } from "@/lib/market/stage";
+import { getDb, schema } from "@/server/db/client";
+
+const { markets, trades, chainEvents, positions, resolutionProposals, disputes, indexerState, evidence } = schema;
+
+export type MarketRow = typeof markets.$inferSelect;
+
+export interface MarketSummary {
+  id: number;
+  question: string;
+  category: string;
+  structured: boolean;
+  priceYes: number;
+  priceYes24hAgo: number;
+  liquidity: string;
+  volume: string;
+  volume24h: string;
+  traders24h: number;
+  tradeCount: number;
+  createdAt: string;
+  closeTime: string;
+  stage: ReturnType<typeof deriveStage>;
+  finalOutcome: number | null;
+  trendingScore: number;
+}
+
+/**
+ * Trending score (documented in docs/architecture.md):
+ *   score = volume24h_MUSD × sqrt(1 + distinctTraders24h)
+ * Only open markets with at least one trade in the last 24h are eligible; others score 0.
+ */
+export function trendingScore(volume24hWei: bigint, traders24h: number, open: boolean): number {
+  if (!open || volume24hWei === 0n) return 0;
+  return (Number(volume24hWei / 10n ** 12n) / 1e6) * Math.sqrt(1 + traders24h);
+}
+
+function initialPrice(m: MarketRow) {
+  return m.initialYesProbBps / 10_000;
+}
+
+async function stats24h(ids: number[]) {
+  if (!ids.length) return new Map<number, { vol: bigint; traders: number; price24h: number | null }>();
+  const db = await getDb();
+  const since = new Date(Date.now() - 86_400_000);
+  const agg = await db
+    .select({
+      marketId: trades.marketId,
+      vol: sql<string>`coalesce(sum(${trades.collateral}), 0)::text`,
+      traders: sql<number>`count(distinct ${trades.trader})::int`,
+    })
+    .from(trades)
+    .where(and(inArray(trades.marketId, ids), gte(trades.blockTime, since)))
+    .groupBy(trades.marketId);
+  // Last price at or before 24h ago, per market.
+  const before = await db
+    .selectDistinctOn([trades.marketId], { marketId: trades.marketId, price: trades.priceYesAfter })
+    .from(trades)
+    .where(and(inArray(trades.marketId, ids), lt(trades.blockTime, since)))
+    .orderBy(trades.marketId, desc(trades.blockTime), desc(trades.eventId));
+  const out = new Map<number, { vol: bigint; traders: number; price24h: number | null }>();
+  for (const id of ids) out.set(id, { vol: 0n, traders: 0, price24h: null });
+  for (const a of agg) Object.assign(out.get(a.marketId)!, { vol: BigInt(a.vol), traders: a.traders });
+  for (const b of before) out.get(b.marketId)!.price24h = b.price;
+  return out;
+}
+
+function summarize(m: MarketRow, s: { vol: bigint; traders: number; price24h: number | null }): MarketSummary {
+  const stage = deriveStage(m);
+  // Before any trade older than 24h exists, compare against the opening price if the market is younger than 24h.
+  const youngerThan24h = Date.now() - m.createdAt.getTime() < 86_400_000;
+  const price24h = s.price24h ?? (youngerThan24h ? initialPrice(m) : m.priceYes);
+  return {
+    id: m.marketId,
+    question: m.question,
+    category: m.category,
+    structured: m.structured,
+    priceYes: m.priceYes,
+    priceYes24hAgo: price24h,
+    liquidity: m.collateral,
+    volume: m.volume,
+    volume24h: s.vol.toString(),
+    traders24h: s.traders,
+    tradeCount: m.tradeCount,
+    createdAt: m.createdAt.toISOString(),
+    closeTime: m.closeTime.toISOString(),
+    stage,
+    finalOutcome: m.finalOutcome,
+    trendingScore: trendingScore(s.vol, s.traders, stage.stage === "open"),
+  };
+}
+
+export interface ListParams {
+  q?: string;
+  category?: string;
+  status?: "open" | "closing" | "resolving" | "resolved" | "all";
+  sort?: "trending" | "volume" | "liquidity" | "newest" | "closing" | "movement";
+  minLiquidity?: bigint;
+  closesWithinHours?: number;
+  creator?: string;
+  limit: number;
+  offset: number;
+}
+
+export async function listMarkets(p: ListParams) {
+  const db = await getDb();
+  const conds = [eq(markets.chainId, deployment.chainId)];
+  if (p.q) {
+    const like = `%${p.q.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+    conds.push(or(ilike(markets.question, like), ilike(markets.description, like))!);
+  }
+  if (p.category) conds.push(eq(markets.category, p.category));
+  if (p.creator) conds.push(eq(markets.creator, p.creator.toLowerCase()));
+  const rows = await db.select().from(markets).where(and(...conds));
+  const s = await stats24h(rows.map((r) => r.marketId));
+  const now = Date.now();
+  let list = rows.map((r) => summarize(r, s.get(r.marketId)!));
+
+  list = list.filter((m) => {
+    const st = m.stage.stage;
+    if (p.minLiquidity && BigInt(m.liquidity) < p.minLiquidity) return false;
+    if (p.closesWithinHours && (st !== "open" || new Date(m.closeTime).getTime() - now > p.closesWithinHours * 3.6e6))
+      return false;
+    switch (p.status ?? "all") {
+      case "open":
+        return st === "open";
+      case "closing":
+        return st === "open" && new Date(m.closeTime).getTime() - now < 48 * 3.6e6;
+      case "resolving":
+        return st === "closed" || st === "proposed" || st === "disputed";
+      case "resolved":
+        return st === "resolved" || st === "invalid";
+      default:
+        return true;
+    }
+  });
+
+  const big = (x: string) => BigInt(x);
+  const cmpBig = (a: bigint, b: bigint) => (a > b ? -1 : a < b ? 1 : 0);
+  const sorters: Record<NonNullable<ListParams["sort"]>, (a: MarketSummary, b: MarketSummary) => number> = {
+    trending: (a, b) => b.trendingScore - a.trendingScore || cmpBig(big(a.volume), big(b.volume)),
+    volume: (a, b) => cmpBig(big(a.volume), big(b.volume)),
+    liquidity: (a, b) => cmpBig(big(a.liquidity), big(b.liquidity)),
+    newest: (a, b) => b.createdAt.localeCompare(a.createdAt),
+    closing: (a, b) => a.closeTime.localeCompare(b.closeTime),
+    movement: (a, b) => Math.abs(b.priceYes - b.priceYes24hAgo) - Math.abs(a.priceYes - a.priceYes24hAgo),
+  };
+  list.sort(sorters[p.sort ?? "newest"]);
+  return { total: list.length, items: list.slice(p.offset, p.offset + p.limit) };
+}
+
+export async function getMarket(id: number) {
+  const db = await getDb();
+  const [m] = await db
+    .select()
+    .from(markets)
+    .where(and(eq(markets.chainId, deployment.chainId), eq(markets.marketId, id)));
+  if (!m) return null;
+  const s = await stats24h([id]);
+  return { row: m, summary: summarize(m, s.get(id)!) };
+}
+
+export async function getHistory(id: number) {
+  const db = await getDb();
+  const m = await getMarket(id);
+  if (!m) return null;
+  const rows = await db
+    .select({ t: trades.blockTime, p: trades.priceYesAfter, tx: trades.txHash })
+    .from(trades)
+    .where(eq(trades.marketId, id))
+    .orderBy(trades.blockTime, trades.eventId);
+  return [
+    { t: m.row.createdAt.toISOString(), p: m.row.initialYesProbBps / 10_000, tx: m.row.createdTx },
+    ...rows.map((r) => ({ t: r.t.toISOString(), p: r.p, tx: r.tx })),
+  ];
+}
+
+export async function getEvents(opts: { marketId?: number; actor?: string; limit: number; before?: number }) {
+  const db = await getDb();
+  const conds = [eq(chainEvents.chainId, deployment.chainId)];
+  if (opts.marketId != null) conds.push(eq(chainEvents.marketId, opts.marketId));
+  if (opts.actor) conds.push(eq(chainEvents.actor, opts.actor.toLowerCase()));
+  if (opts.before) conds.push(lt(chainEvents.id, opts.before));
+  const rows = await db
+    .select({
+      id: chainEvents.id,
+      eventName: chainEvents.eventName,
+      marketId: chainEvents.marketId,
+      actor: chainEvents.actor,
+      args: chainEvents.args,
+      blockNumber: chainEvents.blockNumber,
+      blockTime: chainEvents.blockTime,
+      txHash: chainEvents.txHash,
+      question: markets.question,
+    })
+    .from(chainEvents)
+    .leftJoin(markets, eq(markets.marketId, chainEvents.marketId))
+    .where(and(...conds))
+    .orderBy(desc(chainEvents.blockNumber), desc(chainEvents.logIndex))
+    .limit(opts.limit);
+  return rows.map((r) => ({
+    ...r,
+    blockNumber: r.blockNumber.toString(),
+    blockTime: r.blockTime.toISOString(),
+    // Drop the bulky metadata payload from activity feeds.
+    args: r.eventName === "MarketCreated" ? { creator: (r.args as Record<string, unknown>).creator } : r.args,
+  }));
+}
+
+export async function getPortfolio(account: string) {
+  const db = await getDb();
+  const rows = await db
+    .select({ p: positions, m: markets })
+    .from(positions)
+    .innerJoin(markets, eq(markets.marketId, positions.marketId))
+    .where(eq(positions.account, account.toLowerCase()));
+  const created = await db
+    .select()
+    .from(markets)
+    .where(and(eq(markets.chainId, deployment.chainId), eq(markets.creator, account.toLowerCase())));
+  return {
+    positions: rows.map(({ p, m }) => ({
+      marketId: m.marketId,
+      question: m.question,
+      category: m.category,
+      priceYes: m.priceYes,
+      poolYes: m.poolYes,
+      poolNo: m.poolNo,
+      feeBps: m.feeBps,
+      closeTime: m.closeTime.toISOString(),
+      stage: deriveStage(m),
+      finalOutcome: m.finalOutcome,
+      yesShares: p.yesShares,
+      noShares: p.noShares,
+      yesCost: p.yesCost,
+      noCost: p.noCost,
+      realizedPnl: p.realizedPnl,
+      feesPaid: p.feesPaid,
+      redeemed: p.redeemed,
+      redeemedPayout: p.redeemedPayout,
+      isCreator: p.isCreator,
+    })),
+    created: created.map((m) => ({
+      marketId: m.marketId,
+      question: m.question,
+      stage: deriveStage(m),
+      initialLiquidity: m.initialLiquidity,
+      volume: m.volume,
+      finalOutcome: m.finalOutcome,
+    })),
+  };
+}
+
+export async function getResolution(id: number) {
+  const db = await getDb();
+  const m = await getMarket(id);
+  if (!m) return null;
+  const [props, disps, ev] = await Promise.all([
+    db.select().from(resolutionProposals).where(eq(resolutionProposals.marketId, id)),
+    db.select().from(disputes).where(eq(disputes.marketId, id)),
+    db.select().from(evidence).where(eq(evidence.marketId, id)).orderBy(desc(evidence.createdAt)).limit(50),
+  ]);
+  return {
+    stage: m.summary.stage,
+    resolver: m.row.resolver,
+    arbitrator: m.row.arbitrator,
+    proposerBond: m.row.proposerBond,
+    disputeBond: m.row.disputeBond,
+    challengeWindow: m.row.challengeWindow,
+    proposalWindow: m.row.proposalWindow,
+    arbitrationWindow: m.row.arbitrationWindow,
+    finalOutcome: m.row.finalOutcome,
+    finalizeReason: m.row.finalizeReason,
+    finalizedAt: m.row.finalizedAt?.toISOString() ?? null,
+    proposals: props,
+    disputes: disps,
+    userEvidence: ev,
+  };
+}
+
+export async function getIndexerStatus() {
+  const db = await getDb();
+  const [state] = await db
+    .select()
+    .from(indexerState)
+    .where(eq(indexerState.key, `${deployment.chainId}:${deployment.marketsAddress?.toLowerCase()}`));
+  if (!state) return null;
+  const lag = state.headBlock != null ? Number(state.headBlock - state.lastBlock) : null;
+  return {
+    lastBlock: state.lastBlock.toString(),
+    headBlock: state.headBlock?.toString() ?? null,
+    lagBlocks: lag,
+    lastRunAt: state.lastRunAt?.toISOString() ?? null,
+    lastSuccessAt: state.lastSuccessAt?.toISOString() ?? null,
+    lastError: state.lastError,
+    lastErrorAt: state.lastErrorAt?.toISOString() ?? null,
+    reorgsHandled: state.reorgsHandled,
+    lastReconcileAt: state.lastReconcileAt?.toISOString() ?? null,
+    reconcileMismatches: (state.reconcileMismatches as unknown[] | null) ?? [],
+    stale: !state.lastSuccessAt || Date.now() - state.lastSuccessAt.getTime() > 120_000,
+  };
+}

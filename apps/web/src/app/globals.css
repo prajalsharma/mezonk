@@ -1,0 +1,196 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * MEZONK design tokens. Every colour in the app comes from here.
+ * Brand anchors: cream #F2EFE9, ink #14110F, red #FF004D.
+ * Contrast targets (WCAG 2.2 AA) are noted beside text tokens.
+ */
+:root {
+  color-scheme: light;
+  --bg: #f2efe9; /* brand cream */
+  --surface: #faf8f4;
+  --surface-2: #e8e4dc;
+  --surface-sunk: #ebe7df;
+  --ink: #14110f; /* 16.4:1 on bg */
+  --ink-2: #4a453e; /* 8.3:1 on bg */
+  --muted: #6b655c; /* 5.0:1 on bg */
+  --border: #d6d0c5;
+  --border-strong: #14110f;
+  --accent: #ff004d; /* brand red: marks, markers, fills — not small text */
+  --accent-text: #c8003c; /* 5.2:1 on bg, red used as text */
+  --accent-soft: #ffe0e8;
+  --yes: #0a6a40; /* 5.8:1 on bg, 5.3:1 on surface-2 */
+  --yes-soft: #d8eee2;
+  --no: #c8003c;
+  --no-soft: #fbdde5;
+  --warn: #8a5a00; /* 5.2:1 on bg */
+  --warn-soft: #f6e7c4;
+  --info: #24518a;
+  --primary: #14110f; /* primary button fill */
+  --on-primary: #f2efe9;
+  --focus: #ff004d;
+  --logo-stroke: #14110f;
+  --logo-dot: #ff004d;
+  --logo-cut: var(--bg);
+  --shadow-1: 0 1px 0 rgba(20, 17, 15, 0.04), 0 1px 2px rgba(20, 17, 15, 0.06);
+  --shadow-2: 0 8px 24px -8px rgba(20, 17, 15, 0.18);
+  --overlay: rgba(20, 17, 15, 0.45);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #14110f; /* brand ink */
+  --surface: #1b1815;
+  --surface-2: #26221e;
+  --surface-sunk: #100e0c;
+  --ink: #f2efe9; /* 16.4:1 on bg */
+  --ink-2: #c9c3b9; /* 10.7:1 */
+  --muted: #9a9387; /* 6.2:1 */
+  --border: #332e28;
+  --border-strong: #f2efe9;
+  --accent: #ff004d;
+  --accent-text: #ff4d7c; /* 5.9:1 */
+  --accent-soft: #3a1520;
+  --yes: #3fd18c; /* 9.6:1 */
+  --yes-soft: #12301f;
+  --no: #ff4d7c;
+  --no-soft: #3a1520;
+  --warn: #f2b84b;
+  --warn-soft: #362810;
+  --info: #8db4ee;
+  --primary: #f2efe9;
+  --on-primary: #14110f;
+  --focus: #ff4d7c;
+  --logo-stroke: #f2efe9;
+  --logo-dot: #ff004d;
+  --logo-cut: var(--bg);
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 12px 32px -12px rgba(0, 0, 0, 0.7);
+  --overlay: rgba(0, 0, 0, 0.6);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-sunk: var(--surface-sunk);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-text: var(--accent-text);
+  --color-accent-soft: var(--accent-soft);
+  --color-yes: var(--yes);
+  --color-yes-soft: var(--yes-soft);
+  --color-no: var(--no);
+  --color-no-soft: var(--no-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-info: var(--info);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-focus: var(--focus);
+
+  --font-sans: var(--font-hanken), "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Type scale, ratio ~1.2, fixed rem (product register) */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.6rem;
+  --text-xl: 1.375rem;
+  --text-xl--line-height: 1.8rem;
+  --text-2xl: 1.75rem;
+  --text-2xl--line-height: 2.1rem;
+  --text-3xl: 2.25rem;
+  --text-3xl--line-height: 2.5rem;
+  --text-4xl: 3.25rem;
+  --text-4xl--line-height: 1.05;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  --shadow-1: var(--shadow-1);
+  --shadow-2: var(--shadow-2);
+
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+
+  --breakpoint-xs: 22.5rem;
+}
+
+@layer base {
+  html {
+    background: var(--bg);
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+  }
+  h1, h2, h3 {
+    text-wrap: balance;
+    letter-spacing: -0.015em;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+  ::selection {
+    background: var(--accent);
+    color: #fff;
+  }
+  /* z-index scale */
+  :root {
+    --z-sticky: 20;
+    --z-dropdown: 30;
+    --z-backdrop: 40;
+    --z-modal: 50;
+    --z-toast: 60;
+    --z-tooltip: 70;
+  }
+}
+
+@layer utilities {
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+  .wordmark {
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes skeleton {
+  0% { opacity: 0.55; }
+  50% { opacity: 1; }
+  100% { opacity: 0.55; }
+}
