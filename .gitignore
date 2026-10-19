@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/31337/
+*.log
+.DS_Store
+.pglite/
+.vercel
+playwright-report/
+test-results/
