@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useAccount, useBlock } from "wagmi";
-import { Address } from "@/components/ui/Address";
+import { Address, TxLink } from "@/components/ui/Address";
 import { Button } from "@/components/ui/Button";
 import { KeyValue, Notice, Skeleton, Status } from "@/components/ui/primitives";
 import { WalletButton } from "@/components/wallet/WalletButton";
@@ -20,6 +20,7 @@ import { ArbitrationWorkspace } from "./ArbitrationWorkspace";
 import { ClaimButton, RedeemDetails } from "./Claims";
 import { Timeline } from "./Timeline";
 import type { ResolutionDto } from "./types";
+import type { Confirmed } from "./useResolutionAction";
 
 const d = (s: bigint) => new Date(Number(s) * 1000);
 
@@ -65,6 +66,8 @@ export function ResolutionPanel({
   const qc = useQueryClient();
   const block = useBlock({ chainId: deployment.chainId, watch: true, query: { enabled: deployment.ready } });
   const [refreshing, setRefreshing] = useState(false);
+  // Last confirmed action, kept after its form unmounts (the stage moves on once it confirms).
+  const [done, setDone] = useState<Confirmed | null>(null);
   const res = useQuery({
     queryKey: ["resolution", marketId],
     queryFn: () => apiGet<ResolutionDto>(`/api/resolution/${marketId}`),
@@ -72,7 +75,8 @@ export function ResolutionPanel({
   });
 
   const m = chain.market;
-  const refreshAll = () => {
+  const refreshAll = (c?: Confirmed) => {
+    if (c) setDone(c);
     void chain.refetch();
     void musd.refetch();
     void qc.invalidateQueries({ queryKey: ["resolution", marketId] });
@@ -93,7 +97,7 @@ export function ResolutionPanel({
       <section aria-labelledby="resolution" className="space-y-3">
         <h2 id="resolution" className="text-xl font-semibold">Resolution</h2>
         {chain.isError ? (
-          <Notice tone="error" title="Couldn't read the market from the chain">The RPC didn't respond. Retry shortly.</Notice>
+          <Notice tone="error" title="Couldn't read the market from the chain">The RPC didn&apos;t respond. Retry shortly.</Notice>
         ) : (
           <Skeleton className="h-40 w-full" />
         )}
@@ -187,22 +191,23 @@ export function ResolutionPanel({
 
       {/* Role-aware action area */}
       <div className="space-y-4" aria-label="Your actions">
+        {done && (
+          <Notice tone="success" title={`${done.label}. Confirmed on-chain.`}>
+            Transaction <TxLink hash={done.hash} />
+          </Notice>
+        )}
         {claims.length > 0 && <div className="space-y-3 rounded-lg border border-line bg-surface p-4"><h3 className="text-base font-semibold">Your claims</h3>{claims}</div>}
         {p.roles.includes("arbitrator") && chain.stage === CHAIN_STAGE.Disputed && res.data && (
           <ArbitrationWorkspace timeline={res.data.timeline} documents={res.data.documents} />
         )}
         {actions}
-        {!actions.length && !claims.length && (
-          <div className="rounded-lg border border-dashed border-line p-4 text-sm text-ink-2">
-            {needsWallet && !address ? (
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <span>Connect a wallet to participate in resolution or claim.</span>
-                <WalletButton />
-              </div>
-            ) : (
-              <NoActionReason p={p} stage={chain.stage} />
-            )}
+        {needsWallet && !address ? (
+          <div className="flex flex-col gap-3 rounded-lg border border-dashed border-line p-4 text-sm text-ink-2 sm:flex-row sm:items-center sm:justify-between">
+            <span>Connect a wallet to participate in resolution or claim.</span>
+            <WalletButton />
           </div>
+        ) : (
+          <NoActionReason p={p} stage={chain.stage} />
         )}
       </div>
 
@@ -250,16 +255,20 @@ export function ResolutionPanel({
   );
 }
 
+/** Why this wallet can't take the stage's other actions. Shown even when it can take some action. */
 function NoActionReason({ p, stage }: { p: Permissions; stage: number }) {
-  const lines: string[] = [];
-  if (stage === CHAIN_STAGE.Closed) lines.push(p.propose.reason);
-  if (stage === CHAIN_STAGE.Proposed) lines.push(p.dispute.reason, p.finalize.reason);
-  if (stage === CHAIN_STAGE.Disputed) lines.push(p.arbitrate.reason, p.finalize.reason);
-  if (stage === CHAIN_STAGE.Finalized) lines.push(p.redeem.reason);
-  if (stage === CHAIN_STAGE.Open) lines.push("Resolution starts after trading closes.");
+  const pick = (...xs: Array<{ available: boolean; reason: string }>) => xs.filter((x) => !x.available).map((x) => x.reason);
+  let lines: string[] = [];
+  if (stage === CHAIN_STAGE.Open) lines = ["Resolution starts after trading closes."];
+  if (stage === CHAIN_STAGE.Closed) lines = pick(p.propose, p.finalize);
+  if (stage === CHAIN_STAGE.Proposed) lines = pick(p.dispute, p.finalize);
+  if (stage === CHAIN_STAGE.Disputed) lines = pick(p.arbitrate, p.finalize);
+  if (stage === CHAIN_STAGE.Finalized) lines = p.redeem.payout > 0n ? [] : pick(p.redeem);
+  lines = [...new Set(lines.filter(Boolean))];
+  if (!lines.length) return null;
   return (
-    <ul className="space-y-1">
-      {[...new Set(lines)].map((l) => (
+    <ul className="space-y-1 rounded-lg border border-dashed border-line p-4 text-sm text-ink-2">
+      {lines.map((l) => (
         <li key={l}>{l}</li>
       ))}
     </ul>

@@ -30,9 +30,17 @@ export function PriceChart({ marketId }: { marketId: number }) {
     const pts = data.points.map((x) => ({ t: new Date(x.t).getTime(), p: x.p * 100 }));
     const inRange = pts.filter((x) => x.t >= cut);
     const before = pts.filter((x) => x.t < cut).at(-1);
-    const out = before ? [{ t: cut, p: before.p }, ...inRange] : inRange;
-    // Extend the last known price to now so the line reaches the present.
-    if (out.length) out.push({ t: Date.now(), p: out.at(-1)!.p });
+    const raw = before ? [{ t: cut, p: before.p }, ...inRange] : inRange;
+    // Several trades can share a block timestamp: keep the last price per timestamp.
+    const out: Array<{ t: number; p: number }> = [];
+    for (const x of raw) {
+      if (out.length && out.at(-1)!.t === x.t) out[out.length - 1] = x;
+      else out.push(x);
+    }
+    // Extend the last price to the present. Chain time can run ahead of this browser's clock
+    // (e.g. on a local fork), so never draw backwards.
+    const end = Math.max(Date.now(), (out.at(-1)?.t ?? 0) + 60_000);
+    if (out.length) out.push({ t: end, p: out.at(-1)!.p });
     return out;
   }, [data, range]);
 
@@ -74,6 +82,7 @@ export function PriceChart({ marketId }: { marketId: number }) {
               axisLine={{ stroke: "var(--border)" }}
               tickLine={false}
               minTickGap={40}
+              allowDuplicatedCategory={false}
             />
             <YAxis
               domain={[0, 100]}

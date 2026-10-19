@@ -101,7 +101,7 @@ async function tick(): Promise<TickResult> {
     }
 
     // 2. Pull logs in RPC-sized chunks.
-    const head = (await publicClient.getBlockNumber()) - CONFIRMATIONS;
+    const head = (await publicClient.getBlockNumber({ cacheTime: 0 })) - CONFIRMATIONS;
     const from = lastBlock + 1n;
     const target = head < from + MAX_BLOCKS_PER_TICK ? head : from + MAX_BLOCKS_PER_TICK - 1n;
     let inserted = 0;

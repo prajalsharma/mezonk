@@ -44,7 +44,10 @@ export function MarketsBrowser() {
 
   const set = (patch: Record<string, string>) => {
     const s = new URLSearchParams(params);
-    for (const [k, v] of Object.entries(patch)) (v ? s.set(k, v) : s.delete(k));
+    for (const [k, v] of Object.entries(patch)) {
+      if (v) s.set(k, v);
+      else s.delete(k);
+    }
     router.replace(`${path}?${s}`, { scroll: false });
     setLimit(PAGE);
   };

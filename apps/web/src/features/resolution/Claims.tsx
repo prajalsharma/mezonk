@@ -65,7 +65,7 @@ export function ClaimButton({
   amount: bigint;
   title: string;
   details: React.ReactNode;
-  onDone: () => void;
+  onDone: (c?: { label: string; hash: string }) => void;
   variant?: "primary" | "secondary";
 }) {
   const [review, setReview] = useState(false);
@@ -87,9 +87,9 @@ export function ClaimButton({
           chainId: deployment.chainId,
         }),
       onSubmitted: (hash) => pending.add({ hash, marketId, kind: fn }),
-      onConfirmed: () => {
+      onConfirmed: (hash) => {
         toast({ tone: "success", title: `${title}: confirmed`, body: `${formatMusd(amount)} MUSD sent to your wallet.` });
-        onDone();
+        onDone({ label: `${title}: ${formatMusd(amount)} MUSD sent`, hash });
       },
     });
   }

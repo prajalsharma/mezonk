@@ -12,12 +12,14 @@
     "test:e2e": "playwright test",
     "indexer": "tsx scripts/indexer.ts",
     "db:generate": "drizzle-kit generate",
-    "seed:local": "tsx scripts/seed-local.ts"
+    "seed:local": "tsx scripts/seed-local.ts",
+    "test:integration": "vitest run -c vitest.integration.config.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.3.11",
     "@rainbow-me/rainbowkit": "2.2.9",
     "@tanstack/react-query": "5.90.5",
+    "@wagmi/core": "2.22.1",
     "drizzle-orm": "0.44.7",
     "lucide-react": "0.548.0",
     "next": "15.5.4",

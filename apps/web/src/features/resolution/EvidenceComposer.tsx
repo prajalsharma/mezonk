@@ -65,7 +65,7 @@ export function EvidenceComposer({
         <legend className="text-sm font-semibold">Evidence links</legend>
         <p className="text-sm text-muted">
           https only. Prefer stable sources (official pages, archived snapshots). A link can change after you submit it;
-          add the file's SHA-256 if you want to pin exact content.
+          add the file&apos;s SHA-256 if you want to pin exact content.
         </p>
         {value.links.map((l, i) => (
           <div key={i} className="grid gap-2 rounded-md border border-line p-3 sm:grid-cols-[1fr_10rem]">

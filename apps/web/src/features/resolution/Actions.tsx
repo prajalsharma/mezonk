@@ -12,7 +12,7 @@ import { outcomeToCode } from "@/lib/market/evidence";
 import { outcomeLabel } from "@/lib/market/stage";
 import type { Availability } from "@/lib/market/permissions";
 import { EvidenceComposer, emptyEvidence, validateEvidence, type EvidenceDraft } from "./EvidenceComposer";
-import { useResolutionAction, type Outcome } from "./useResolutionAction";
+import { useResolutionAction, type Confirmed, type Outcome } from "./useResolutionAction";
 
 const OUTCOMES: Array<{ value: Outcome; label: string }> = [
   { value: "yes", label: "Yes" },
@@ -56,7 +56,7 @@ export function ProposeAction({
   bond: bigint;
   challengeWindow: number;
   rules: ReactNode;
-  onDone: () => void;
+  onDone: (c?: Confirmed) => void;
 }) {
   const [outcome, setOutcome] = useState<Outcome>("yes");
   const [draft, setDraft] = useState<EvidenceDraft>(emptyEvidence);
@@ -88,7 +88,7 @@ export function ProposeAction({
           args: [BigInt(marketId), outcomeToCode[outcome], doc.hash, doc.uri],
           chainId: deployment.chainId,
         }),
-      onConfirmed: a.refreshAll,
+      onConfirmed: a.confirmed("Outcome proposed"),
     });
   }
 
@@ -173,7 +173,7 @@ export function DisputeAction({
   bond: bigint;
   proposedOutcome: number;
   challengeDeadline: Date;
-  onDone: () => void;
+  onDone: (c?: Confirmed) => void;
 }) {
   const [draft, setDraft] = useState<EvidenceDraft>(emptyEvidence);
   const [claimed, setClaimed] = useState<Outcome>(proposedOutcome === 1 ? "no" : "yes");
@@ -205,7 +205,7 @@ export function DisputeAction({
           args: [BigInt(marketId), doc.hash, doc.uri],
           chainId: deployment.chainId,
         }),
-      onConfirmed: a.refreshAll,
+      onConfirmed: a.confirmed("Challenge filed"),
     });
   }
 
@@ -257,7 +257,7 @@ export function ArbitrateAction({
   avail: Availability;
   proposedOutcome: number;
   arbitrationDeadline: Date;
-  onDone: () => void;
+  onDone: (c?: Confirmed) => void;
 }) {
   const [outcome, setOutcome] = useState<Outcome>("yes");
   const [draft, setDraft] = useState<EvidenceDraft>(emptyEvidence);
@@ -289,7 +289,7 @@ export function ArbitrateAction({
           args: [BigInt(marketId), outcomeToCode[outcome], doc.hash, doc.uri],
           chainId: deployment.chainId,
         }),
-      onConfirmed: a.refreshAll,
+      onConfirmed: a.confirmed("Ruling recorded"),
     });
   }
 
@@ -331,7 +331,7 @@ export function FinalizeAction({
 }: {
   marketId: number;
   avail: Availability & { outcome?: number; why?: string };
-  onDone: () => void;
+  onDone: (c?: Confirmed) => void;
 }) {
   const [review, setReview] = useState(false);
   const a = useResolutionAction(marketId, onDone);
@@ -347,7 +347,7 @@ export function FinalizeAction({
           args: [BigInt(marketId)],
           chainId: deployment.chainId,
         }),
-      onConfirmed: a.refreshAll,
+      onConfirmed: a.confirmed("Market finalized"),
     });
   }
   return (

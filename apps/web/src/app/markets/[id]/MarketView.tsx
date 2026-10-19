@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Check, Share2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useBlock } from "wagmi";
 import { Address, TxLink } from "@/components/ui/Address";
 import { ButtonLink } from "@/components/ui/Button";
 import { EmptyState, KeyValue, Notice, Skeleton } from "@/components/ui/primitives";
@@ -66,6 +67,9 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
   useEffect(() => add(id), [id, add]);
   const meta = useMemo(() => (indexed ? parseMetadata(indexed.metadataRaw) : null), [indexed]);
   const m = chain.market;
+  // Stage labels use chain time (latest block), matching how the contract decides stages.
+  const block = useBlock({ chainId: deployment.chainId, watch: true, query: { enabled: deployment.ready } });
+  const chainNowMs = block.data ? Number(block.data.timestamp) * 1000 : Date.now();
 
   const activity = useQuery({
     queryKey: ["market", id, "activity"],
@@ -75,7 +79,7 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
   });
 
   if (!deployment.ready) {
-    return <EmptyState title="Trading isn't available on this network">The market contract isn't deployed here.</EmptyState>;
+    return <EmptyState title="Trading isn't available on this network">The market contract isn&apos;t deployed here.</EmptyState>;
   }
   if (chain.notFound && !indexed) {
     return (
@@ -95,7 +99,7 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
         disputedAt: m.disputedAt ? new Date(Number(m.disputedAt) * 1000) : null,
         arbitrationDeadline: m.disputedAt ? new Date(Number(m.disputedAt + BigInt(m.arbitrationWindow)) * 1000) : null,
         finalOutcome: m.finalized ? m.finalOutcome : null,
-      })
+      }, chainNowMs)
     : null;
   const question = indexed?.question ?? `Market #${id}`;
   const rules = indexed ? (
@@ -122,7 +126,7 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
           <header className="space-y-4">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               {stage && <StageStatus stage={stage.stage} label={stage.label} />}
-              {m && stage?.stage === "open" && <span className="text-ink-2">Closes {relativeTime(Number(m.closeTime) * 1000)}</span>}
+              {m && stage?.stage === "open" && <span className="text-ink-2">Closes {relativeTime(Number(m.closeTime) * 1000, chainNowMs)}</span>}
               <span className="ml-auto"><ShareButton /></span>
             </div>
             <h1 className="max-w-3xl text-2xl font-semibold leading-tight md:text-3xl">{question}</h1>

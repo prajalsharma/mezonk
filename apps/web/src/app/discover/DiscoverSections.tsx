@@ -136,7 +136,7 @@ export function DiscoverSections() {
         <div className="space-y-2 text-sm">
           <h2 className="font-semibold">How a market works</h2>
           <ol className="list-decimal space-y-1.5 pl-4 text-ink-2">
-            <li>Buy Yes or No shares with MUSD. The price is the market's implied chance, 0 to 1.</li>
+            <li>Buy Yes or No shares with MUSD. The price is the market&apos;s implied chance, 0 to 1.</li>
             <li>Sell back to the pool any time before trading closes.</li>
             <li>After close, a resolver proposes the outcome with evidence. Anyone can dispute it.</li>
             <li>Each winning share then redeems for 1 MUSD.</li>
@@ -148,7 +148,7 @@ export function DiscoverSections() {
         <div className="space-y-2 text-sm">
           <h2 className="font-semibold">About MUSD</h2>
           <p className="text-ink-2">
-            MUSD is Mezo's Bitcoin-backed stablecoin. You mint it by borrowing against BTC on Mezo. MEZONK uses it for
+            MUSD is Mezo&apos;s Bitcoin-backed stablecoin. You mint it by borrowing against BTC on Mezo. MEZONK uses it for
             every trade and payout.
           </p>
           {deployment.chain.testnet && (

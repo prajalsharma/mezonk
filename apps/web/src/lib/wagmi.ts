@@ -10,15 +10,17 @@ import {
   walletConnectWallet,
 } from "@rainbow-me/rainbowkit/wallets";
 import { createConfig, createConnector, http } from "wagmi";
-import { mock } from "wagmi/connectors";
+import { mock } from "@wagmi/core";
 import type { Address } from "viem";
 import { deployment } from "@/lib/chain/config";
 
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
 
+// Browser-extension wallets (MetaMask, Rabby, OKX…) are discovered through EIP-6963 by injectedWallet.
+// MetaMask's SDK-based connector is only added with WalletConnect (mobile deep links); it sends SDK analytics.
 const wallets = projectId
-  ? [metaMaskWallet, rabbyWallet, okxWallet, coinbaseWallet, walletConnectWallet, injectedWallet]
-  : [injectedWallet, metaMaskWallet, rabbyWallet, coinbaseWallet];
+  ? [injectedWallet, metaMaskWallet, rabbyWallet, okxWallet, coinbaseWallet, walletConnectWallet]
+  : [injectedWallet, rabbyWallet, coinbaseWallet];
 
 /**
  * Local end-to-end test wallets: anvil's public test accounts, signing through the local node.

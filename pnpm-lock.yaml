@@ -19,6 +19,9 @@ importers:
       '@tanstack/react-query':
         specifier: 5.90.5
         version: 5.90.5(react@19.1.0)
+      '@wagmi/core':
+        specifier: 2.22.1
+        version: 2.22.1(@tanstack/query-core@5.90.5)(@types/react@19.3.0)(immer@11.1.21)(react@19.1.0)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.1.0))(viem@2.38.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
       drizzle-orm:
         specifier: 0.44.7
         version: 0.44.7(@electric-sql/pglite@0.3.11)(postgres@3.4.7)

@@ -15,7 +15,12 @@ export type Outcome = "yes" | "no" | "invalid";
  * then sends the contract call that commits the document hash. Each step is a separate,
  * confirmed transaction; nothing is reported as done until its receipt is mined.
  */
-export function useResolutionAction(marketId: number, onDone: () => void) {
+export interface Confirmed {
+  label: string;
+  hash: string;
+}
+
+export function useResolutionAction(marketId: number, onDone: (c?: Confirmed) => void) {
   const { address } = useAccount();
   const client = usePublicClient({ chainId: deployment.chainId });
   const { writeContractAsync } = useWriteContract();
@@ -71,7 +76,10 @@ export function useResolutionAction(marketId: number, onDone: () => void) {
     });
   }
 
-  function refreshAll() {
+  /** Returns an onConfirmed handler that refreshes data and reports the confirmed tx upward. */
+  const confirmed = (label: string) => (hash: string) => refreshAll({ label, hash });
+
+  function refreshAll(c?: Confirmed) {
     void qc.invalidateQueries({ queryKey: ["resolution", marketId] });
     void qc.invalidateQueries({ queryKey: ["markets"] });
     void qc.invalidateQueries({ queryKey: ["portfolio"] });
@@ -79,8 +87,8 @@ export function useResolutionAction(marketId: number, onDone: () => void) {
     void fetch(`/api/markets/${marketId}/refresh`, { method: "POST" }).finally(() =>
       qc.invalidateQueries({ queryKey: ["resolution", marketId] }),
     );
-    onDone();
+    onDone(c);
   }
 
-  return { tx, publish, ensureAllowance, refreshAll, writeContractAsync, client, address };
+  return { tx, publish, ensureAllowance, refreshAll, confirmed, writeContractAsync, client, address };
 }

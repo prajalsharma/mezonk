@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 
 /**
  * Native <dialog> as a modal: browser-provided focus trapping, Esc to close, inert background.
@@ -21,6 +21,7 @@ export function Dialog({
   footer?: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
@@ -32,11 +33,11 @@ export function Dialog({
       ref={ref}
       onClose={onClose}
       onCancel={onClose}
-      aria-labelledby="dialog-title"
+      aria-labelledby={titleId}
       className="m-0 mt-auto w-full max-w-none rounded-t-lg border border-line bg-surface p-0 text-ink shadow-2 backdrop:bg-[var(--overlay)] sm:m-auto sm:max-w-lg sm:rounded-lg"
     >
       <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
-        <h2 id="dialog-title" className="text-lg font-semibold">{title}</h2>
+        <h2 id={titleId} className="text-lg font-semibold">{title}</h2>
         <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-muted hover:bg-surface-2 hover:text-ink">
           <X className="size-4" />
         </button>

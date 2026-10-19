@@ -158,7 +158,7 @@ export function TradePanel({ marketId, chain }: { marketId: number; chain: Marke
   }
 
   if (!deployment.ready) {
-    return <Notice tone="warn" title="Trading is off">The market contract isn't deployed on this network.</Notice>;
+    return <Notice tone="warn" title="Trading is off">The market contract isn&apos;t deployed on this network.</Notice>;
   }
   if (chain.isLoading && !m) {
     return <div className="h-80 rounded-lg border border-line bg-surface" aria-busy="true" />;
@@ -180,7 +180,6 @@ export function TradePanel({ marketId, chain }: { marketId: number; chain: Marke
 
   const bq = mode === "buy" ? (quote.q as BuyQuote | null) : null;
   const sq = mode === "sell" ? (quote.q as SellQuote | null) : null;
-  const sidePrice = priceYes == null ? 0 : side === "yes" ? priceYes : 1 - priceYes;
   const stale = quote.q && quoteAge * 1000 > QUOTE_TTL_MS;
 
   let cta: React.ReactNode;
@@ -365,7 +364,7 @@ export function TradePanel({ marketId, chain }: { marketId: number; chain: Marke
         </p>
       )}
       <p className="text-xs text-muted">
-        Prices are the market's current estimate, not a guarantee. You can lose the full amount you put in.
+        Prices are the market&apos;s current estimate, not a guarantee. You can lose the full amount you put in.
       </p>
     </section>
   );

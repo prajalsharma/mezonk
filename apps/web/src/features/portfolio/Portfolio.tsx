@@ -210,7 +210,7 @@ export function Portfolio() {
 
       <dl className="grid grid-cols-2 gap-x-8 gap-y-4 border-y border-line py-5 md:grid-cols-5">
         <div>
-          <dt className="flex items-center gap-1 text-xs text-muted">Claimable now <Hint label="claimable">Sum of the contract's claimable() for every market you hold. Authoritative.</Hint></dt>
+          <dt className="flex items-center gap-1 text-xs text-muted">Claimable now <Hint label="claimable">Sum of the contract&apos;s claimable() for every market you hold. Authoritative.</Hint></dt>
           <dd className="tnum text-xl font-semibold">{formatMusd(totals.claimable)}</dd>
         </div>
         <div>

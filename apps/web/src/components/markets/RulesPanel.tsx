@@ -66,7 +66,7 @@ export function RulesPanel({
       ) : (
         <div className="space-y-2">
           <p className="flex items-center gap-2 text-sm text-warn">
-            <AlertTriangle className="size-4" aria-hidden /> This market was created without MEZONK's structured rules format. Read
+            <AlertTriangle className="size-4" aria-hidden /> This market was created without MEZONK&apos;s structured rules format. Read
             the raw text carefully.
           </p>
           <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-sunk p-3 text-xs text-ink-2">{raw}</pre>

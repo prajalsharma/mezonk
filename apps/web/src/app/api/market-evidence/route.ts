@@ -31,13 +31,14 @@ export function POST(req: NextRequest) {
     const parsed = body.safeParse(await req.json().catch(() => null));
     if (!parsed.success) return fail(400, "invalid_evidence", "Invalid evidence submission", parsed.error.flatten());
     const { marketId, url, note, author, signature } = parsed.data;
-    if (!(await getMarket(marketId))) return fail(404, "not_found", "No indexed market with this id");
+    // Authenticate before touching the database.
     const valid = await verifyMessage({
       address: author as `0x${string}`,
       message: evidenceMessage(marketId, url, note),
       signature: signature as `0x${string}`,
     }).catch(() => false);
     if (!valid) return fail(401, "bad_signature", "The signature does not match the submitting wallet");
+    if (!(await getMarket(marketId))) return fail(404, "not_found", "No indexed market with this id");
     const db = await getDb();
     const [row] = await db.insert(schema.evidence).values({ marketId, url, note, author, signature }).returning();
     return ok({ evidence: row }, { status: 201, maxAge: 0 });

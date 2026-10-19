@@ -87,6 +87,18 @@ describe("replayMarket", () => {
     expect(replayMarket(1, [bad], { chainId: 1, contract: "0x" })!.market.structured).toBe(false);
   });
 
+  it("produces identical results from out-of-order delivery", () => {
+    const trades = [
+      ev("Trade", { trader: "0xB", isYes: false, isBuy: true, collateralAmount: (4n * E).toString(), fee: (E / 25n).toString(), shares: (7n * E).toString(), poolYes: (104n * E).toString(), poolNo: (97n * E).toString() }, 20n),
+      ev("Trade", { trader: "0xB", isYes: false, isBuy: false, collateralAmount: (2n * E).toString(), fee: (E / 50n).toString(), shares: (3n * E).toString(), poolYes: (102n * E).toString(), poolNo: (100n * E).toString() }, 21n),
+    ];
+    const ordered = replayMarket(1, [created, ...trades], { chainId: 1, contract: "0x" })!;
+    const shuffled = replayMarket(1, [trades[1]!, created, trades[0]!], { chainId: 1, contract: "0x" })!;
+    expect({ ...shuffled.market, updatedAt: 0 }).toEqual({ ...ordered.market, updatedAt: 0 });
+    expect(shuffled.positions).toEqual(ordered.positions);
+    expect(ordered.market.poolNo).toBe((100n * E).toString());
+  });
+
   it("is idempotent", () => {
     const a = replayMarket(1, [created], { chainId: 1, contract: "0x" })!;
     const b = replayMarket(1, [created], { chainId: 1, contract: "0x" })!;
