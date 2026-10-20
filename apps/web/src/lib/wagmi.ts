@@ -34,6 +34,7 @@ export const E2E_ACCOUNTS: Record<string, Address> = {
   alice: "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
   bob: "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
   carol: "0x976EA74026E726554dB657fA54763abd0C3a0aa9",
+  curator: "0x14dC79964da2C08b23698B3D3cc7Ca32193d9955",
 };
 export const e2eEnabled = process.env.NEXT_PUBLIC_E2E_WALLET === "anvil" && deployment.isLocalFork;
 

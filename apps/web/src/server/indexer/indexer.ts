@@ -235,6 +235,12 @@ async function rebuildMarket(marketId: number) {
       );
     }
   });
+
+  // Governance link: the MarketApprovalUsed nonce ties this market to the proposal it was approved as.
+  // Outside the transaction on purpose; a workflow-store failure must never roll back chain data.
+  const used = evs.find((e) => e.eventName === "MarketApprovalUsed");
+  const nonce = (used?.args as { nonce?: string } | undefined)?.nonce;
+  if (nonce) await linkPublishedMarket(marketId, nonce).catch(() => undefined);
 }
 
 /**

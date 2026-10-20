@@ -16,7 +16,7 @@ export function TxStatus({ state, onRetry }: { state: TxState; onRetry?: () => v
       aria-live={failed ? "assertive" : "polite"}
       className={cx(
         "rounded-md border px-3 py-2.5 text-sm",
-        failed ? "border-no/40 bg-no-soft" : state.phase === "confirmed" ? "border-yes/40 bg-yes-soft" : "border-line bg-surface-2",
+        failed ? "border-danger/40 bg-danger-soft" : state.phase === "confirmed" ? "border-success/40 bg-success-soft" : "border-line bg-surface-2",
       )}
     >
       <div className="flex items-center gap-2">

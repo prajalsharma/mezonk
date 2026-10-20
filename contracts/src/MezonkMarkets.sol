@@ -90,7 +90,14 @@ contract MezonkMarkets is IMezonkMarkets, Ownable2Step, Pausable, ReentrancyGuar
     /// @notice YES price in 1e18 fixed point (equals the implied YES probability before fees).
     function priceYes(uint256 marketId) external view returns (uint256) {
         Market storage m = _market(marketId);
-        return Math.mulDiv(m.poolNo, 1e18, m.poolYes + m.poolNo);
+        uint256 total = m.poolYes + m.poolNo;
+        // After the creator claims liquidity both pools are empty; report the settlement price instead of reverting.
+        if (total == 0) {
+            if (m.finalOutcome == Outcome.Yes) return 1e18;
+            if (m.finalOutcome == Outcome.No) return 0;
+            return 5e17;
+        }
+        return Math.mulDiv(m.poolNo, 1e18, total);
     }
 
     function quoteBuy(uint256 marketId, bool isYes, uint256 amountIn)
@@ -153,6 +160,15 @@ contract MezonkMarkets is IMezonkMarkets, Ownable2Step, Pausable, ReentrancyGuar
         _pull(msg.sender, p.initialLiquidity);
         _emitCreated(marketId, p, lpYes, lpNo);
         emit MarketApprovalUsed(marketId, curator, approval.nonce);
+    }
+
+    /// @notice Voids an approval before it is used. A curator can only void its own nonces in effect (a nonce
+    /// it never signed is meaningless to void); the owner may void any. Used when a review is withdrawn.
+    function cancelApproval(bytes32 nonce) external {
+        if (!isCurator[msg.sender] && msg.sender != owner()) revert NotCurator();
+        if (approvalUsed[nonce]) revert ApprovalUsed();
+        approvalUsed[nonce] = true;
+        emit MarketApprovalCancelled(msg.sender, nonce);
     }
 
     /// @notice EIP-712 digest a curator signs for `approval`.
@@ -329,7 +345,9 @@ contract MezonkMarkets is IMezonkMarkets, Ownable2Step, Pausable, ReentrancyGuar
         Stage s = _stage(m);
         if (s != Stage.Proposed) revert WrongStage(s);
         if (block.timestamp >= uint256(m.proposedAt) + m.challengeWindow) revert WindowClosed();
-        if (msg.sender == m.resolver) revert InvalidParams();
+        // Neither party to the ruling may open it: the resolver cannot challenge itself and the arbitrator
+        // cannot create the dispute it then rules on (and collect the proposer bond).
+        if (msg.sender == m.resolver || msg.sender == m.arbitrator) revert InvalidParams();
         if (evidenceHash == bytes32(0)) revert InvalidParams();
 
         m.disputer = msg.sender;

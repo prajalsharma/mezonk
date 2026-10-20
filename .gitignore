@@ -16,3 +16,8 @@ contracts/broadcast/*/31337/
 playwright-report/
 test-results/
 contracts/broadcast/
+
+# pashov solidity-auditor scan artifacts
+.solidity-auditor/
+.audit-*/
+x-ray/

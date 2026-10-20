@@ -85,8 +85,11 @@ export const REVIEW_CHECKLIST = [
 export type ChecklistKey = (typeof REVIEW_CHECKLIST)[number][0];
 
 export const reviewActionSchema = z.object({
-  action: z.enum(["claim", "request_changes", "reject", "approve", "note", "unassign"]),
+  action: z.enum(["claim", "request_changes", "reject", "approve", "note", "unassign", "assign"]),
   reason: z.string().trim().max(1200).default(""),
+  /** For `assign`: the on-chain resolver and the approved creator who will publish. */
+  resolver: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
+  publisher: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   checklist: z.record(z.string(), z.boolean()).optional(),
   duplicateOf: z.string().max(64).optional(),
   internal: z.boolean().default(false),

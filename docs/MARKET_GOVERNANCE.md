@@ -43,9 +43,14 @@ DRAFT → SUBMITTED → UNDER_REVIEW → APPROVED → SCHEDULED → LIVE → CLO
 | under_review → changes_requested | curator | reason ≥ 10 chars | `request_changes` + reason (public) |
 | changes_requested → submitted | author | after editing (version increments if rules changed) | `resubmit` |
 | under_review → rejected | curator | reason ≥ 10 chars; optional duplicate reference | `reject` + reason (public) |
-| under_review → approved | curator | full checklist; curator signs the EIP-712 `MarketApproval` for **this version's** rules hash, author, resolver and close time; signature verified server-side (EOA or ERC-1271) | `approve` + checklist; approval stored |
+| under_review → under_review (assign) | curator | picks the resolver (must pass `isResolver`) and the publisher (must pass `isCreator`, ≠ curator); defaults: publisher = author | `assign`, audit |
+| under_review → approved | curator | full checklist; curator signs the EIP-712 `MarketApproval` for **this version's** rules hash, the publisher, resolver and close time; signature verified server-side (EOA or ERC-1271) | `approve` + checklist; approval stored and public |
 | approved → scheduled | creator | optional: records the intended launch | — |
-| approved/scheduled → published | **chain** | `createMarket` succeeds; the indexer links `MarketApprovalUsed(nonce)` to the proposal | `publish`, audit |
+| approved/scheduled → published | **chain** | the publisher calls `createMarket` with the stored approval and seed liquidity; the indexer links `MarketApprovalUsed(nonce)` to the proposal | `publish`, audit |
+
+A suggestion from a wallet that is not an approved creator is still publishable: the curator names an approved
+creator as **publisher** before approving, and the approval binds that address. The author keeps authorship on the
+proposal page; the publisher owns the on-chain creator role (seed liquidity, creator fees).
 | any pre-approval → withdrawn | author | — | `withdraw` |
 
 ### Which states the contract enforces
@@ -57,6 +62,8 @@ Only the last step is on-chain, but it is the one that matters: `createMarket(pa
 3. the approval is unexpired (`ApprovalExpired`) and its nonce unused (`ApprovalUsed`);
 4. `approval.metadataHash == keccak256(params.metadata)`, and creator, resolver and closeTime match (`ApprovalMismatch`);
 5. the signature verifies for `curator` (`BadApprovalSignature`, ERC-1271 supported).
+
+A curator (or the owner) can void an unused approval on-chain with `cancelApproval(nonce)`, which marks the nonce used (pashov audit 2026-10-20, finding 1).
 
 Everything before that lives in the backend workflow store with an append-only audit log. The backend can
 lose data or be wrong about a status, but it can never make an unreviewed market tradable, because it holds

@@ -17,7 +17,7 @@ export default function Home() {
           </p>
           <div className="flex flex-wrap gap-3">
             <ButtonLink href="/discover" size="lg">Explore markets</ButtonLink>
-            <ButtonLink href="/create" size="lg" variant="secondary">Create a market</ButtonLink>
+            <ButtonLink href="/suggest" size="lg" variant="secondary">Suggest a market</ButtonLink>
           </div>
           <p className="text-sm text-muted">
             {deployment.ready
@@ -86,14 +86,14 @@ export default function Home() {
 
       <section className="flex flex-col items-start gap-6 rounded-lg bg-primary px-6 py-10 text-on-primary md:flex-row md:items-center md:justify-between md:px-10">
         <div className="flex items-center gap-4">
-          <LogoMark size={44} variant="icon" aria-hidden title="" />
+          <LogoMark size={44} variant="tile-red" title="" />
           <div>
             <h2 className="text-2xl font-semibold">Have a question worth a market?</h2>
-            <p className="opacity-80">Write clear rules, seed the pool with MUSD, and earn half of the trading fees.</p>
+            <p className="opacity-80">Write clear rules and submit them. A curator reviews in public; an approved creator seeds and publishes.</p>
           </div>
         </div>
-        <Link href="/create" className="inline-flex h-12 items-center gap-2 rounded-md bg-on-primary px-5 font-semibold text-primary hover:opacity-90">
-          Create a market <ArrowRight className="size-4" />
+        <Link href="/suggest" className="inline-flex h-12 items-center gap-2 rounded-md bg-on-primary px-5 font-semibold text-primary hover:opacity-90">
+          Suggest a market <ArrowRight className="size-4" />
         </Link>
       </section>
     </div>

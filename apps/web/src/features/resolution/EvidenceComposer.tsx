@@ -89,7 +89,7 @@ export function EvidenceComposer({
               <button
                 type="button"
                 onClick={() => onChange({ ...value, links: value.links.filter((_, j) => j !== i) })}
-                className="inline-flex items-center gap-1 justify-self-start text-sm text-ink-2 hover:text-no"
+                className="inline-flex items-center gap-1 justify-self-start text-sm text-ink-2 hover:text-danger"
               >
                 <Trash2 className="size-3.5" /> Remove
               </button>

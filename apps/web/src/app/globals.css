@@ -18,24 +18,40 @@
   --muted: #6b655c; /* 5.0:1 on bg */
   --border: #d6d0c5;
   --border-strong: #14110f;
-  --accent: #ff004d; /* brand red: marks, markers, fills — not small text */
+  --accent: #ff004d; /* brand red: fills, markers, YES */
   --accent-text: #c8003c; /* 5.2:1 on bg, red used as text */
   --accent-soft: #ffe0e8;
-  --yes: #0a6a40; /* 5.8:1 on bg, 5.3:1 on surface-2 */
-  --yes-soft: #d8eee2;
-  --no: #c8003c;
-  --no-soft: #fbdde5;
+
+  /* Outcomes follow the split-coin logo: red half = YES, ink half = NO. */
+  --yes: #ff004d; /* fill; put --on-yes text on it (4.8:1) */
+  --on-yes: #14110f;
+  --yes-text: #c8003c; /* 5.2:1 on bg */
+  --yes-soft: #ffe0e8;
+  --no: #14110f; /* fill; put --on-no text on it */
+  --on-no: #f2efe9;
+  --no-text: #14110f;
+  --no-soft: #e3dfd7;
+
+  /* System states, deliberately not the brand red. */
+  --danger: #9a3412; /* 6.4:1 on bg, 5.8:1 on surface-2 */
+  --danger-soft: #f9e2d6;
+  --success: #0a6a40; /* 5.8:1 on bg */
+  --success-soft: #d8eee2;
+  --gain: #0a6a40;
+  --loss: #9a3412;
   --warn: #8a5a00; /* 5.2:1 on bg */
   --warn-soft: #f6e7c4;
   --info: #24518a;
   --primary: #14110f; /* primary button fill */
   --on-primary: #f2efe9;
   --focus: #ff004d;
-  --logo-stroke: #14110f;
-  --logo-dot: #ff004d;
-  --logo-cut: var(--bg);
+  --logo-ink: #14110f;
+  --logo-red: #ff004d;
+  --glass: rgba(250, 248, 244, 0.72);
+  --glass-border: rgba(20, 17, 15, 0.1);
   --shadow-1: 0 1px 0 rgba(20, 17, 15, 0.04), 0 1px 2px rgba(20, 17, 15, 0.06);
   --shadow-2: 0 8px 24px -8px rgba(20, 17, 15, 0.18);
+  --shadow-3: 0 18px 48px -16px rgba(20, 17, 15, 0.28);
   --overlay: rgba(20, 17, 15, 0.45);
 }
 
@@ -53,21 +69,35 @@
   --accent: #ff004d;
   --accent-text: #ff4d7c; /* 5.9:1 */
   --accent-soft: #3a1520;
-  --yes: #3fd18c; /* 9.6:1 */
-  --yes-soft: #12301f;
-  --no: #ff4d7c;
-  --no-soft: #3a1520;
+
+  --yes: #ff004d;
+  --on-yes: #14110f;
+  --yes-text: #ff4d7c; /* 5.9:1 on bg */
+  --yes-soft: #3a1520;
+  --no: #f2efe9; /* ink half inverts to cream on dark surfaces */
+  --on-no: #14110f;
+  --no-text: #f2efe9;
+  --no-soft: #2c2823;
+
+  --danger: #fb923c; /* 8.3:1 */
+  --danger-soft: #3a2314;
+  --success: #3fd18c; /* 9.6:1 */
+  --success-soft: #12301f;
+  --gain: #3fd18c;
+  --loss: #fb923c;
   --warn: #f2b84b;
   --warn-soft: #362810;
   --info: #8db4ee;
   --primary: #f2efe9;
   --on-primary: #14110f;
   --focus: #ff4d7c;
-  --logo-stroke: #f2efe9;
-  --logo-dot: #ff004d;
-  --logo-cut: var(--bg);
+  --logo-ink: #f2efe9;
+  --logo-red: #ff004d;
+  --glass: rgba(27, 24, 21, 0.72);
+  --glass-border: rgba(242, 239, 233, 0.1);
   --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.3);
   --shadow-2: 0 12px 32px -12px rgba(0, 0, 0, 0.7);
+  --shadow-3: 0 24px 56px -16px rgba(0, 0, 0, 0.8);
   --overlay: rgba(0, 0, 0, 0.6);
 }
 
@@ -85,9 +115,19 @@
   --color-accent-text: var(--accent-text);
   --color-accent-soft: var(--accent-soft);
   --color-yes: var(--yes);
+  --color-on-yes: var(--on-yes);
+  --color-yes-text: var(--yes-text);
   --color-yes-soft: var(--yes-soft);
   --color-no: var(--no);
+  --color-on-no: var(--on-no);
+  --color-no-text: var(--no-text);
   --color-no-soft: var(--no-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-gain: var(--gain);
+  --color-loss: var(--loss);
   --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
   --color-info: var(--info);
@@ -122,8 +162,10 @@
 
   --shadow-1: var(--shadow-1);
   --shadow-2: var(--shadow-2);
+  --shadow-3: var(--shadow-3);
 
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 
   --breakpoint-xs: 22.5rem;
 }
@@ -141,6 +183,7 @@
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     font-feature-settings: "ss01";
+    font-variant-numeric: tabular-nums;
   }
   h1, h2, h3 {
     text-wrap: balance;
@@ -173,6 +216,38 @@
   .tnum {
     font-variant-numeric: tabular-nums;
   }
+  /* Floating surfaces only: header, command palette, popovers, sheets. */
+  .glass {
+    background: var(--glass);
+    border-color: var(--glass-border);
+    -webkit-backdrop-filter: saturate(140%) blur(14px);
+    backdrop-filter: saturate(140%) blur(14px);
+  }
+  /* Entrance for lists: set --i per item for a stagger. */
+  .rise {
+    animation: rise 420ms var(--ease-out-expo) both;
+    animation-delay: calc(var(--i, 0) * 38ms);
+  }
+  .fade {
+    animation: fade 240ms var(--ease-out-quart) both;
+  }
+  .lift {
+    transition: transform 180ms var(--ease-out-quart), box-shadow 180ms var(--ease-out-quart), border-color 180ms;
+  }
+  .lift:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-2);
+  }
+  .press {
+    transition: transform 90ms var(--ease-out-quart);
+  }
+  .press:active {
+    transform: scale(0.985);
+  }
+  .theme-transition,
+  .theme-transition * {
+    transition: background-color 220ms var(--ease-out-quart), color 220ms var(--ease-out-quart), border-color 220ms var(--ease-out-quart) !important;
+  }
   .wordmark {
     font-weight: 600;
     letter-spacing: 0.07em;
@@ -186,6 +261,42 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pop {
+  from { opacity: 0; transform: translateY(6px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes sheet-up {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes flash-yes {
+  from { background-color: var(--yes-soft); }
+  to { background-color: transparent; }
+}
+@keyframes flash-no {
+  from { background-color: var(--no-soft); }
+  to { background-color: transparent; }
+}
+dialog[open] {
+  animation: pop 200ms var(--ease-out-expo) both;
+}
+dialog::backdrop {
+  animation: fade 180ms var(--ease-out-quart) both;
+}
+@media (max-width: 639px) {
+  dialog[open] {
+    animation-name: sheet-up;
   }
 }
 

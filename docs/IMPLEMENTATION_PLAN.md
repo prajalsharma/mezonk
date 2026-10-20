@@ -22,12 +22,12 @@
 
 | # | Work | Status |
 |---|---|---|
-| 1 | Audit (`INITIAL_AUDIT.md`), frontend audit (`FRONTEND_AUDIT.md`), governance spec (`MARKET_GOVERNANCE.md`), architecture (`ARCHITECTURE.md`) | in progress |
-| 2 | Contract: creator/curator roles, EIP-712 approvals, tests (unauthorized publish, bypass, self-approval, replay, expiry, param binding, ERC-1271) | next |
-| 3 | Backend: proposals, reviews, projects, audit log, settings; signed-request auth; indexer links proposals to markets | |
-| 4 | Design system: new logo, outcome tokens, motion, glass for floating surfaces, theme switcher with system option | |
-| 5 | Screens: suggest wizard, curator dashboard, proposal status, profile, settings, resolution center, discover upgrades, related markets | |
-| 6 | Integration: E2E for governance and themes, keyboard, a11y; docs; push | |
+| 1 | Audit (`INITIAL_AUDIT.md`), frontend audit (`FRONTEND_AUDIT.md`), governance spec (`MARKET_GOVERNANCE.md`), architecture (`ARCHITECTURE.md`) | done |
+| 2 | Contract: creator/curator roles, EIP-712 approvals, tests (unauthorized publish, bypass, self-approval, replay, expiry, param binding, ERC-1271) | done (Governance.t.sol, 14 cases) |
+| 3 | Backend: proposals, reviews, projects, audit log, settings; signed-request auth; indexer links proposals to markets | done (+ curator-assigned resolver and publisher) |
+| 4 | Design system: new logo, outcome tokens, motion, glass for floating surfaces, theme switcher with system option | done |
+| 5 | Screens: suggest wizard, curator dashboard, proposal status, profile, settings, resolution center | done; discover upgrades and related markets: not started |
+| 6 | Integration: E2E for governance (3 flows), docs; push | E2E written; see `testing.md` for the last run |
 
 ### Earlier phases (done)
 

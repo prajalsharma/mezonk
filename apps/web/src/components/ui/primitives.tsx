@@ -13,14 +13,14 @@ type Tone = "info" | "warn" | "error" | "success";
 const toneStyle: Record<Tone, string> = {
   info: "bg-surface border-line text-ink",
   warn: "bg-warn-soft border-warn/40 text-ink",
-  error: "bg-no-soft border-no/40 text-ink",
-  success: "bg-yes-soft border-yes/40 text-ink",
+  error: "bg-danger-soft border-danger/40 text-ink",
+  success: "bg-success-soft border-success/40 text-ink",
 };
 const toneIcon: Record<Tone, ReactNode> = {
   info: <Info className="size-4 text-info" aria-hidden />,
   warn: <AlertTriangle className="size-4 text-warn" aria-hidden />,
-  error: <CircleX className="size-4 text-no" aria-hidden />,
-  success: <CircleCheck className="size-4 text-yes" aria-hidden />,
+  error: <CircleX className="size-4 text-danger" aria-hidden />,
+  success: <CircleCheck className="size-4 text-success" aria-hidden />,
 };
 
 /** Inline notice. Tone is conveyed by icon and wording, not colour alone. */
@@ -107,7 +107,7 @@ export function Hint({ label, children }: { label: string; children: ReactNode }
 }
 
 /** A coloured dot plus a word. Used for status instead of pills. */
-export function Status({ tone, children }: { tone: "yes" | "no" | "warn" | "muted" | "accent" | "info"; children: ReactNode }) {
+export function Status({ tone, children }: { tone: "yes" | "no" | "warn" | "muted" | "accent" | "info" | "success" | "danger"; children: ReactNode }) {
   const dot = {
     yes: "bg-yes",
     no: "bg-no",
@@ -115,6 +115,8 @@ export function Status({ tone, children }: { tone: "yes" | "no" | "warn" | "mute
     muted: "bg-muted",
     accent: "bg-accent",
     info: "bg-info",
+    success: "bg-success",
+    danger: "bg-danger",
   }[tone];
   return (
     <span className="inline-flex items-center gap-1.5 text-sm text-ink-2">
@@ -193,7 +195,7 @@ export function Field({
       </label>
       {children}
       {error ? (
-        <p className="text-sm text-no" role="alert">
+        <p className="text-sm text-danger" role="alert">
           {error}
         </p>
       ) : hint ? (
@@ -206,4 +208,4 @@ export function Field({
 export const inputClass =
   "w-full rounded-md border border-line bg-surface px-3 py-2.5 text-base text-ink placeholder:text-muted " +
   "transition-colors hover:border-ink-2 focus:border-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-focus " +
-  "aria-[invalid=true]:border-no disabled:opacity-50";
+  "aria-[invalid=true]:border-danger disabled:opacity-50";

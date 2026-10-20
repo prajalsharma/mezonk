@@ -1,7 +1,6 @@
 # MEZONK
 
-**Turn your conviction into a market.** An independent, non-custodial prediction market on [Mezo](https://mezo.org), settled in MUSD.
-Not affiliated with or endorsed by Mezo.
+**Turn your conviction into a market.** A non-custodial prediction market built on [Mezo](https://mezo.org), settled in MUSD.
 
 - Buy **Yes** or **No** shares with MUSD; sell back any time before trading closes.
 - Every Yes/No pair is backed by exactly 1 MUSD held by the contract, so payouts can't exceed reserves.

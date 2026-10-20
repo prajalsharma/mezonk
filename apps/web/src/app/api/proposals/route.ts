@@ -6,7 +6,15 @@ import { PROPOSAL_STATUS } from "@/lib/governance/proposal";
 import { createProposal, GovernanceError, listProposals } from "@/server/governance";
 
 export const dynamic = "force-dynamic";
-const q = z.object({ status: z.string().optional(), mine: z.coerce.boolean().optional(), queue: z.coerce.boolean().optional(), ...pageSchema });
+const q = z.object({
+  status: z.string().optional(),
+  mine: z.coerce.boolean().optional(),
+  queue: z.coerce.boolean().optional(),
+  /** Approved proposals this signed-in wallet may publish. */
+  publish: z.coerce.boolean().optional(),
+  author: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
+  ...pageSchema,
+});
 
 /** Public: community suggestions and their status. Curators: the review queue. Authors: their own, including drafts. */
 export function GET(req: NextRequest) {
@@ -23,7 +31,11 @@ export function GET(req: NextRequest) {
       if (!v) return unauthorized();
       return ok(await listProposals({ status: statuses, author: v.wallet, viewer: v, limit: p.data.limit, offset: p.data.offset }), { maxAge: 0 });
     }
-    return ok(await listProposals({ status: statuses, viewer: v, publicOnly: true, limit: p.data.limit, offset: p.data.offset }), { maxAge: 10 });
+    if (p.data.publish) {
+      if (!v) return unauthorized();
+      return ok(await listProposals({ status: statuses?.length ? statuses : ["approved", "scheduled"], publisher: v.wallet, viewer: v, limit: p.data.limit, offset: p.data.offset }), { maxAge: 0 });
+    }
+    return ok(await listProposals({ status: statuses, author: p.data.author, viewer: v, publicOnly: true, limit: p.data.limit, offset: p.data.offset }), { maxAge: 10 });
   });
 }
 

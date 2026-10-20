@@ -292,6 +292,8 @@ export const marketProposals = pgTable(
     closeTime: timestamp("close_time", { withTimezone: true }).notNull(),
     launchWindow: text("launch_window").notNull().default(""),
     resolver: text("resolver"),
+    /** Approved creator who will publish (set by the curator). Defaults to the author when null. */
+    publisher: text("publisher"),
     liquidityPlan: text("liquidity_plan").notNull().default(""),
     conflicts: text("conflicts").notNull().default(""),
     rationale: text("rationale").notNull().default(""),

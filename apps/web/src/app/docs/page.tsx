@@ -106,14 +106,19 @@ export default function DocsPage() {
         {deployment.ready ? <LiveParams /> : <p className="text-warn">{readinessMessage[deployment.reason]}</p>}
         <p>Claiming payouts, refunds and bonds is free apart from the network fee.</p>
 
-        <H id="creators">Creating a market</H>
+        <H id="creators">Suggesting and publishing a market</H>
         <ul className="list-disc space-y-1 pl-5">
-          <li>Write a question with a number or date, and rules a stranger would apply the same way.</li>
-          <li>Rules are hashed on-chain and can never be edited, so ambiguity hurts everyone.</li>
-          <li>You seed the pool. Your liquidity trades against everyone: at settlement you withdraw what the pool holds at the final rate, which can be less than you deposited.</li>
-          <li>You earn the creator share of every trading fee, claimable at any time.</li>
+          <li>Anyone with a wallet can suggest a market: a question with a number or date, and rules a stranger would apply the same way.</li>
+          <li>A curator reviews it against the market policy and a public checklist. Every decision and reason is visible on the suggestion&apos;s page.</li>
+          <li>Approval is a signature from the curator&apos;s wallet. The contract refuses to create a market without a valid, unused, unexpired one, and the curator can never be the publisher.</li>
+          <li>An approved creator publishes it and seeds the pool. Their liquidity trades against everyone: at settlement they withdraw what the pool holds at the final rate, which can be less than they deposited. They earn the creator share of every trading fee.</li>
+          <li>Once published, rules are hashed on-chain and can never be edited, so ambiguity hurts everyone.</li>
         </ul>
-        <p><Link className="font-semibold text-ink underline" href="/create">Create a market</Link></p>
+        <p>
+          <Link className="font-semibold text-ink underline" href="/suggest">Suggest a market</Link>
+          {" · "}
+          <Link className="font-semibold text-ink underline" href="/proposals">See the review queue</Link>
+        </p>
 
         <H id="policy">Market policy</H>
         <ul className="list-disc space-y-1 pl-5">

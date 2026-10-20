@@ -35,12 +35,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             role={t.tone === "error" ? "alert" : "status"}
             className={cx(
               "pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-md border bg-surface px-4 py-3 shadow-2",
-              t.tone === "error" ? "border-no/50" : t.tone === "success" ? "border-yes/50" : "border-line",
+              t.tone === "error" ? "border-danger/50" : t.tone === "success" ? "border-success/50" : "border-line",
             )}
           >
             <span
               aria-hidden
-              className={cx("mt-1.5 size-2 shrink-0 rounded-full", t.tone === "error" ? "bg-no" : t.tone === "success" ? "bg-yes" : "bg-info")}
+              className={cx("mt-1.5 size-2 shrink-0 rounded-full", t.tone === "error" ? "bg-danger" : t.tone === "success" ? "bg-success" : "bg-info")}
             />
             <div className="min-w-0 flex-1 text-sm">
               <p className="font-semibold">{t.title}</p>

@@ -56,14 +56,14 @@ const STATUS_LABEL: Record<ClaimStatus, string> = {
   lost: "Lost · nothing to claim",
   open: "Open position",
 };
-const STATUS_TONE: Record<ClaimStatus, "yes" | "no" | "warn" | "muted" | "accent" | "info"> = {
-  claimable: "yes",
-  refund: "yes",
+const STATUS_TONE: Record<ClaimStatus, "yes" | "no" | "warn" | "muted" | "accent" | "info" | "success" | "danger"> = {
+  claimable: "success",
+  refund: "success",
   pending: "info",
   claimed: "muted",
   "invalid-claimed": "muted",
   awaiting: "warn",
-  lost: "no",
+  lost: "muted",
   open: "info",
 };
 const FILTERS: Array<{ v: "all" | ClaimStatus | "invalid"; l: string }> = [
@@ -223,7 +223,7 @@ export function Portfolio() {
         </div>
         <div>
           <dt className="flex items-center gap-1 text-xs text-muted">Realized P&amp;L <Hint label="realized">Sales and redemptions minus average cost of the shares closed. From indexed events.</Hint></dt>
-          <dd className={cx("tnum text-xl font-semibold", totals.realized > 0n ? "text-yes" : totals.realized < 0n ? "text-no" : "")}>{signed(totals.realized)}</dd>
+          <dd className={cx("tnum text-xl font-semibold", totals.realized > 0n ? "text-gain" : totals.realized < 0n ? "text-loss" : "")}>{signed(totals.realized)}</dd>
         </div>
         <div>
           <dt className="text-xs text-muted">Fees paid · won / lost</dt>
@@ -282,8 +282,8 @@ export function Portfolio() {
                   {pend && <p className="text-xs text-muted">Submitted <TxLink hash={pend.hash} /> · waiting for confirmation</p>}
                 </div>
                 <dl className="tnum space-y-0.5 text-sm">
-                  {yes > 0n && <div className="flex justify-between"><dt className="text-yes">Yes</dt><dd>{formatShares(yes)}</dd></div>}
-                  {no > 0n && <div className="flex justify-between"><dt className="text-no">No</dt><dd>{formatShares(no)}</dd></div>}
+                  {yes > 0n && <div className="flex justify-between"><dt className="text-yes-text">Yes</dt><dd>{formatShares(yes)}</dd></div>}
+                  {no > 0n && <div className="flex justify-between"><dt className="text-no-text">No</dt><dd>{formatShares(no)}</dd></div>}
                   {cost > 0n && <div className="flex justify-between text-ink-2"><dt>Cost basis</dt><dd>{formatMusd(cost)}</dd></div>}
                   {exit !== null && exit > 0n && <div className="flex justify-between text-ink-2"><dt>Sell value</dt><dd>{formatMusd(exit)}</dd></div>}
                   {big(p.redeemedPayout) > 0n && <div className="flex justify-between text-ink-2"><dt>Paid out</dt><dd>{formatMusd(p.redeemedPayout)}</dd></div>}

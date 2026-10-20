@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-for (const path of ["/", "/discover", "/markets", "/markets/4", "/markets/5", "/create", "/portfolio", "/activity", "/docs", "/status"]) {
+for (const path of ["/", "/discover", "/markets", "/markets/4", "/markets/5", "/suggest", "/proposals", "/resolve", "/settings", "/portfolio", "/activity", "/docs", "/status"]) {
   test(`no horizontal overflow on ${path}`, async ({ page }) => {
     await page.goto(path);
     await page.waitForTimeout(3000);

@@ -160,7 +160,7 @@ export function MarketsBrowser() {
           ) : (
             <EmptyState
               title="No markets yet"
-              action={<ButtonLink href="/create">Create the first market</ButtonLink>}
+              action={<ButtonLink href="/suggest">Suggest the first market</ButtonLink>}
             >
               Markets appear here as soon as they are created on-chain and indexed.
             </EmptyState>

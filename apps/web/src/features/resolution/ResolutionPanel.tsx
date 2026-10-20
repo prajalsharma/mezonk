@@ -44,7 +44,7 @@ function lifecycle(stage: number, p: Permissions, finalOutcome: number) {
     default:
       return finalOutcome === 3
         ? { tone: "muted" as const, label: "Invalid · refunds open", sub: "Every share redeems for 0.5 MUSD." }
-        : { tone: "accent" as const, label: `Finalized ${outcomeLabel(finalOutcome)} · claims open`, sub: `Each ${outcomeLabel(finalOutcome)} share redeems for 1 MUSD.` };
+        : { tone: (finalOutcome === 1 ? "yes" : "no") as "yes" | "no", label: `Finalized ${outcomeLabel(finalOutcome)} · claims open`, sub: `Each ${outcomeLabel(finalOutcome)} share redeems for 1 MUSD.` };
   }
 }
 

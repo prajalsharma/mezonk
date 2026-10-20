@@ -82,7 +82,7 @@ export async function startChain(port: number) {
   const createMarket = async (p: CreateParams, creator: Who = "creator") => {
     const now = (await client.getBlock()).timestamp;
     const args = await signedCreateArgs(KEYS.curator, 31611, markets, addr(creator), p, now);
-    await send(wallet(creator).writeContract({ address: markets, abi: mezonkMarketsAbi, functionName: "createMarket", args }));
+    await send(wallet(creator).writeContract({ address: markets, abi: mezonkMarketsAbi, functionName: "createMarket", args: args as never }));
     return client.readContract({ address: markets, abi: mezonkMarketsAbi, functionName: "marketCount" });
   };
   return { proc, rpc, client, wallet, addr, send, musd, markets, deployBlock, createMarket, stop: () => proc.kill() };

@@ -1,0 +1,1 @@
+ALTER TABLE "market_proposals" ADD COLUMN "publisher" text;

@@ -242,7 +242,7 @@ export function TradePanel({ marketId, chain }: { marketId: number; chain: Marke
                   : "border-line hover:border-ink-2",
               )}
             >
-              <span className={cx("font-semibold", s === "yes" ? "text-yes" : "text-no")}>{s === "yes" ? "Yes" : "No"}</span>
+              <span className={cx("font-semibold", s === "yes" ? "text-yes-text" : "text-no-text")}>{s === "yes" ? "Yes" : "No"}</span>
               <span className="tnum text-sm text-ink-2">{p == null ? "—" : `${formatPrice(p)} MUSD`}</span>
             </button>
           );
@@ -283,7 +283,7 @@ export function TradePanel({ marketId, chain }: { marketId: number; chain: Marke
           aria-invalid={!!quote.err || insufficient}
           className={cx(inputClass, "tnum text-lg")}
         />
-        {quote.err && <p className="text-sm text-no">{quote.err}</p>}
+        {quote.err && <p className="text-sm text-danger">{quote.err}</p>}
       </div>
 
       {quote.q && (
@@ -302,7 +302,7 @@ export function TradePanel({ marketId, chain }: { marketId: number; chain: Marke
                 {formatMusd(bq.payoutIfWin)} MUSD
               </KeyValue>
               <KeyValue label="Profit if it wins">
-                <span className={bq.profitIfWin >= 0n ? "text-yes" : "text-no"}>
+                <span className={bq.profitIfWin >= 0n ? "text-gain" : "text-loss"}>
                   {bq.profitIfWin >= 0n ? "+" : "−"}
                   {formatMusd(bq.profitIfWin >= 0n ? bq.profitIfWin : -bq.profitIfWin)} MUSD
                 </span>

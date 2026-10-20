@@ -9,7 +9,7 @@ import { DeploymentBanner } from "@/components/layout/DeploymentBanner";
 const hanken = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-hanken", weight: ["400", "500", "600", "700"] });
 
 export const metadata: Metadata = {
-  title: { default: "MEZONK · Prediction markets on Mezo", template: "%s · MEZONK" },
+  title: { default: "MEZONK · Prediction markets settled in MUSD", template: "%s · MEZONK" },
   description:
     "Turn your conviction into a market. Trade YES or NO with MUSD on Mezo, with rules committed on-chain and a public dispute trail.",
   icons: { icon: "/mezonk-icon.svg" },

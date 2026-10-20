@@ -10,8 +10,11 @@ export function Footer() {
         <div className="space-y-3">
           <Lockup />
           <p className="max-w-sm text-sm text-ink-2">
-            An independent prediction market on Mezo. Not affiliated with or endorsed by Mezo. Prices are not
-            predictions of certainty and nothing here is financial advice.
+            Prediction markets built on{" "}
+            <a href="https://mezo.org" target="_blank" rel="noreferrer" className="font-semibold text-ink underline decoration-line underline-offset-2">
+              Mezo
+            </a>
+            . Prices are not predictions of certainty and nothing here is financial advice.
           </p>
         </div>
         <nav aria-label="Footer" className="grid grid-cols-2 gap-2 text-sm">
@@ -21,6 +24,9 @@ export function Footer() {
           <Link className="text-ink-2 hover:text-ink" href="/docs#risks">Risks</Link>
           <Link className="text-ink-2 hover:text-ink" href="/docs#contracts">Contracts</Link>
           <Link className="text-ink-2 hover:text-ink" href="/docs#policy">Market policy</Link>
+          <Link className="text-ink-2 hover:text-ink" href="/proposals">Suggestions</Link>
+          <Link className="text-ink-2 hover:text-ink" href="/resolve">Resolution center</Link>
+          <Link className="text-ink-2 hover:text-ink" href="/settings">Settings</Link>
           <Link className="text-ink-2 hover:text-ink" href="/status">System status</Link>
         </nav>
         <dl className="space-y-1.5 text-sm">

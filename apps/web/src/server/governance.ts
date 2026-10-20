@@ -11,7 +11,7 @@ import {
   type ProposalInput,
   type ProposalStatus,
 } from "@/lib/governance/proposal";
-import { metadataHash, reviewMetadata, serializeMetadata } from "@/lib/market/metadata";
+import { metadataHash, reviewMetadata, serializeMetadata, type MarketMetadata } from "@/lib/market/metadata";
 import { publicClient } from "@/server/chain";
 import { getDb, schema } from "@/server/db/client";
 import { listMarkets } from "@/server/queries";
@@ -42,22 +42,26 @@ export function publicProposal(p: ProposalRow, viewer?: Roles | null) {
     projectId: p.projectId,
     status: p.status as ProposalStatus,
     version: p.version,
-    metadata: p.metadata,
+    metadata: p.metadata as MarketMetadata,
     metadataHash: p.metadataHash,
     closeTime: p.closeTime.toISOString(),
     launchWindow: p.launchWindow,
     resolver: p.resolver,
+    publisher: p.publisher ?? p.author,
     rationale: p.rationale,
     references: p.references_,
     sponsored: p.sponsored,
+    conflicts: p.conflicts,
     marketId: p.marketId,
     submittedAt: p.submittedAt?.toISOString() ?? null,
     decidedAt: p.decidedAt?.toISOString() ?? null,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
-    ...(privileged
-      ? { liquidityPlan: p.liquidityPlan, conflicts: p.conflicts, assignedCurator: p.assignedCurator, approval: p.approval }
-      : {}),
+    assignedCurator: p.assignedCurator,
+    // The signed approval is public once it exists: it is bound to one creator and one metadata hash,
+    // single-use on-chain, and the publish transaction reveals it anyway.
+    approval: (p.approval as StoredApproval | null) ?? null,
+    ...(privileged ? { liquidityPlan: p.liquidityPlan } : {}),
   };
 }
 
@@ -197,6 +201,7 @@ const APPROVAL_TTL_S = 14 * 86400;
 /** The approval a curator must sign for a proposal (deterministic per proposal version). */
 export async function buildApproval(p: ProposalRow): Promise<Omit<StoredApproval, "curator" | "signature">> {
   if (!p.resolver) throw deny(422, "no_resolver", "Assign a resolver before approving");
+  const publisher = (p.publisher ?? p.author) as Address;
   const cfg = deployment.marketsAddress
     ? await publicClient.readContract({ address: deployment.marketsAddress, abi: mezonkMarketsAbi, functionName: "config" })
     : null;
@@ -208,7 +213,7 @@ export async function buildApproval(p: ProposalRow): Promise<Omit<StoredApproval
   if (deadline <= now) throw deny(422, "too_late", "The proposed close time is too soon to publish. Ask for a later close time.");
   return {
     metadataHash: p.metadataHash as Hex,
-    creator: p.author as Address,
+    creator: publisher,
     resolver: p.resolver as Address,
     closeTime: String(closeTime),
     deadline: String(deadline),
@@ -219,7 +224,17 @@ export async function buildApproval(p: ProposalRow): Promise<Omit<StoredApproval
 export async function curatorAction(
   id: string,
   curator: Roles,
-  body: { action: string; reason: string; checklist?: Record<string, boolean>; duplicateOf?: string; internal: boolean; signature?: string; approval?: Record<string, string> },
+  body: {
+    action: string;
+    reason: string;
+    checklist?: Record<string, boolean>;
+    duplicateOf?: string;
+    internal: boolean;
+    signature?: string;
+    approval?: Record<string, string>;
+    resolver?: string;
+    publisher?: string;
+  },
 ) {
   if (!curator.curator) throw deny(403, "forbidden", "Only an on-chain approved curator can review proposals");
   const db = await getDb();
@@ -227,6 +242,29 @@ export async function curatorAction(
   if (!p) throw deny(404, "not_found", "No such proposal");
   if (p.author === curator.wallet) throw deny(403, "self_review", "You can't review your own proposal");
   const { action } = body;
+
+  if (action === "assign") {
+    // Resolver and publisher are chosen by the curator, never the author, and both are checked on-chain.
+    if (!["submitted", "under_review", "changes_requested"].includes(p.status)) throw deny(409, "locked", "Assignments can only change before approval");
+    if (!deployment.marketsAddress) throw deny(503, "no_deployment", "No market contract is configured");
+    const base = { address: deployment.marketsAddress, abi: mezonkMarketsAbi } as const;
+    const set: Partial<typeof marketProposals.$inferInsert> = { updatedAt: new Date() };
+    if (body.resolver) {
+      const ok = await publicClient.readContract({ ...base, functionName: "isResolver", args: [body.resolver as Address] });
+      if (!ok) throw deny(422, "not_resolver", "That address is not an approved resolver");
+      set.resolver = body.resolver.toLowerCase();
+    }
+    if (body.publisher) {
+      const ok = await publicClient.readContract({ ...base, functionName: "isCreator", args: [body.publisher as Address] });
+      if (!ok) throw deny(422, "not_creator", "That address is not an approved creator");
+      if (body.publisher.toLowerCase() === curator.wallet) throw deny(422, "self_publish", "You can't publish a market you review (the contract rejects self-approval)");
+      set.publisher = body.publisher.toLowerCase();
+    }
+    const [row] = await db.update(marketProposals).set(set).where(eq(marketProposals.id, id)).returning();
+    await db.insert(proposalReviews).values({ proposalId: id, proposalVersion: p.version, reviewer: curator.wallet, action, reason: body.reason, internal: body.internal });
+    await audit(curator.wallet, "proposal.assign", "proposal", id, { resolver: set.resolver, publisher: set.publisher });
+    return row!;
+  }
 
   if (action === "note") {
     await db.insert(proposalReviews).values({ proposalId: id, proposalVersion: p.version, reviewer: curator.wallet, action, reason: body.reason, internal: body.internal });
@@ -300,11 +338,16 @@ export async function curatorAction(
   return row!;
 }
 
-export async function listProposals(opts: { status?: string[]; author?: string; viewer?: Roles | null; limit: number; offset: number; publicOnly?: boolean }) {
+export async function listProposals(opts: { status?: string[]; author?: string; publisher?: string; viewer?: Roles | null; limit: number; offset: number; publicOnly?: boolean }) {
   const db = await getDb();
   const conds = [];
   if (opts.status?.length) conds.push(inArray(marketProposals.status, opts.status));
   if (opts.author) conds.push(eq(marketProposals.author, opts.author.toLowerCase()));
+  // "Mine to publish": approved proposals where this wallet is the designated publisher (or the author with no override).
+  if (opts.publisher) {
+    const w = opts.publisher.toLowerCase();
+    conds.push(or(eq(marketProposals.publisher, w), and(sql`${marketProposals.publisher} is null`, eq(marketProposals.author, w)))!);
+  }
   // Public listings never show drafts or withdrawn proposals.
   if (opts.publicOnly) conds.push(or(ne(marketProposals.status, "draft"), eq(marketProposals.author, opts.viewer?.wallet ?? ""))!, ne(marketProposals.status, "withdrawn"));
   const rows = await db.select().from(marketProposals).where(and(...conds)).orderBy(desc(marketProposals.updatedAt)).limit(opts.limit).offset(opts.offset);

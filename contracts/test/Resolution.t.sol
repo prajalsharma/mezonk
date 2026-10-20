@@ -125,6 +125,27 @@ contract ResolutionTest is BaseTest {
         mk.dispute(id, bytes32(0), "");
     }
 
+    // 8b — the arbitrator cannot open the dispute it would rule on (pashov audit finding 2)
+    function test_08b_arbitratorCannotDispute() public {
+        _closeAndPropose(IMezonkMarkets.Outcome.Yes);
+        vm.prank(arbitrator);
+        vm.expectRevert(IMezonkMarkets.InvalidParams.selector);
+        mk.dispute(id, EV, "");
+        // An unrelated wallet still can.
+        vm.prank(bob);
+        mk.dispute(id, EV, "");
+    }
+
+    // priceYes stays readable after the creator empties the pool (pashov audit finding 5)
+    function test_priceYesAfterClaimLiquidity() public {
+        _closeAndPropose(IMezonkMarkets.Outcome.Yes);
+        vm.warp(block.timestamp + 2 days);
+        mk.finalize(id);
+        vm.prank(creator);
+        mk.claimLiquidity(id);
+        assertEq(mk.priceYes(id), 1e18);
+    }
+
     // 9 — and only one challenge per proposal
     function test_09_arbitrationOpensAfterChallenge() public {
         _closeAndPropose(IMezonkMarkets.Outcome.Yes);

@@ -37,7 +37,7 @@ const send = async (p: Promise<Hash>) => {
   const r = await client.waitForTransactionReceipt({ hash: await p });
   if (r.status !== "success") throw new Error("reverted");
 };
-const call = (r: Role, functionName: string, args: unknown[]) =>
+export const call = (r: Role, functionName: string, args: unknown[]) =>
   send(w(r).writeContract({ address: MARKETS, abi: mezonkMarketsAbi, functionName, args } as never));
 
 export const read = <T>(functionName: string, args: unknown[]) =>

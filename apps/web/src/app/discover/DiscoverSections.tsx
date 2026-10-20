@@ -78,7 +78,7 @@ export function DiscoverSections() {
         title="No markets yet"
         action={
           <>
-            <ButtonLink href="/create">Create a market</ButtonLink>
+            <ButtonLink href="/suggest">Suggest a market</ButtonLink>
             <ButtonLink href="/docs" variant="secondary">How it works</ButtonLink>
           </>
         }

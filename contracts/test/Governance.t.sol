@@ -98,6 +98,22 @@ contract GovernanceTest is BaseTest {
         mk.createMarket(p, a, curatorAddr(), sig);
     }
 
+    function test_curatorCanCancelUnusedApproval() public {
+        (IMezonkMarkets.MarketApproval memory a, bytes memory sig) = _approval(mk, p, creator);
+        vm.prank(alice);
+        vm.expectRevert(IMezonkMarkets.NotCurator.selector);
+        mk.cancelApproval(a.nonce);
+        vm.prank(curatorAddr());
+        mk.cancelApproval(a.nonce);
+        vm.prank(creator);
+        vm.expectRevert(IMezonkMarkets.ApprovalUsed.selector);
+        mk.createMarket(p, a, curatorAddr(), sig);
+        // Cancelling twice, or cancelling a used nonce, is rejected.
+        vm.prank(curatorAddr());
+        vm.expectRevert(IMezonkMarkets.ApprovalUsed.selector);
+        mk.cancelApproval(a.nonce);
+    }
+
     function test_expiredApprovalRejected() public {
         (IMezonkMarkets.MarketApproval memory a, bytes memory sig) = _approval(mk, p, creator);
         vm.warp(uint256(a.deadline) + 1);

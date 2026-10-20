@@ -40,7 +40,7 @@ export function Address({ address, you, label }: { address: string; you?: string
         aria-label={copied ? "Copied" : `Copy ${label ?? "address"}`}
         className="text-muted hover:text-ink"
       >
-        {copied ? <Check className="size-3.5 text-yes" /> : <Copy className="size-3.5" />}
+        {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
       </button>
     </span>
   );

@@ -8,15 +8,15 @@ type Size = "sm" | "md" | "lg";
 const base =
   "inline-flex items-center justify-center gap-2 font-semibold whitespace-nowrap rounded-md select-none " +
   "transition-[background-color,color,border-color,box-shadow,transform] duration-150 ease-[var(--ease-out-quart)] " +
-  "active:translate-y-px disabled:opacity-45 disabled:pointer-events-none";
+  "press disabled:opacity-45 disabled:pointer-events-none";
 
 const variants: Record<Variant, string> = {
   primary: "bg-primary text-on-primary hover:bg-primary/88",
   secondary: "bg-surface text-ink border border-line hover:border-ink-2",
   ghost: "text-ink-2 hover:text-ink hover:bg-surface-2",
-  yes: "bg-yes text-bg hover:bg-yes/90",
-  no: "bg-no text-bg hover:bg-no/90",
-  danger: "border border-no text-no hover:bg-no-soft",
+  yes: "bg-yes text-on-yes hover:bg-yes/90",
+  no: "bg-no text-on-no hover:bg-no/90",
+  danger: "border border-danger text-danger hover:bg-danger-soft",
 };
 
 const sizes: Record<Size, string> = {

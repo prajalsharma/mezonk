@@ -31,7 +31,7 @@ export function EvidenceBlock({ hash, uri, state }: { hash: string; uri: string;
     <div className="mt-2 space-y-2 rounded-md border border-line bg-sunk p-3 text-sm">
       {state?.status === "verified" && state.doc ? (
         <>
-          <p className="flex items-center gap-1.5 text-xs text-yes">
+          <p className="flex items-center gap-1.5 text-xs text-success">
             <CheckCircle2 className="size-3.5" aria-hidden /> Document matches the hash committed on-chain
           </p>
           <p className="whitespace-pre-wrap break-words text-ink">{state.doc.summary}</p>
@@ -45,7 +45,7 @@ export function EvidenceBlock({ hash, uri, state }: { hash: string; uri: string;
           </ul>
         </>
       ) : state?.status === "mismatch" ? (
-        <p className="flex items-center gap-1.5 text-no">
+        <p className="flex items-center gap-1.5 text-danger">
           <AlertTriangle className="size-3.5" aria-hidden /> The stored document does not match the on-chain hash. Do not rely on it.
         </p>
       ) : (

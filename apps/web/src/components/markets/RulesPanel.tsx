@@ -11,13 +11,20 @@ export function RulesPanel({
   raw,
   onchainHash,
   closeTime,
+  context = "market",
 }: {
   meta: MarketMetadata | null;
   raw: string;
   onchainHash: string;
   closeTime: Date;
+  /** A proposal's hash is what the curator signs; a market's is what the contract stored. */
+  context?: "market" | "proposal";
 }) {
   const matches = metadataHash(raw) === onchainHash;
+  const matchText =
+    context === "proposal"
+      ? "This is the rules hash a curator signs. Any edit changes it and needs a new review."
+      : "These rules match the hash committed on-chain at creation. They cannot be edited.";
   return (
     <section aria-labelledby="rules" className="space-y-4">
       <h2 id="rules" className="text-xl font-semibold">Resolution rules</h2>
@@ -26,11 +33,11 @@ export function RulesPanel({
           {meta.description && <p className="max-w-prose text-ink-2">{meta.description}</p>}
           <dl className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
-              <dt className="text-sm font-semibold text-yes">Resolves Yes if</dt>
+              <dt className="text-sm font-semibold text-yes-text">Resolves Yes if</dt>
               <dd className="text-sm text-ink">{meta.rules.yes}</dd>
             </div>
             <div className="space-y-1">
-              <dt className="text-sm font-semibold text-no">Resolves No if</dt>
+              <dt className="text-sm font-semibold text-no-text">Resolves No if</dt>
               <dd className="text-sm text-ink">{meta.rules.no}</dd>
             </div>
             <div className="space-y-1">
@@ -74,14 +81,12 @@ export function RulesPanel({
       )}
       <p className="flex items-start gap-2 text-xs text-muted">
         {matches ? (
-          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-yes" aria-hidden />
+          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-success" aria-hidden />
         ) : (
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-no" aria-hidden />
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-danger" aria-hidden />
         )}
         <span>
-          {matches
-            ? "These rules match the hash committed on-chain at creation. They cannot be edited."
-            : "Warning: these rules do not match the on-chain hash. Treat them as unverified."}{" "}
+          {matches ? matchText : "Warning: these rules do not match the recorded hash. Treat them as unverified."}{" "}
           <span className="break-all font-mono">{onchainHash}</span>
         </span>
       </p>

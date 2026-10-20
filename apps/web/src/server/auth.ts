@@ -2,7 +2,8 @@ import "server-only";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import type { NextRequest } from "next/server";
-import { verifyMessage, type Address } from "viem";
+import { getAddress, verifyMessage, type Address } from "viem";
+import { deployment } from "@/lib/chain/config";
 import { getDb, schema } from "@/server/db/client";
 
 /**
@@ -28,10 +29,28 @@ function secret(): Buffer {
   return g.__mezonkAuthSecret;
 }
 
-export const loginMessage = (wallet: string, nonce: string, issuedAt: string) =>
-  `MEZONK wants you to sign in with your wallet.\n\nWallet: ${wallet}\nNonce: ${nonce}\nIssued at: ${issuedAt}\n\nThis signature costs nothing and does not authorize any transaction.`;
+/** The site the message is bound to. Wallets compare `domain` with the page origin before they show a SIWE prompt. */
+export interface Site {
+  domain: string;
+  uri: string;
+}
 
-export async function issueNonce(wallet: string) {
+export function siteFromRequest(req: NextRequest): Site {
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "localhost:3000";
+  const proto = req.headers.get("x-forwarded-proto") ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
+  return { domain: host, uri: `${proto}://${host}` };
+}
+
+/**
+ * EIP-4361 (Sign-In with Ethereum) message. The exact layout matters: wallets that recognise it
+ * show a sign-in prompt, verify that `domain` matches the page, and do not treat it as an opaque signature.
+ */
+export const loginMessage = (wallet: string, nonce: string, issuedAt: string, site: Site) =>
+  `${site.domain} wants you to sign in with your Ethereum account:\n${getAddress(wallet)}\n\n` +
+  `Sign in to MEZONK. This signature costs nothing and does not authorize any transaction.\n\n` +
+  `URI: ${site.uri}\nVersion: 1\nChain ID: ${deployment.chainId}\nNonce: ${nonce}\nIssued At: ${issuedAt}`;
+
+export async function issueNonce(wallet: string, site: Site) {
   const db = await getDb();
   const nonce = randomBytes(16).toString("hex");
   const issuedAt = new Date().toISOString();
@@ -40,17 +59,17 @@ export async function issueNonce(wallet: string) {
     wallet: wallet.toLowerCase(),
     expiresAt: new Date(Date.now() + NONCE_TTL_MS),
   });
-  return { nonce, issuedAt, message: loginMessage(wallet, nonce, issuedAt) };
+  return { nonce, issuedAt, message: loginMessage(wallet, nonce, issuedAt, site) };
 }
 
-export async function createSession(wallet: string, nonce: string, issuedAt: string, signature: `0x${string}`) {
+export async function createSession(wallet: string, nonce: string, issuedAt: string, signature: `0x${string}`, site: Site) {
   const db = await getDb();
   const [row] = await db
     .select()
     .from(schema.authNonces)
     .where(and(eq(schema.authNonces.nonce, nonce), isNull(schema.authNonces.usedAt), gt(schema.authNonces.expiresAt, new Date())));
   if (!row || row.wallet !== wallet.toLowerCase()) return null;
-  const ok = await verifyMessage({ address: wallet as Address, message: loginMessage(wallet, nonce, issuedAt), signature }).catch(() => false);
+  const ok = await verifyMessage({ address: wallet as Address, message: loginMessage(wallet, nonce, issuedAt, site), signature }).catch(() => false);
   if (!ok) return null;
   await db.update(schema.authNonces).set({ usedAt: new Date() }).where(eq(schema.authNonces.nonce, nonce));
   const payload = Buffer.from(JSON.stringify({ w: wallet.toLowerCase(), e: Date.now() + TTL_MS })).toString("base64url");

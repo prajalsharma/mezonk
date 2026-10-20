@@ -56,7 +56,7 @@ function ShareButton() {
       }}
       className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-semibold text-ink-2 hover:bg-surface-2 hover:text-ink"
     >
-      {done ? <Check className="size-4 text-yes" /> : <Share2 className="size-4" />} {done ? "Link copied" : "Share"}
+      {done ? <Check className="size-4 text-success" /> : <Share2 className="size-4" />} {done ? "Link copied" : "Share"}
     </button>
   );
 }
@@ -228,7 +228,7 @@ function PositionCard({ chain }: { chain: ReturnType<typeof useMarketChain> }) {
           return (
             <div key={r.side} className="py-2 text-sm">
               <div className="flex justify-between">
-                <dt className={r.side === "yes" ? "font-semibold text-yes" : "font-semibold text-no"}>{r.side === "yes" ? "Yes" : "No"}</dt>
+                <dt className={r.side === "yes" ? "font-semibold text-yes-text" : "font-semibold text-no-text"}>{r.side === "yes" ? "Yes" : "No"}</dt>
                 <dd className="tnum">{formatShares(r.shares)} shares</dd>
               </div>
               <div className="flex justify-between text-ink-2">

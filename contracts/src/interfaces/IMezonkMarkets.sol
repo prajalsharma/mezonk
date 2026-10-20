@@ -161,6 +161,7 @@ interface IMezonkMarkets {
     event CuratorUpdated(address indexed curator, bool approved);
     /// @notice Links a published market to the curator approval it consumed (audit trail).
     event MarketApprovalUsed(uint256 indexed marketId, address indexed curator, bytes32 indexed nonce);
+    event MarketApprovalCancelled(address indexed by, bytes32 indexed nonce);
 
     // ───────────────────────────── Errors ─────────────────────────────
 

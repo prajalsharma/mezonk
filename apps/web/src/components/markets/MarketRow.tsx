@@ -15,7 +15,7 @@ export function MarketRow({ m, now }: { m: MarketSummaryDto; now: number }) {
       <div className="min-w-0 space-y-1.5">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
           <span>{categoryLabel[m.category as Category] ?? m.category}</span>
-          <StageStatus stage={m.stage.stage} label={m.stage.label} />
+          <StageStatus stage={m.stage.stage} label={m.stage.label} finalOutcome={m.finalOutcome} />
           {open && <span>Closes {relativeTime(new Date(m.closeTime), now)}</span>}
           {open && thin && <span className="text-warn">Thin liquidity</span>}
           {!m.structured && <span className="text-warn">Unstructured rules</span>}
