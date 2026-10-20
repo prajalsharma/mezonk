@@ -1,3 +1,4 @@
+// Visual QA: node scripts/screenshots.mjs <outDir> <baseUrl> "/,/markets/1" [light,dark] — desktop/tablet/mobile full-page shots.
 import { chromium } from "@playwright/test";
 // usage: node _shoot.mjs <outDir> <base> <comma paths> [themes]
 const [out, base, pathsArg, themesArg] = process.argv.slice(2);
