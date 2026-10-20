@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Format
+        run: cd contracts && forge fmt --check
+      - name: Test (unit, resolution, fuzz, invariants)
+        run: cd contracts && FOUNDRY_PROFILE=ci forge test
+      - name: Fork test against Mezo testnet MUSD
+        run: cd contracts && MEZO_TESTNET_RPC_URL=https://rpc.test.mezo.org forge test --match-path 'test/fork/*'
+        continue-on-error: true # depends on a public RPC being up
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: pnpm install --frozen-lockfile
+      - name: Build contract artifacts (integration tests deploy them)
+        run: cd contracts && forge build
+      - run: pnpm --filter web typecheck
+      - run: pnpm --filter web lint
+      - run: pnpm --filter web test
+      - run: pnpm --filter web test:integration
+      - name: Production build
+        run: pnpm --filter web build
