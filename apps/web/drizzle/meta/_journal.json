@@ -15,6 +15,13 @@
       "when": 1792428158589,
       "tag": "0001_resolution_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792454326685,
+      "tag": "0002_governance",
+      "breakpoints": true
     }
   ]
 }

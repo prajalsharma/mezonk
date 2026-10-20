@@ -335,22 +335,14 @@ contract ResolutionTest is BaseTest {
         MezonkMarkets m2 = new MezonkMarkets(IERC20(address(rt)), owner, _config());
         vm.prank(owner);
         m2.setResolver(resolver, true);
+        _grantPublishing(m2, owner, creator);
         rt.mint(creator, 1000 * ONE);
         rt.mint(resolver, 1000 * ONE);
         vm.prank(creator);
         rt.approve(address(m2), type(uint256).max);
         vm.prank(resolver);
         rt.approve(address(m2), type(uint256).max);
-        vm.prank(creator);
-        uint256 mid = m2.createMarket(
-            IMezonkMarkets.CreateParams({
-                metadata: _metadata(),
-                closeTime: closeTime,
-                resolver: resolver,
-                initialLiquidity: 100 * ONE,
-                initialYesProbBps: 5000
-            })
-        );
+        uint256 mid = _publish(m2, creator, _params(100 * ONE, 5000));
         vm.warp(closeTime);
         vm.prank(resolver);
         m2.proposeOutcome(mid, IMezonkMarkets.Outcome.Yes, EV, "");

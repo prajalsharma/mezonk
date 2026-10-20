@@ -13,7 +13,8 @@ Binary prediction market on Mezo settled in MUSD. `contracts/` (Foundry) + `apps
 - **Explorer links only for verified public networks** (`hasExplorer`); never on local forks.
 - **The contract is not upgradeable.** Interface changes mean a new deployment (see docs/RESOLUTION_DESIGN.md §8).
 - Permissions for UI actions come from `lib/market/permissions.ts` only. Don't scatter address checks.
-- Design: tokens in `src/app/globals.css`; red (#FF004D) is rare (marker, NO, destructive); no eyebrow labels, pills, glass or gradient text.
+- Design: tokens in `src/app/globals.css`. Brand (split-coin logo, 2026-10-20): **red = YES, ink = NO**; errors use the separate `--danger` token, never the YES red. Glass only on floating surfaces (nav overlay, command palette, popovers). No eyebrow labels, pills or gradient text.
+- Market creation is governed: approved creators publish curator-signed proposals (see docs/MARKET_GOVERNANCE.md). Never add a path that lets a wallet publish without a curator approval.
 
 ## Commands
 - Contracts: `cd contracts && forge test` (fork: set `MEZO_TESTNET_RPC_URL`)

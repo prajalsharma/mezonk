@@ -47,39 +47,30 @@ contract MezonkMarketsTest is BaseTest {
             initialYesProbBps: 5000
         });
 
-        vm.startPrank(creator);
         p.closeTime = uint64(block.timestamp + 10 minutes);
-        vm.expectRevert(IMezonkMarkets.InvalidParams.selector);
-        mk.createMarket(p);
+        _publishExpectRevert(mk, creator, p, IMezonkMarkets.InvalidParams.selector);
 
         p.closeTime = uint64(block.timestamp + 400 days);
-        vm.expectRevert(IMezonkMarkets.InvalidParams.selector);
-        mk.createMarket(p);
+        _publishExpectRevert(mk, creator, p, IMezonkMarkets.InvalidParams.selector);
 
         p.closeTime = closeTime;
         p.initialLiquidity = 1 * ONE;
-        vm.expectRevert(IMezonkMarkets.InvalidParams.selector);
-        mk.createMarket(p);
+        _publishExpectRevert(mk, creator, p, IMezonkMarkets.InvalidParams.selector);
 
         p.initialLiquidity = 100 * ONE;
         p.initialYesProbBps = 9600;
-        vm.expectRevert(IMezonkMarkets.InvalidParams.selector);
-        mk.createMarket(p);
+        _publishExpectRevert(mk, creator, p, IMezonkMarkets.InvalidParams.selector);
 
         p.initialYesProbBps = 5000;
         p.resolver = alice;
-        vm.expectRevert(IMezonkMarkets.NotResolver.selector);
-        mk.createMarket(p);
+        _publishExpectRevert(mk, creator, p, IMezonkMarkets.NotResolver.selector);
 
         p.resolver = resolver;
         p.metadata = "";
-        vm.expectRevert(IMezonkMarkets.InvalidParams.selector);
-        mk.createMarket(p);
+        _publishExpectRevert(mk, creator, p, IMezonkMarkets.InvalidParams.selector);
 
         p.metadata = string(new bytes(8193));
-        vm.expectRevert(IMezonkMarkets.InvalidParams.selector);
-        mk.createMarket(p);
-        vm.stopPrank();
+        _publishExpectRevert(mk, creator, p, IMezonkMarkets.InvalidParams.selector);
     }
 
     function test_configChange_doesNotAffectExistingMarket() public {
@@ -479,20 +470,11 @@ contract MezonkMarketsTest is BaseTest {
         MezonkMarkets m2 = new MezonkMarkets(IERC20(address(fot)), owner, _config());
         vm.prank(owner);
         m2.setResolver(resolver, true);
+        _grantPublishing(m2, owner, creator);
         fot.mint(creator, 1000 * ONE);
-        vm.startPrank(creator);
+        vm.prank(creator);
         fot.approve(address(m2), type(uint256).max);
-        vm.expectRevert(IMezonkMarkets.UnsupportedToken.selector);
-        m2.createMarket(
-            IMezonkMarkets.CreateParams({
-                metadata: _metadata(),
-                closeTime: closeTime,
-                resolver: resolver,
-                initialLiquidity: 100 * ONE,
-                initialYesProbBps: 5000
-            })
-        );
-        vm.stopPrank();
+        _publishExpectRevert(m2, creator, _params(100 * ONE, 5000), IMezonkMarkets.UnsupportedToken.selector);
     }
 
     function test_reentrancy_onRedeem_isBlocked() public {
@@ -500,22 +482,14 @@ contract MezonkMarketsTest is BaseTest {
         MezonkMarkets m2 = new MezonkMarkets(IERC20(address(rt)), owner, _config());
         vm.prank(owner);
         m2.setResolver(resolver, true);
+        _grantPublishing(m2, owner, creator);
         address[3] memory users = [creator, alice, resolver];
         for (uint256 i; i < 3; i++) {
             rt.mint(users[i], 1000 * ONE);
             vm.prank(users[i]);
             rt.approve(address(m2), type(uint256).max);
         }
-        vm.prank(creator);
-        uint256 id = m2.createMarket(
-            IMezonkMarkets.CreateParams({
-                metadata: _metadata(),
-                closeTime: closeTime,
-                resolver: resolver,
-                initialLiquidity: 100 * ONE,
-                initialYesProbBps: 5000
-            })
-        );
+        uint256 id = _publish(m2, creator, _params(100 * ONE, 5000));
         vm.prank(alice);
         uint256 y = m2.buy(id, true, 10 * ONE, 0, block.timestamp);
         vm.warp(closeTime);

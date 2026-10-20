@@ -10,6 +10,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { mezonkMarketsAbi } from "../src/lib/contracts/abi";
 import { serializeMetadata, type MarketMetadata } from "../src/lib/market/metadata";
 import { serializeEvidence, type EvidenceDoc } from "../src/lib/market/evidence";
+import { ANVIL_CURATOR_PK, signedCreateArgs } from "./lib/approval-sign";
 
 const env = Object.fromEntries(
   readFileSync(path.join(__dirname, "../.env.local"), "utf8")
@@ -31,6 +32,7 @@ const KEYS = {
   alice: "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a",
   bob: "0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba",
   carol: "0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e",
+  curator: ANVIL_CURATOR_PK,
 } as const;
 type Who = keyof typeof KEYS;
 
@@ -70,14 +72,9 @@ function meta(q: string, category: MarketMetadata["category"], yes: string, no: 
 
 async function create(metadata: string, closeIn: bigint, liq: number, prob: number) {
   const t = await now();
-  const r = await send(
-    w("creator").writeContract({
-      address: MARKETS,
-      abi: mezonkMarketsAbi,
-      functionName: "createMarket",
-      args: [{ metadata, closeTime: t + closeIn, resolver: addr("resolver"), initialLiquidity: M(liq), initialYesProbBps: prob }],
-    }),
-  );
+  // Every seeded market goes through a real curator-signed approval, like production.
+  const args = await signedCreateArgs(ANVIL_CURATOR_PK, 31611, MARKETS, addr("creator"), { metadata, closeTime: t + closeIn, resolver: addr("resolver"), initialLiquidity: M(liq), initialYesProbBps: prob }, t);
+  const r = await send(w("creator").writeContract({ address: MARKETS, abi: mezonkMarketsAbi, functionName: "createMarket", args: args as never }));
   const n = await test.readContract({ address: MARKETS, abi: mezonkMarketsAbi, functionName: "marketCount" });
   console.log(`  market #${n} (tx ${r.transactionHash.slice(0, 10)})`);
   return n;

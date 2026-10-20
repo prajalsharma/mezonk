@@ -6,6 +6,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { mezonkMarketsAbi } from "../../src/lib/contracts/abi";
 import { serializeMetadata } from "../../src/lib/market/metadata";
 import { serializeEvidence } from "../../src/lib/market/evidence";
+import { ANVIL_CURATOR_PK, signedCreateArgs } from "../../scripts/lib/approval-sign";
 
 const env = Object.fromEntries(
   readFileSync(path.join(__dirname, "../../.env.local"), "utf8")
@@ -24,6 +25,7 @@ const KEYS = {
   creator: "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6",
   alice: "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a",
   bob: "0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba",
+  curator: ANVIL_CURATOR_PK,
 } as const;
 export type Role = keyof typeof KEYS;
 const chain = { id: 31611, name: "fork", nativeCurrency: { name: "BTC", symbol: "BTC", decimals: 18 }, rpcUrls: { default: { http: [RPC] } } } as const;
@@ -61,7 +63,8 @@ export async function closedMarket(label: string) {
     source: { name: "E2E", url: "https://example.org/e2e" },
     resolvesAt: new Date(Number(t + 7200n) * 1000).toISOString(),
   });
-  await call("creator", "createMarket", [{ metadata, closeTime: t + 7200n, resolver: addr("resolver"), initialLiquidity: E(100), initialYesProbBps: 5000 }]);
+  const args = await signedCreateArgs(ANVIL_CURATOR_PK, 31611, MARKETS, addr("creator"), { metadata, closeTime: t + 7200n, resolver: addr("resolver"), initialLiquidity: E(100), initialYesProbBps: 5000 }, t);
+  await call("creator", "createMarket", [...args]);
   const id = await read<bigint>("marketCount", []);
   await call("alice", "buy", [id, true, E(20), 0n, 2n ** 63n]);
   await call("bob", "buy", [id, false, E(20), 0n, 2n ** 63n]);

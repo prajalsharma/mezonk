@@ -53,6 +53,17 @@ interface IMezonkMarkets {
         uint16 initialYesProbBps; // starting YES probability, 500..9500
     }
 
+    /// @notice Curator approval for publishing one market. Signed off-chain (EIP-712) by an approved curator
+    ///         and consumed on-chain by `createMarket`. Binds the exact rules and key parameters.
+    struct MarketApproval {
+        bytes32 metadataHash; // keccak256 of the exact metadata bytes that will be published
+        address creator; // the approved creator allowed to publish it
+        address resolver; // the resolver the review approved
+        uint64 closeTime; // the trading close the review approved
+        uint64 deadline; // approval expires after this timestamp
+        bytes32 nonce; // single use; typically the backend proposal id
+    }
+
     struct Market {
         address creator;
         address resolver;
@@ -146,6 +157,10 @@ interface IMezonkMarkets {
     event ProtocolFeesWithdrawn(address indexed to, uint256 amount);
     event ConfigUpdated(Config config);
     event ResolverUpdated(address indexed resolver, bool approved);
+    event CreatorUpdated(address indexed creator, bool approved);
+    event CuratorUpdated(address indexed curator, bool approved);
+    /// @notice Links a published market to the curator approval it consumed (audit trail).
+    event MarketApprovalUsed(uint256 indexed marketId, address indexed curator, bytes32 indexed nonce);
 
     // ───────────────────────────── Errors ─────────────────────────────
 
@@ -164,4 +179,11 @@ interface IMezonkMarkets {
     error NothingToClaim();
     error NotCreator();
     error UnsupportedToken();
+    error NotApprovedCreator();
+    error NotCurator();
+    error SelfApproval();
+    error ApprovalExpired();
+    error ApprovalUsed();
+    error ApprovalMismatch();
+    error BadApprovalSignature();
 }

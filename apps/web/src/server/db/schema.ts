@@ -234,3 +234,138 @@ export const evidenceDocuments = pgTable(
   },
   (t) => [index("evidence_documents_market").on(t.marketId)],
 );
+
+// ───────────────────────────── Market governance (off-chain workflow) ─────────────────────────────
+// Publication itself is enforced by the contract (approved creator + curator-signed EIP-712 approval).
+// These tables hold the review workflow, project verification and the audit trail around it.
+
+/** Projects that may have verified representatives. Verification is a disclosure, never a protocol power. */
+export const projects = pgTable(
+  "projects",
+  {
+    id: text("id").primaryKey(), // slug
+    name: text("name").notNull(),
+    website: text("website"),
+    description: text("description").notNull().default(""),
+    status: text("status").notNull().default("pending"), // pending | verified | revoked
+    verifiedBy: text("verified_by"), // curator wallet
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("projects_status").on(t.status)],
+);
+
+/** Wallets claiming to represent a project. */
+export const projectRepresentatives = pgTable(
+  "project_representatives",
+  {
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    wallet: text("wallet").notNull(),
+    role: text("role").notNull().default("representative"),
+    proofUrl: text("proof_url"), // public post/page showing the wallet, never fetched server-side
+    status: text("status").notNull().default("pending"), // pending | verified | revoked
+    reviewedBy: text("reviewed_by"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.wallet] }), index("project_reps_wallet").on(t.wallet)],
+);
+
+/**
+ * A market proposal moving through review. `metadata` is the exact structured rules (schema v1)
+ * and `metadataHash` its canonical keccak256; the on-chain approval later binds that hash.
+ * Status: draft | submitted | under_review | changes_requested | approved | rejected | scheduled | published | withdrawn
+ */
+export const marketProposals = pgTable(
+  "market_proposals",
+  {
+    id: text("id").primaryKey(),
+    author: text("author").notNull(),
+    projectId: text("project_id").references(() => projects.id, { onDelete: "set null" }),
+    status: text("status").notNull().default("draft"),
+    version: integer("version").notNull().default(1),
+    metadata: jsonb("metadata").notNull(),
+    metadataHash: text("metadata_hash").notNull(),
+    closeTime: timestamp("close_time", { withTimezone: true }).notNull(),
+    launchWindow: text("launch_window").notNull().default(""),
+    resolver: text("resolver"),
+    liquidityPlan: text("liquidity_plan").notNull().default(""),
+    conflicts: text("conflicts").notNull().default(""),
+    rationale: text("rationale").notNull().default(""),
+    references_: jsonb("references").notNull().default([]),
+    sponsored: boolean("sponsored").notNull().default(false),
+    assignedCurator: text("assigned_curator"),
+    /** Signed approval, present once status = approved/scheduled/published. */
+    approval: jsonb("approval"),
+    marketId: integer("market_id"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("proposals_status").on(t.status),
+    index("proposals_author").on(t.author),
+    index("proposals_hash").on(t.metadataHash),
+    uniqueIndex("proposals_market").on(t.marketId),
+  ],
+);
+
+/** Every review action, append-only. The public sees decisions and reasons; internal notes stay private. */
+export const proposalReviews = pgTable(
+  "proposal_reviews",
+  {
+    id: serial("id").primaryKey(),
+    proposalId: text("proposal_id")
+      .notNull()
+      .references(() => marketProposals.id, { onDelete: "cascade" }),
+    proposalVersion: integer("proposal_version").notNull(),
+    reviewer: text("reviewer").notNull(),
+    action: text("action").notNull(), // claim | approve | reject | request_changes | note | unassign | withdraw | resubmit | publish
+    reason: text("reason").notNull().default(""),
+    checklist: jsonb("checklist"),
+    duplicateOf: text("duplicate_of"),
+    internal: boolean("internal").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("reviews_proposal").on(t.proposalId, t.createdAt)],
+);
+
+/** Administrative and curation audit log (append-only). */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: serial("id").primaryKey(),
+    actor: text("actor").notNull(),
+    action: text("action").notNull(),
+    subjectType: text("subject_type").notNull(),
+    subjectId: text("subject_id").notNull(),
+    details: jsonb("details"),
+    signature: text("signature"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("audit_subject").on(t.subjectType, t.subjectId), index("audit_actor").on(t.actor)],
+);
+
+/** Per-wallet preferences. No personal data. */
+export const userSettings = pgTable("user_settings", {
+  wallet: text("wallet").primaryKey(),
+  displayName: text("display_name"),
+  notifyProposals: boolean("notify_proposals").notNull().default(true),
+  notifyResolution: boolean("notify_resolution").notNull().default(true),
+  notifyClaims: boolean("notify_claims").notNull().default(true),
+  numberFormat: text("number_format").notNull().default("compact"),
+  hideBalances: boolean("hide_balances").notNull().default(false),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Wallet-signed session nonces (challenge/response), short-lived. */
+export const authNonces = pgTable("auth_nonces", {
+  nonce: text("nonce").primaryKey(),
+  wallet: text("wallet").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+});

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {Test} from "forge-std/Test.sol";
+import {ApprovalSigner} from "../ApprovalSigner.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {MezonkMarkets} from "../../src/MezonkMarkets.sol";
 import {IMezonkMarkets} from "../../src/interfaces/IMezonkMarkets.sol";
@@ -9,7 +9,7 @@ import {MezoAddresses} from "../../src/MezoAddresses.sol";
 
 /// @notice Full lifecycle against the real MUSD contract on a fork of Mezo testnet.
 /// Run: MEZO_TESTNET_RPC_URL=https://rpc.test.mezo.org forge test --match-path test/fork/*
-contract MezoTestnetForkTest is Test {
+contract MezoTestnetForkTest is ApprovalSigner {
     IERC20 musd;
     MezonkMarkets mk;
     address owner = makeAddr("owner");
@@ -45,6 +45,7 @@ contract MezoTestnetForkTest is Test {
         );
         vm.prank(owner);
         mk.setResolver(resolver, true);
+        _grantPublishing(mk, owner, creator);
 
         address[4] memory users = [creator, alice, bob, resolver];
         for (uint256 i; i < 4; i++) {
@@ -55,8 +56,9 @@ contract MezoTestnetForkTest is Test {
     }
 
     function test_fork_fullLifecycle_withRealMUSD() public {
-        vm.prank(creator);
-        uint256 id = mk.createMarket(
+        uint256 id = _publish(
+            mk,
+            creator,
             IMezonkMarkets.CreateParams({
                 metadata: '{"v":1,"question":"Fork test market"}',
                 closeTime: uint64(block.timestamp + 2 days),

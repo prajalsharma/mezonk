@@ -25,15 +25,7 @@ const meta = serializeMetadata({
 
 async function createMarket() {
   const t = (await c.client.getBlock()).timestamp;
-  await c.send(
-    c.wallet("creator").writeContract({
-      address: c.markets,
-      abi: mezonkMarketsAbi,
-      functionName: "createMarket",
-      args: [{ metadata: meta, closeTime: t + 7200n, resolver: c.addr("resolver"), initialLiquidity: E(100), initialYesProbBps: 5000 }],
-    }),
-  );
-  return c.client.readContract({ address: c.markets, abi: mezonkMarketsAbi, functionName: "marketCount" });
+  return c.createMarket({ metadata: meta, closeTime: t + 7200n, resolver: c.addr("resolver"), initialLiquidity: E(100), initialYesProbBps: 5000 });
 }
 const buy = (who: "alice" | "bob", id: bigint, yes: boolean, amt: number) =>
   c.send(c.wallet(who).writeContract({ address: c.markets, abi: mezonkMarketsAbi, functionName: "buy", args: [id, yes, E(amt), 0n, MAX] }));

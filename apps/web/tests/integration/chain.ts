@@ -8,6 +8,7 @@ import path from "node:path";
 import { createTestClient, createWalletClient, http, publicActions, parseUnits, type Address, type Hash, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mezonkMarketsAbi } from "@/lib/contracts/abi";
+import { signedCreateArgs, type CreateParams } from "../../scripts/lib/approval-sign";
 
 const OUT = path.resolve(__dirname, "../../../../contracts/out");
 const artifact = (file: string, name: string) => JSON.parse(readFileSync(path.join(OUT, file, `${name}.json`), "utf8"));
@@ -19,6 +20,7 @@ export const KEYS = {
   creator: "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6",
   alice: "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a",
   bob: "0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba",
+  curator: "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356",
 } as const;
 export type Who = keyof typeof KEYS;
 export const E = (n: number) => parseUnits(String(n), 18);
@@ -70,9 +72,18 @@ export async function startChain(port: number) {
     },
   ]);
   await send(wallet("owner").writeContract({ address: markets, abi: mezonkMarketsAbi, functionName: "setResolver", args: [addr("resolver"), true] }));
+  await send(wallet("owner").writeContract({ address: markets, abi: mezonkMarketsAbi, functionName: "setCurator", args: [addr("curator"), true] }));
+  await send(wallet("owner").writeContract({ address: markets, abi: mezonkMarketsAbi, functionName: "setCreator", args: [addr("creator"), true] }));
   for (const who of Object.keys(KEYS) as Who[]) {
     await send(wallet("owner").writeContract({ address: musd, abi: token.abi, functionName: "mint", args: [addr(who), E(1_000_000)] } as never));
     await send(wallet(who).writeContract({ address: musd, abi: token.abi, functionName: "approve", args: [markets, 2n ** 255n] } as never));
   }
-  return { proc, rpc, client, wallet, addr, send, musd, markets, deployBlock, stop: () => proc.kill() };
+  /** Publish a market as `creator` with a curator-signed approval (real EIP-712, real on-chain check). */
+  const createMarket = async (p: CreateParams, creator: Who = "creator") => {
+    const now = (await client.getBlock()).timestamp;
+    const args = await signedCreateArgs(KEYS.curator, 31611, markets, addr(creator), p, now);
+    await send(wallet(creator).writeContract({ address: markets, abi: mezonkMarketsAbi, functionName: "createMarket", args }));
+    return client.readContract({ address: markets, abi: mezonkMarketsAbi, functionName: "marketCount" });
+  };
+  return { proc, rpc, client, wallet, addr, send, musd, markets, deployBlock, createMarket, stop: () => proc.kill() };
 }

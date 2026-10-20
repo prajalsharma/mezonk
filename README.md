@@ -48,7 +48,7 @@ See [docs/deployment.md](docs/deployment.md) for env keys, testnet deploy and ho
 - [Resolution design](docs/RESOLUTION_DESIGN.md): lifecycle, transition table, roles, evidence, claims
 - [Resolution threat model](docs/RESOLUTION_THREAT_MODEL.md)
 - [Deployment](docs/deployment.md)
-- [Protocol design](docs/protocol-design.md), [Economics](docs/economics.md), [Architecture](docs/architecture.md)
+- [Protocol design](docs/protocol-design.md), [Economics](docs/economics.md), [Architecture](docs/ARCHITECTURE.md)
 - [Security model](docs/security-model.md), [Threat model](docs/threat-model.md), [Testing](docs/testing.md)
 - [Competitive analysis](docs/competitive-analysis.md)
 

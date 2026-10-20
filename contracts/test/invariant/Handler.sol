@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {Test} from "forge-std/Test.sol";
+import {ApprovalSigner} from "../ApprovalSigner.sol";
 import {MezonkMarkets} from "../../src/MezonkMarkets.sol";
 import {IMezonkMarkets} from "../../src/interfaces/IMezonkMarkets.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
 
 /// @dev Drives random sequences of trades, resolution steps and claims across several markets.
-contract Handler is Test {
+contract Handler is ApprovalSigner {
     MezonkMarkets public mk;
     MockERC20 public musd;
     address public resolver;
@@ -63,8 +63,9 @@ contract Handler is Test {
         prob = bound(prob, 500, 9500);
         dur = bound(dur, 1 hours, 30 days);
         musd.mint(creator, liq);
-        vm.prank(creator);
-        uint256 id = mk.createMarket(
+        uint256 id = _publish(
+            mk,
+            creator,
             IMezonkMarkets.CreateParams({
                 metadata: "{\"v\":1}",
                 closeTime: uint64(block.timestamp + dur),

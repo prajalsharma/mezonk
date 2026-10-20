@@ -12,6 +12,8 @@ PK0=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 A0=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 # owner / deployer
 A1=0x70997970C51812dc3A010C7d01b50e0d17dc79C8 # resolver
 A2=0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC # arbitrator
+A3=0x90F79bf6EB2c4f870365E785982E1f101E93b906 # creator
+A7=0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 # curator
 
 anvil --fork-url "$FORK" --port "$PORT" --chain-id 31611 --silent &
 ANVIL=$!
@@ -20,7 +22,7 @@ for _ in $(seq 1 60); do cast block-number --rpc-url "$RPC" >/dev/null 2>&1 && b
 echo "anvil fork up at block $(cast block-number --rpc-url "$RPC")"
 
 cd contracts
-OUT=$(OWNER=$A0 ARBITRATOR=$A2 RESOLVER=$A1 MIN_LIQUIDITY=50000000000000000000 \
+OUT=$(OWNER=$A0 ARBITRATOR=$A2 RESOLVER=$A1 CURATOR=$A7 CREATOR=$A3 MIN_LIQUIDITY=50000000000000000000 \
   forge script script/Deploy.s.sol --rpc-url "$RPC" --private-key "$PK0" --broadcast 2>&1)
 ADDR=$(echo "$OUT" | grep -Eo 'MezonkMarkets 0x[0-9a-fA-F]{40}' | head -1 | awk '{print $2}')
 BLOCK=$(echo "$OUT" | grep -Eo 'deployBlock [0-9]+' | head -1 | awk '{print $2}')

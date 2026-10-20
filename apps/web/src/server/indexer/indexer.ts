@@ -6,6 +6,7 @@ import { mezonkMarketsAbi } from "@/lib/contracts/abi";
 import { publicClient } from "@/server/chain";
 import { getDb, schema, type Db } from "@/server/db/client";
 import { replayMarket, type StoredEvent } from "./replay";
+import { linkPublishedMarket } from "@/server/governance";
 import { toJson } from "./serialize";
 
 const { chainEvents, markets, trades, positions, resolutionProposals, disputes, indexerState } = schema;

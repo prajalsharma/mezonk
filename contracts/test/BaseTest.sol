@@ -6,8 +6,9 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {MezonkMarkets} from "../src/MezonkMarkets.sol";
 import {IMezonkMarkets} from "../src/interfaces/IMezonkMarkets.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
+import {ApprovalSigner} from "./ApprovalSigner.sol";
 
-abstract contract BaseTest is Test {
+abstract contract BaseTest is ApprovalSigner {
     MezonkMarkets internal mk;
     MockERC20 internal musd;
 
@@ -43,6 +44,7 @@ abstract contract BaseTest is Test {
         mk = new MezonkMarkets(IERC20(address(musd)), owner, _config());
         vm.prank(owner);
         mk.setResolver(resolver, true);
+        _grantPublishing(mk, owner, creator);
 
         address[5] memory users = [resolver, creator, alice, bob, carol];
         for (uint256 i; i < users.length; i++) {
@@ -57,9 +59,24 @@ abstract contract BaseTest is Test {
         return '{"v":1,"question":"Will BTC close above $150,000 on Coinbase on 31 Dec 2026 UTC?","category":"crypto"}';
     }
 
+    function _params(uint256 liquidity, uint16 yesProbBps)
+        internal
+        view
+        returns (IMezonkMarkets.CreateParams memory)
+    {
+        return IMezonkMarkets.CreateParams({
+            metadata: _metadata(),
+            closeTime: closeTime,
+            resolver: resolver,
+            initialLiquidity: liquidity,
+            initialYesProbBps: yesProbBps
+        });
+    }
+
     function _create(uint256 liquidity, uint16 yesProbBps) internal returns (uint256 id) {
-        vm.prank(creator);
-        id = mk.createMarket(
+        id = _publish(
+            mk,
+            creator,
             IMezonkMarkets.CreateParams({
                 metadata: _metadata(),
                 closeTime: closeTime,

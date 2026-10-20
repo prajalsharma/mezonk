@@ -9,7 +9,7 @@ import {IMezonkMarkets} from "../src/interfaces/IMezonkMarkets.sol";
 import {MezoAddresses} from "../src/MezoAddresses.sol";
 
 /// @notice Deploys MezonkMarkets to Mezo testnet.
-/// Env: OWNER, ARBITRATOR, RESOLVER (required). Mainnet requires ALLOW_MAINNET=true.
+/// Env: OWNER, ARBITRATOR, RESOLVER, CURATOR (required), CREATOR (optional). Mainnet requires ALLOW_MAINNET=true.
 /// Usage: forge script script/Deploy.s.sol --rpc-url mezo_testnet --broadcast --account <keystore>
 contract Deploy is Script {
     function run() external returns (MezonkMarkets mk) {
@@ -25,7 +25,11 @@ contract Deploy is Script {
         address owner = vm.envAddress("OWNER");
         address arbitrator = vm.envAddress("ARBITRATOR");
         address resolver = vm.envAddress("RESOLVER");
+        address curator = vm.envAddress("CURATOR");
+        address creator = vm.envOr("CREATOR", address(0));
         require(arbitrator != resolver, "arbitrator must differ from resolver");
+        require(curator != resolver && curator != arbitrator, "curator must be independent of resolution roles");
+        require(creator != curator, "creator must differ from curator");
 
         IMezonkMarkets.Config memory c = IMezonkMarkets.Config({
             feeBps: uint16(vm.envOr("FEE_BPS", uint256(100))),
@@ -44,6 +48,8 @@ contract Deploy is Script {
         vm.startBroadcast();
         mk = new MezonkMarkets(IERC20(musd), msg.sender, c);
         mk.setResolver(resolver, true);
+        mk.setCurator(curator, true);
+        if (creator != address(0)) mk.setCreator(creator, true);
         if (owner != msg.sender) mk.transferOwnership(owner); // owner must call acceptOwnership()
         vm.stopBroadcast();
 

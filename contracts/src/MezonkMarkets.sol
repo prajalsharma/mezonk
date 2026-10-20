@@ -8,6 +8,8 @@ import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 
 import {IMezonkMarkets} from "./interfaces/IMezonkMarkets.sol";
 import {FPMMMath} from "./libraries/FPMMMath.sol";
@@ -31,7 +33,7 @@ import {FPMMMath} from "./libraries/FPMMMath.sol";
 ///  - Resolver (per market, snapshotted): proposes outcomes. Cannot finalize without the challenge window.
 ///  - Arbitrator (per market, snapshotted): rules only on disputed proposals, within a deadline.
 ///  - Pausing never blocks proposals, disputes, finalization, redemption or claims.
-contract MezonkMarkets is IMezonkMarkets, Ownable2Step, Pausable, ReentrancyGuard {
+contract MezonkMarkets is IMezonkMarkets, Ownable2Step, Pausable, ReentrancyGuard, EIP712 {
     using SafeERC20 for IERC20;
 
     uint256 public constant BPS = 10_000;
@@ -50,13 +52,26 @@ contract MezonkMarkets is IMezonkMarkets, Ownable2Step, Pausable, ReentrancyGuar
     uint256 public protocolFees;
 
     mapping(address => bool) public isResolver;
+    /// @notice Wallets allowed to publish markets (each publication also needs a curator approval).
+    mapping(address => bool) public isCreator;
+    /// @notice Wallets (EOAs or ERC-1271 contracts such as a Safe) whose approvals authorize publication.
+    mapping(address => bool) public isCurator;
+    /// @notice Consumed approval nonces. An approval can publish at most one market.
+    mapping(bytes32 => bool) public approvalUsed;
+
+    bytes32 public constant MARKET_APPROVAL_TYPEHASH = keccak256(
+        "MarketApproval(bytes32 metadataHash,address creator,address resolver,uint64 closeTime,uint64 deadline,bytes32 nonce)"
+    );
     mapping(uint256 => Market) internal _markets;
     mapping(uint256 => mapping(address => uint256)) public yesBalance;
     mapping(uint256 => mapping(address => uint256)) public noBalance;
     /// @notice Bonds returned or won, withdrawable by the account (pull payments).
     mapping(address => uint256) public bondCredits;
 
-    constructor(IERC20 collateral_, address owner_, Config memory config_) Ownable(owner_) {
+    constructor(IERC20 collateral_, address owner_, Config memory config_)
+        Ownable(owner_)
+        EIP712("MEZONK Markets", "1")
+    {
         if (address(collateral_) == address(0)) revert InvalidParams();
         collateralToken = collateral_;
         _setConfig(config_);
@@ -112,12 +127,14 @@ contract MezonkMarkets is IMezonkMarkets, Ownable2Step, Pausable, ReentrancyGuar
 
     // ───────────────────────────── Creation ─────────────────────────────
 
-    function createMarket(CreateParams calldata p)
-        external
-        nonReentrant
-        whenNotPaused
-        returns (uint256 marketId)
-    {
+    /// @notice Publish a reviewed market. Requires an approved creator and a matching, unused, unexpired
+    ///         approval signed by an approved curator who is not the creator.
+    function createMarket(
+        CreateParams calldata p,
+        MarketApproval calldata approval,
+        address curator,
+        bytes calldata signature
+    ) external nonReentrant whenNotPaused returns (uint256 marketId) {
         Config memory c = config;
         uint256 metaLen = bytes(p.metadata).length;
         if (metaLen == 0 || metaLen > MAX_METADATA_BYTES) revert InvalidParams();
@@ -129,11 +146,51 @@ contract MezonkMarkets is IMezonkMarkets, Ownable2Step, Pausable, ReentrancyGuar
         if (p.initialYesProbBps < MIN_YES_PROB_BPS || p.initialYesProbBps > MAX_YES_PROB_BPS) {
             revert InvalidParams();
         }
+        _consumeApproval(p, approval, curator, signature);
 
         marketId = ++marketCount;
         (uint256 lpYes, uint256 lpNo) = _initMarket(marketId, p, c);
         _pull(msg.sender, p.initialLiquidity);
         _emitCreated(marketId, p, lpYes, lpNo);
+        emit MarketApprovalUsed(marketId, curator, approval.nonce);
+    }
+
+    /// @notice EIP-712 digest a curator signs for `approval`.
+    function approvalDigest(MarketApproval calldata a) public view returns (bytes32) {
+        return _hashTypedDataV4(
+            keccak256(
+                abi.encode(
+                    MARKET_APPROVAL_TYPEHASH,
+                    a.metadataHash,
+                    a.creator,
+                    a.resolver,
+                    a.closeTime,
+                    a.deadline,
+                    a.nonce
+                )
+            )
+        );
+    }
+
+    function _consumeApproval(
+        CreateParams calldata p,
+        MarketApproval calldata a,
+        address curator,
+        bytes calldata signature
+    ) internal {
+        if (!isCreator[msg.sender]) revert NotApprovedCreator();
+        if (!isCurator[curator]) revert NotCurator();
+        if (curator == msg.sender) revert SelfApproval();
+        if (block.timestamp > a.deadline) revert ApprovalExpired();
+        if (approvalUsed[a.nonce]) revert ApprovalUsed();
+        if (
+            a.creator != msg.sender || a.resolver != p.resolver || a.closeTime != p.closeTime
+                || a.metadataHash != keccak256(bytes(p.metadata))
+        ) revert ApprovalMismatch();
+        if (!SignatureChecker.isValidSignatureNow(curator, approvalDigest(a), signature)) {
+            revert BadApprovalSignature();
+        }
+        approvalUsed[a.nonce] = true;
     }
 
     function _initMarket(uint256 marketId, CreateParams calldata p, Config memory c)
@@ -390,6 +447,18 @@ contract MezonkMarkets is IMezonkMarkets, Ownable2Step, Pausable, ReentrancyGuar
     /// @notice Applies to markets created after this call only.
     function setConfig(Config calldata config_) external onlyOwner {
         _setConfig(config_);
+    }
+
+    function setCreator(address creator, bool approved) external onlyOwner {
+        if (creator == address(0)) revert InvalidParams();
+        isCreator[creator] = approved;
+        emit CreatorUpdated(creator, approved);
+    }
+
+    function setCurator(address curator, bool approved) external onlyOwner {
+        if (curator == address(0)) revert InvalidParams();
+        isCurator[curator] = approved;
+        emit CuratorUpdated(curator, approved);
     }
 
     function setResolver(address resolver, bool approved) external onlyOwner {
