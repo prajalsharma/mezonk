@@ -7,8 +7,8 @@ export const metadata: Metadata = { title: "Markets" };
 export default function MarketsPage() {
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-3xl font-semibold">Markets</h1>
+      <div className="space-y-3">
+        <h1 className="display text-5xl md:text-6xl">Markets</h1>
         <p className="text-ink-2">Every market indexed from the MEZONK contract. Filter, sort, and open one to trade.</p>
       </div>
       <Suspense>

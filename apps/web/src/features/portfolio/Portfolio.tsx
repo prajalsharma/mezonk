@@ -186,7 +186,7 @@ export function Portfolio() {
   if (!isConnected) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-semibold">Portfolio</h1>
+        <h1 className="display text-5xl md:text-6xl">Portfolio</h1>
         <EmptyState title="Connect a wallet to see your positions" action={<WalletButton />}>
           Your positions, claims and history are read from the chain for the connected address. Nothing is stored about you.
         </EmptyState>
@@ -200,7 +200,7 @@ export function Portfolio() {
     <div className="space-y-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-3xl font-semibold">Portfolio</h1>
+          <h1 className="display text-5xl md:text-6xl">Portfolio</h1>
           <p className="text-ink-2">Positions and claims for the connected wallet.</p>
         </div>
         <button onClick={refresh} className="text-sm font-semibold text-ink-2 hover:text-ink">Refresh</button>

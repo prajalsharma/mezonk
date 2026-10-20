@@ -34,7 +34,7 @@ export function Dialog({
       onClose={onClose}
       onCancel={onClose}
       aria-labelledby={titleId}
-      className="m-0 mt-auto w-full max-w-none rounded-t-lg border border-line bg-surface p-0 text-ink shadow-2 backdrop:bg-[var(--overlay)] sm:m-auto sm:max-w-lg sm:rounded-lg"
+      className="glass m-0 mt-auto w-full max-w-none rounded-t-xl border p-0 text-ink shadow-3 backdrop:bg-[var(--overlay)] backdrop:backdrop-blur-sm sm:m-auto sm:max-w-lg sm:rounded-xl"
     >
       <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
         <h2 id={titleId} className="text-lg font-semibold">{title}</h2>

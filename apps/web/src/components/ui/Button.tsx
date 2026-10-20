@@ -2,17 +2,18 @@ import Link from "next/link";
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cx } from "./cx";
 
-type Variant = "primary" | "secondary" | "ghost" | "yes" | "no" | "danger";
+type Variant = "primary" | "accent" | "secondary" | "ghost" | "yes" | "no" | "danger";
 type Size = "sm" | "md" | "lg";
 
 const base =
-  "inline-flex items-center justify-center gap-2 font-semibold whitespace-nowrap rounded-md select-none " +
+  "inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap rounded-md select-none " +
   "transition-[background-color,color,border-color,box-shadow,transform] duration-150 ease-[var(--ease-out-quart)] " +
   "press disabled:opacity-45 disabled:pointer-events-none";
 
 const variants: Record<Variant, string> = {
-  primary: "bg-primary text-on-primary hover:bg-primary/88",
-  secondary: "bg-surface text-ink border border-line hover:border-ink-2",
+  primary: "bg-primary text-on-primary hover:bg-primary/90 shadow-1",
+  accent: "bg-accent text-white hover:bg-accent/90 shadow-[0_8px_24px_-10px_var(--accent)]",
+  secondary: "bg-surface-2 text-ink border border-line hover:border-ink-2/50 hover:bg-surface",
   ghost: "text-ink-2 hover:text-ink hover:bg-surface-2",
   yes: "bg-yes text-on-yes hover:bg-yes/90",
   no: "bg-no text-on-no hover:bg-no/90",
@@ -22,7 +23,7 @@ const variants: Record<Variant, string> = {
 const sizes: Record<Size, string> = {
   sm: "h-8 px-3 text-sm",
   md: "h-10 px-4 text-sm",
-  lg: "h-12 px-5 text-base",
+  lg: "h-12 px-6 text-[0.9375rem]",
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

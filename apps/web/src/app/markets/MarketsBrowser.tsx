@@ -1,12 +1,14 @@
 "use client";
 
-import { Search, X } from "lucide-react";
+import { LayoutGrid, Rows3, Search, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { cx } from "@/components/ui/cx";
 import { EmptyState, inputClass } from "@/components/ui/primitives";
 import { MarketList } from "@/components/markets/MarketList";
+import { MarketGrid } from "@/components/markets/MarketCard";
+import { Select } from "@/components/ui/Select";
 import { useMarkets } from "@/hooks/useMarkets";
 import { CATEGORIES, categoryLabel } from "@/lib/market/metadata";
 
@@ -76,6 +78,7 @@ export function MarketsBrowser() {
   );
   const { data, isLoading, error, isFetching } = useMarkets(query);
   const filtered = !!(query.q || query.category || query.status !== "all" || query.minLiquidity);
+  const view = get("view") === "table" ? "table" : "cards";
 
   return (
     <div className="space-y-5">
@@ -92,16 +95,34 @@ export function MarketsBrowser() {
           />
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex">
-          <select aria-label="Sort by" value={query.sort} onChange={(e) => set({ sort: e.target.value })} className={cx(inputClass, "sm:w-44")}>
+          <Select aria-label="Sort by" value={query.sort} onChange={(e) => set({ sort: e.target.value })} className="sm:w-48">
             {SORTS.map((s) => (
               <option key={s.v} value={s.v}>Sort: {s.l}</option>
             ))}
-          </select>
-          <select aria-label="Minimum collateral" value={get("minLiquidity")} onChange={(e) => set({ minLiquidity: e.target.value })} className={cx(inputClass, "sm:w-44")}>
+          </Select>
+          <Select aria-label="Minimum collateral" value={get("minLiquidity")} onChange={(e) => set({ minLiquidity: e.target.value })} className="sm:w-44">
             {LIQ.map((s) => (
               <option key={s.v} value={s.v}>{s.l}</option>
             ))}
-          </select>
+          </Select>
+          <div role="radiogroup" aria-label="Layout" className="col-span-2 flex rounded-md border border-line bg-sunk p-1 sm:col-span-1">
+            {([["cards", LayoutGrid, "Cards"], ["table", Rows3, "Table"]] as const).map(([v, Icon, l]) => (
+              <button
+                key={v}
+                role="radio"
+                aria-checked={view === v}
+                aria-label={l}
+                title={l}
+                onClick={() => set({ view: v === "cards" ? "" : v })}
+                className={cx(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-sm px-3 py-1.5 text-sm transition-colors sm:flex-none",
+                  view === v ? "bg-surface-2 text-ink ring-1 ring-line" : "text-muted hover:text-ink",
+                )}
+              >
+                <Icon className="size-4" /> <span className="sm:sr-only">{l}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -113,7 +134,7 @@ export function MarketsBrowser() {
               aria-pressed={query.status === s.v}
               onClick={() => set({ status: s.v === "all" ? "" : s.v })}
               className={cx(
-                "shrink-0 rounded-md px-3 py-1.5 text-sm font-semibold",
+                "press shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors",
                 query.status === s.v ? "bg-primary text-on-primary" : "text-ink-2 hover:bg-surface-2 hover:text-ink",
               )}
             >
@@ -128,8 +149,8 @@ export function MarketsBrowser() {
               aria-pressed={query.category === c}
               onClick={() => set({ category: query.category === c ? "" : c })}
               className={cx(
-                "shrink-0 rounded-md border px-2.5 py-1 text-sm",
-                query.category === c ? "border-ink text-ink" : "border-line text-ink-2 hover:text-ink",
+                "press shrink-0 rounded-full border px-3 py-1 text-sm transition-colors",
+                query.category === c ? "border-accent bg-accent-soft text-accent-text" : "border-line text-ink-2 hover:border-ink-2/40 hover:text-ink",
               )}
             >
               {categoryLabel[c]}
@@ -150,11 +171,8 @@ export function MarketsBrowser() {
         )}
       </div>
 
-      <MarketList
-        items={data?.items}
-        isLoading={isLoading}
-        error={error}
-        empty={
+      {(() => {
+        const empty = 
           filtered ? (
             <EmptyState title="No markets match these filters">Try a broader search or clear the filters.</EmptyState>
           ) : (
@@ -164,9 +182,15 @@ export function MarketsBrowser() {
             >
               Markets appear here as soon as they are created on-chain and indexed.
             </EmptyState>
-          )
-        }
-      />
+          );
+        return view === "table" ? (
+          <div className="panel px-4 py-1">
+            <MarketList items={data?.items} isLoading={isLoading} error={error} empty={empty} />
+          </div>
+        ) : (
+          <MarketGrid items={data?.items} isLoading={isLoading} error={error} empty={empty} skeletons={9} />
+        );
+      })()}
       {data && data.total > data.items.length && (
         <div className="flex justify-center">
           <Button variant="secondary" loading={isFetching} onClick={() => setLimit((l) => l + PAGE)}>

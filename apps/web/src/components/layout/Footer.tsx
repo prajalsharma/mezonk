@@ -1,69 +1,101 @@
 import Link from "next/link";
-import { Lockup } from "@/components/brand/Logo";
+import { LogoMark, Wordmark } from "@/components/brand/Logo";
 import { deployment, explorerAddress, readinessMessage } from "@/lib/chain/config";
 import { shortAddress } from "@/lib/format";
 
+const GROUPS: Array<{ title: string; links: Array<[string, string]> }> = [
+  {
+    title: "Markets",
+    links: [
+      ["Discover", "/discover"],
+      ["All markets", "/markets"],
+      ["Resolution center", "/resolve"],
+      ["Activity", "/activity"],
+    ],
+  },
+  {
+    title: "Create",
+    links: [
+      ["Suggest a market", "/suggest"],
+      ["Suggestions", "/proposals"],
+      ["Market policy", "/docs#policy"],
+      ["Settings", "/settings"],
+    ],
+  },
+  {
+    title: "Learn",
+    links: [
+      ["How it works", "/docs"],
+      ["Resolution", "/docs#resolution"],
+      ["Fees", "/docs#fees"],
+      ["Risks", "/docs#risks"],
+      ["Contracts", "/docs#contracts"],
+      ["System status", "/status"],
+    ],
+  },
+];
+
+function ChainLink({ address, label }: { address: string; label: string }) {
+  const url = explorerAddress(address);
+  return url ? (
+    <a className="underline decoration-line underline-offset-2 hover:text-ink" href={url} target="_blank" rel="noreferrer">
+      {label} {shortAddress(address)}
+    </a>
+  ) : (
+    <span>
+      {label} {shortAddress(address)}
+    </span>
+  );
+}
+
 export function Footer() {
   return (
-    <footer className="mt-24 border-t border-line pb-24 lg:pb-0">
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 md:grid-cols-[1.3fr_1fr_1fr] md:px-6">
-        <div className="space-y-3">
-          <Lockup />
+    <footer className="mt-28 border-t border-line bg-surface pb-28 lg:pb-0">
+      <div className="mx-auto grid max-w-[84rem] gap-12 px-4 py-14 md:px-6 lg:grid-cols-[1.4fr_2fr]">
+        <div className="space-y-5">
+          <Link href="/" className="inline-flex items-center gap-3 text-ink" aria-label="MEZONK home">
+            <LogoMark size={36} title="" />
+            <Wordmark className="text-lg" />
+          </Link>
           <p className="max-w-sm text-sm text-ink-2">
             Prediction markets built on{" "}
-            <a href="https://mezo.org" target="_blank" rel="noreferrer" className="font-semibold text-ink underline decoration-line underline-offset-2">
+            <a href="https://mezo.org" target="_blank" rel="noreferrer" className="font-medium text-ink underline decoration-line underline-offset-2">
               Mezo
             </a>
-            . Prices are not predictions of certainty and nothing here is financial advice.
+            , settled in MUSD. Prices are not predictions of certainty and nothing here is financial advice.
           </p>
+          <dl className="mono space-y-1 text-xs text-muted">
+            <div className="flex gap-2">
+              <dt>Network</dt>
+              <dd className="text-ink-2">{deployment.isLocalFork ? `Local fork of ${deployment.chain.name}` : deployment.chain.name}</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt>Market</dt>
+              <dd className="text-ink-2">{deployment.marketsAddress ? <ChainLink address={deployment.marketsAddress} label="contract" /> : "Not deployed"}</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt>Collateral</dt>
+              <dd className="text-ink-2"><ChainLink address={deployment.musd} label="MUSD" /></dd>
+            </div>
+          </dl>
+          {!deployment.ready && <p className="text-sm text-warn">{readinessMessage[deployment.reason]}</p>}
         </div>
-        <nav aria-label="Footer" className="grid grid-cols-2 gap-2 text-sm">
-          <Link className="text-ink-2 hover:text-ink" href="/docs">How it works</Link>
-          <Link className="text-ink-2 hover:text-ink" href="/docs#resolution">Resolution</Link>
-          <Link className="text-ink-2 hover:text-ink" href="/docs#fees">Fees</Link>
-          <Link className="text-ink-2 hover:text-ink" href="/docs#risks">Risks</Link>
-          <Link className="text-ink-2 hover:text-ink" href="/docs#contracts">Contracts</Link>
-          <Link className="text-ink-2 hover:text-ink" href="/docs#policy">Market policy</Link>
-          <Link className="text-ink-2 hover:text-ink" href="/proposals">Suggestions</Link>
-          <Link className="text-ink-2 hover:text-ink" href="/resolve">Resolution center</Link>
-          <Link className="text-ink-2 hover:text-ink" href="/settings">Settings</Link>
-          <Link className="text-ink-2 hover:text-ink" href="/status">System status</Link>
+        <nav aria-label="Footer" className="grid grid-cols-2 gap-8 sm:grid-cols-3">
+          {GROUPS.map((g) => (
+            <div key={g.title} className="space-y-3">
+              <p className="label">{g.title}</p>
+              <ul className="space-y-2 text-sm">
+                {g.links.map(([l, h]) => (
+                  <li key={h}>
+                    <Link className="text-ink-2 transition-colors hover:text-ink" href={h}>
+                      {l}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </nav>
-        <dl className="space-y-1.5 text-sm">
-          <div className="flex justify-between gap-4">
-            <dt className="text-ink-2">Network</dt>
-            <dd>{deployment.isLocalFork ? `Local fork of ${deployment.chain.name}` : deployment.chain.name}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-ink-2">Market contract</dt>
-            <dd className="font-mono text-xs">
-              {deployment.marketsAddress ? (
-                explorerAddress(deployment.marketsAddress) ? (
-                  <a className="underline decoration-line underline-offset-2" href={explorerAddress(deployment.marketsAddress)!} target="_blank" rel="noreferrer">
-                    {shortAddress(deployment.marketsAddress)}
-                  </a>
-                ) : (
-                  shortAddress(deployment.marketsAddress)
-                )
-              ) : (
-                "Not deployed"
-              )}
-            </dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-ink-2">Collateral</dt>
-            <dd className="font-mono text-xs">
-              {explorerAddress(deployment.musd) ? (
-                <a className="underline decoration-line underline-offset-2" href={explorerAddress(deployment.musd)!} target="_blank" rel="noreferrer">
-                  MUSD {shortAddress(deployment.musd)}
-                </a>
-              ) : (
-                `MUSD ${shortAddress(deployment.musd)}`
-              )}
-            </dd>
-          </div>
-          {!deployment.ready && <p className="pt-2 text-warn">{readinessMessage[deployment.reason]}</p>}
-        </dl>
       </div>
     </footer>
   );

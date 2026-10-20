@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Line, LineChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Segmented, Skeleton } from "@/components/ui/primitives";
 import { apiGet } from "@/lib/api/types";
 import { formatDateTime, formatProb } from "@/lib/format";
@@ -44,9 +44,9 @@ export function PriceChart({ marketId }: { marketId: number }) {
     return out;
   }, [data, range]);
 
-  if (isLoading) return <Skeleton className="h-56 w-full" />;
+  if (isLoading) return <Skeleton className="h-72 w-full" />;
   if (error || !data) {
-    return <p className="flex h-56 items-center justify-center text-sm text-muted">Price history is unavailable right now.</p>;
+    return <p className="flex h-72 items-center justify-center text-sm text-muted">Price history is unavailable right now.</p>;
   }
   const trades = data.points.length - 1;
   const last = series.at(-1);
@@ -54,9 +54,10 @@ export function PriceChart({ marketId }: { marketId: number }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-ink-2">
-          Chance of Yes · {trades === 0 ? "no trades yet, showing the opening price" : `${trades} trade${trades === 1 ? "" : "s"}`}
-        </p>
+        <div>
+          <p className="label">Chance of Yes</p>
+          <p className="text-sm text-ink-2">{trades === 0 ? "No trades yet, showing the opening price" : `${trades} trade${trades === 1 ? "" : "s"} · step line, moves only on trades`}</p>
+        </div>
         <Segmented
           label="Chart range"
           value={range}
@@ -69,16 +70,24 @@ export function PriceChart({ marketId }: { marketId: number }) {
           ]}
         />
       </div>
-      <div className="h-56 w-full" role="img" aria-label={`Price chart. Current chance of Yes ${last ? formatProb(last.p / 100) : "unknown"}.`}>
+      <div className="h-72 w-full" role="img" aria-label={`Price chart. Current chance of Yes ${last ? formatProb(last.p / 100) : "unknown"}.`}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={series} margin={{ top: 8, right: 12, bottom: 0, left: -12 }}>
+          <AreaChart data={series} margin={{ top: 8, right: 12, bottom: 0, left: -12 }}>
+            <defs>
+              <linearGradient id={`pc-${marketId}`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.24} />
+                <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="2 6" />
+            <ReferenceLine y={50} stroke="var(--border)" />
             <XAxis
               dataKey="t"
               type="number"
               domain={["dataMin", "dataMax"]}
               scale="time"
               tickFormatter={(t: number) => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-              tick={{ fill: "var(--muted)", fontSize: 11 }}
+              tick={{ fill: "var(--muted)", fontSize: 11, fontFamily: "var(--font-geist-mono)" }}
               axisLine={{ stroke: "var(--border)" }}
               tickLine={false}
               minTickGap={40}
@@ -88,22 +97,22 @@ export function PriceChart({ marketId }: { marketId: number }) {
               domain={[0, 100]}
               ticks={[0, 25, 50, 75, 100]}
               tickFormatter={(v: number) => `${v}%`}
-              tick={{ fill: "var(--muted)", fontSize: 11 }}
+              tick={{ fill: "var(--muted)", fontSize: 11, fontFamily: "var(--font-geist-mono)" }}
               axisLine={false}
               tickLine={false}
               width={44}
             />
             <Tooltip
               cursor={{ stroke: "var(--border)" }}
-              contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }}
+              contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12, boxShadow: "var(--shadow-2)" }}
               labelStyle={{ color: "var(--ink-2)" }}
               itemStyle={{ color: "var(--ink)" }}
               labelFormatter={(t) => formatDateTime(Number(t))}
               formatter={(v) => [`${Number(v).toFixed(1)}%`, "Yes"]}
             />
-            <Line type="stepAfter" dataKey="p" stroke="var(--ink)" strokeWidth={1.75} dot={false} isAnimationActive={false} />
-            {last && <ReferenceDot x={last.t} y={last.p} r={5} fill="var(--accent)" stroke="var(--bg)" strokeWidth={3} />}
-          </LineChart>
+            <Area type="stepAfter" dataKey="p" stroke="var(--accent)" strokeWidth={2} fill={`url(#pc-${marketId})`} dot={false} isAnimationActive={false} />
+            {last && <ReferenceDot x={last.t} y={last.p} r={5} fill="var(--accent)" stroke="var(--surface)" strokeWidth={3} />}
+          </AreaChart>
         </ResponsiveContainer>
       </div>
     </div>

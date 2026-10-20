@@ -35,7 +35,18 @@ function parseAmount(s: string): bigint | null {
   }
 }
 
-export function TradePanel({ marketId, chain }: { marketId: number; chain: MarketChain }) {
+export function TradePanel({
+  marketId,
+  chain,
+  side: sideProp,
+  onSideChange,
+}: {
+  marketId: number;
+  chain: MarketChain;
+  /** Controlled outcome, shared with the outcome tiles on the market page. */
+  side?: Side;
+  onSideChange?: (s: Side) => void;
+}) {
   const { isConnected, chainId } = useAccount();
   const client = usePublicClient({ chainId: deployment.chainId });
   const { writeContractAsync } = useWriteContract();
@@ -45,7 +56,9 @@ export function TradePanel({ marketId, chain }: { marketId: number; chain: Marke
   const qc = useQueryClient();
 
   const [mode, setMode] = useState<Mode>("buy");
-  const [side, setSide] = useState<Side>("yes");
+  const [sideLocal, setSideLocal] = useState<Side>("yes");
+  const side = sideProp ?? sideLocal;
+  const setSide = (s: Side) => (onSideChange ? onSideChange(s) : setSideLocal(s));
   const [input, setInput] = useState("");
   const [slippageBps, setSlippageBps] = useState(100);
   const [quotedAt, setQuotedAt] = useState(0);
@@ -161,7 +174,7 @@ export function TradePanel({ marketId, chain }: { marketId: number; chain: Marke
     return <Notice tone="warn" title="Trading is off">The market contract isn&apos;t deployed on this network.</Notice>;
   }
   if (chain.isLoading && !m) {
-    return <div className="h-80 rounded-lg border border-line bg-surface" aria-busy="true" />;
+    return <div className="panel h-96" aria-busy="true" />;
   }
   if (!m) {
     return (
@@ -172,8 +185,9 @@ export function TradePanel({ marketId, chain }: { marketId: number; chain: Marke
   }
   if (!isOpen) {
     return (
-      <div className="rounded-lg border border-line bg-surface p-4 text-sm text-ink-2">
-        Trading has closed. Positions settle according to the resolution process below.
+      <div className="panel space-y-1 p-5 text-sm">
+        <p className="font-medium text-ink">Trading has closed</p>
+        <p className="text-ink-2">Positions settle according to the resolution process on this page.</p>
       </div>
     );
   }
@@ -208,7 +222,7 @@ export function TradePanel({ marketId, chain }: { marketId: number; chain: Marke
     );
 
   return (
-    <section aria-label="Trade" className="space-y-4 rounded-lg border border-line bg-surface p-4">
+    <section aria-label="Trade" className="panel space-y-4 p-5 shadow-2">
       <Segmented
         label="Trade direction"
         value={mode}
@@ -234,16 +248,16 @@ export function TradePanel({ marketId, chain }: { marketId: number; chain: Marke
               aria-checked={active}
               onClick={() => setSide(s)}
               className={cx(
-                "flex items-baseline justify-between rounded-md border px-3 py-2.5 text-left transition-colors",
+                "press flex h-14 flex-col justify-center rounded-md border px-3.5 text-left transition-[border-color,background-color] duration-150",
                 active
                   ? s === "yes"
-                    ? "border-yes bg-yes-soft"
-                    : "border-no bg-no-soft"
-                  : "border-line hover:border-ink-2",
+                    ? "border-yes bg-yes text-on-yes"
+                    : "border-no bg-no text-on-no"
+                  : "border-line bg-surface-2 hover:border-ink-2/40",
               )}
             >
-              <span className={cx("font-semibold", s === "yes" ? "text-yes-text" : "text-no-text")}>{s === "yes" ? "Yes" : "No"}</span>
-              <span className="tnum text-sm text-ink-2">{p == null ? "—" : `${formatPrice(p)} MUSD`}</span>
+              <span className={cx("text-sm font-semibold", !active && (s === "yes" ? "text-yes-text" : "text-no-text"))}>{s === "yes" ? "Yes" : "No"}</span>
+              <span className={cx("mono text-xs", active ? "opacity-85" : "text-muted")}>{p == null ? "—" : `${formatPrice(p)} MUSD`}</span>
             </button>
           );
         })}
@@ -251,13 +265,13 @@ export function TradePanel({ marketId, chain }: { marketId: number; chain: Marke
 
       <div className="space-y-1.5">
         <div className="flex items-baseline justify-between text-sm">
-          <label htmlFor="trade-amount" className="font-semibold">
+          <label htmlFor="trade-amount" className="font-medium">
             {mode === "buy" ? "Amount (MUSD)" : `Shares to sell`}
           </label>
           {isConnected && (
             <button
               type="button"
-              className="tnum text-ink-2 hover:text-ink"
+              className="mono text-xs text-ink-2 hover:text-ink"
               onClick={() => {
                 const max = mode === "buy" ? musd.balance : held;
                 if (max) setInput(formatUnits(max, 18));
@@ -269,25 +283,50 @@ export function TradePanel({ marketId, chain }: { marketId: number; chain: Marke
             </button>
           )}
         </div>
-        <input
-          id="trade-amount"
-          inputMode="decimal"
-          autoComplete="off"
-          placeholder="0.00"
-          value={input}
-          onChange={(e) => {
-            const v = e.target.value.replace(",", ".");
-            if (/^\d*\.?\d{0,18}$/.test(v)) setInput(v);
-            if (tx.state.phase === "confirmed" || tx.state.phase === "failed") tx.reset();
-          }}
-          aria-invalid={!!quote.err || insufficient}
-          className={cx(inputClass, "tnum text-lg")}
-        />
+        <div className="relative">
+          <input
+            id="trade-amount"
+            inputMode="decimal"
+            autoComplete="off"
+            placeholder="0.00"
+            value={input}
+            onChange={(e) => {
+              const v = e.target.value.replace(",", ".");
+              if (/^\d*\.?\d{0,18}$/.test(v)) setInput(v);
+              if (tx.state.phase === "confirmed" || tx.state.phase === "failed") tx.reset();
+            }}
+            aria-invalid={!!quote.err || insufficient}
+            className={cx(inputClass, "mono h-14 pr-20 text-2xl font-semibold")}
+          />
+          <span className="mono pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-sm text-muted">
+            {mode === "buy" ? "MUSD" : "shares"}
+          </span>
+        </div>
+        {mode === "buy" && (
+          <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="Quick amounts">
+            {["10", "25", "50", "100"].map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => {
+                  setInput(v);
+                  if (tx.state.phase === "confirmed" || tx.state.phase === "failed") tx.reset();
+                }}
+                className={cx(
+                  "press mono h-8 rounded-sm border text-xs transition-colors",
+                  input === v ? "border-ink-2/60 bg-surface-2 text-ink" : "border-line text-ink-2 hover:text-ink",
+                )}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        )}
         {quote.err && <p className="text-sm text-danger">{quote.err}</p>}
       </div>
 
       {quote.q && (
-        <dl className="divide-y divide-line border-y border-line" aria-live="polite">
+        <dl className="divide-y divide-line rounded-md border border-line bg-sunk/60 px-3.5" aria-live="polite">
           {bq && (
             <>
               <KeyValue label="Shares you receive">{formatShares(bq.shares)}</KeyValue>

@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { ButtonLink } from "@/components/ui/Button";
 import { EmptyState, Hint } from "@/components/ui/primitives";
-import { MarketList } from "@/components/markets/MarketList";
+import { CategoryGlyph, MarketGrid } from "@/components/markets/MarketCard";
 import { useMarkets, type MarketQuery } from "@/hooks/useMarkets";
 import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
 import { apiGet, type MarketSummaryDto } from "@/lib/api/types";
@@ -27,20 +27,33 @@ function Section({
   empty: string;
   filter?: (m: MarketSummaryDto) => boolean;
 }) {
-  const { data, isLoading, error } = useMarkets({ limit: 5, offset: 0, ...query });
+  const { data, isLoading, error } = useMarkets({ limit: 3, offset: 0, ...query });
   const items = filter ? data?.items.filter(filter) : data?.items;
-  return (
-    <section aria-labelledby={title} className="space-y-3">
-      <div className="flex items-baseline justify-between gap-4">
-        <h2 id={title} className="flex items-center gap-2 text-xl font-semibold">
+  const id = title.toLowerCase().replace(/\s+/g, "-");
+  // An empty section collapses to one line so empty lists never dominate the page.
+  if (data && !items?.length) {
+    return (
+      <section aria-labelledby={id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-line pt-4">
+        <h2 id={id} className="flex items-center gap-2 font-medium">
           {title}
           {hint && <Hint label={title}>{hint}</Hint>}
         </h2>
-        <Link href={more} className="text-sm font-semibold text-ink-2 hover:text-ink">
-          See all
+        <p className="text-sm text-muted">{empty}</p>
+      </section>
+    );
+  }
+  return (
+    <section aria-labelledby={id} className="space-y-4">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 id={id} className="flex items-center gap-2 text-2xl font-medium tracking-tight">
+          {title}
+          {hint && <Hint label={title}>{hint}</Hint>}
+        </h2>
+        <Link href={more} className="text-sm font-medium text-ink-2 hover:text-ink">
+          See all →
         </Link>
       </div>
-      <MarketList items={items} isLoading={isLoading} error={error} empty={<p className="py-6 text-sm text-muted">{empty}</p>} skeletonRows={3} showHeader={false} />
+      <MarketGrid items={items} isLoading={isLoading} error={error} empty={null} skeletons={3} />
     </section>
   );
 }
@@ -63,9 +76,9 @@ function RecentlyViewed() {
   });
   if (!ids.length || (q.data && !q.data.length)) return null;
   return (
-    <section aria-labelledby="recent" className="space-y-3">
-      <h2 id="recent" className="text-xl font-semibold">Recently viewed</h2>
-      <MarketList items={q.data} isLoading={q.isLoading} error={q.error} empty="" skeletonRows={2} showHeader={false} />
+    <section aria-labelledby="recent" className="space-y-4">
+      <h2 id="recent" className="text-2xl font-medium tracking-tight">Recently viewed</h2>
+      <MarketGrid items={q.data} isLoading={q.isLoading} error={q.error} empty={null} skeletons={3} />
     </section>
   );
 }
@@ -90,7 +103,19 @@ export function DiscoverSections() {
     );
   }
   return (
-    <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_18rem]">
+    <div className="space-y-12">
+      <nav aria-label="Browse by category" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        {CATEGORIES.map((c) => (
+          <Link
+            key={c}
+            href={`/markets?category=${c}`}
+            className="press flex shrink-0 items-center gap-2.5 rounded-md border border-line bg-surface py-1.5 pl-1.5 pr-4 text-sm font-medium text-ink-2 transition-colors hover:border-ink-2/40 hover:text-ink"
+          >
+            <CategoryGlyph category={c} className="size-7" />
+            {categoryLabel[c]}
+          </Link>
+        ))}
+      </nav>
       <div className="space-y-12">
         <Section
           title="Trending"
@@ -120,20 +145,8 @@ export function DiscoverSections() {
         <Section title="Awaiting resolution" query={{ status: "resolving", sort: "closing" }} more="/markets?status=resolving" empty="No markets are being resolved right now." />
         <RecentlyViewed />
       </div>
-      <aside className="space-y-8 lg:sticky lg:top-24 lg:self-start">
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-ink-2">Browse by category</h2>
-          <ul className="flex flex-wrap gap-1.5">
-            {CATEGORIES.map((c) => (
-              <li key={c}>
-                <Link href={`/markets?category=${c}`} className="inline-block rounded-md border border-line px-2.5 py-1 text-sm text-ink-2 hover:border-ink-2 hover:text-ink">
-                  {categoryLabel[c]}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="space-y-2 text-sm">
+      <aside className="grid gap-3 md:grid-cols-2">
+        <div className="panel space-y-2 p-6 text-sm">
           <h2 className="font-semibold">How a market works</h2>
           <ol className="list-decimal space-y-1.5 pl-4 text-ink-2">
             <li>Buy Yes or No shares with MUSD. The price is the market&apos;s implied chance, 0 to 1.</li>
@@ -145,7 +158,7 @@ export function DiscoverSections() {
             Read the full rules
           </Link>
         </div>
-        <div className="space-y-2 text-sm">
+        <div className="panel space-y-2 p-6 text-sm">
           <h2 className="font-semibold">About MUSD</h2>
           <p className="text-ink-2">
             MUSD is Mezo&apos;s Bitcoin-backed stablecoin. You mint it by borrowing against BTC on Mezo. MEZONK uses it for

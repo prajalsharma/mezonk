@@ -39,7 +39,7 @@ export default function DocsPage() {
       </nav>
       <article className="min-w-0 max-w-[70ch] space-y-6 text-ink-2 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-ink [&_li]:pl-1 [&_strong]:text-ink">
         <header className="space-y-2">
-          <h1 className="text-3xl font-semibold text-ink">How MEZONK works</h1>
+          <h1 className="display text-5xl text-ink md:text-6xl">How MEZONK works</h1>
           <p>
             MEZONK is an independent prediction market on Mezo. You trade Yes or No on questions with clear rules, using MUSD. This page
             covers how prices, payouts, resolution and fees work, and what the risks are.

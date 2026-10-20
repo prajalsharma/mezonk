@@ -7,8 +7,8 @@ export const metadata: Metadata = { title: "Suggestions", description: "Communit
 export default function ProposalsPage() {
   return (
     <div className="space-y-8">
-      <div className="max-w-2xl space-y-1">
-        <h1 className="text-3xl font-semibold">Suggestions</h1>
+      <div className="max-w-2xl space-y-3">
+        <h1 className="display text-5xl md:text-6xl">Suggestions</h1>
         <p className="text-ink-2">Every market starts here. Curators review each suggestion in public; reasons for every decision are on the suggestion&apos;s page.</p>
       </div>
       <Suspense>

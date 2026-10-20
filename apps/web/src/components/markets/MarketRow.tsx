@@ -20,13 +20,13 @@ export function MarketRow({ m, now }: { m: MarketSummaryDto; now: number }) {
           {open && thin && <span className="text-warn">Thin liquidity</span>}
           {!m.structured && <span className="text-warn">Unstructured rules</span>}
         </div>
-        <Link href={`/markets/${m.id}`} className="block text-base font-semibold leading-snug text-ink after:absolute after:inset-0 group-hover:underline group-hover:decoration-line group-hover:underline-offset-4">
+        <Link href={`/markets/${m.id}`} className="block text-[0.9375rem] font-medium leading-snug text-ink after:absolute after:inset-0 group-hover:text-accent-text">
           {m.question}
         </Link>
       </div>
       <div className="w-24 space-y-1.5 md:w-auto">
         <div className="tnum flex items-baseline justify-between gap-2">
-          <span className="text-lg font-semibold">{formatProb(m.priceYes)}</span>
+          <span className="mono text-lg font-semibold">{formatProb(m.priceYes)}</span>
           <span className="text-xs">
             <Change from={m.priceYes24hAgo} to={m.priceYes} />
           </span>
@@ -34,11 +34,11 @@ export function MarketRow({ m, now }: { m: MarketSummaryDto; now: number }) {
         <ProbabilityBar priceYes={m.priceYes} size="sm" />
         <span className="sr-only">chance of Yes</span>
       </div>
-      <div className="tnum hidden text-right text-sm md:block">
+      <div className="mono hidden text-right text-sm md:block">
         <div className="font-semibold">{formatMusd(m.volume, { compact: true })}</div>
         <div className="text-xs text-muted">volume</div>
       </div>
-      <div className="tnum hidden text-right text-sm md:block">
+      <div className="mono hidden text-right text-sm md:block">
         <div className="font-semibold">{formatMusd(m.liquidity, { compact: true })}</div>
         <div className="text-xs text-muted">collateral</div>
       </div>
@@ -48,7 +48,7 @@ export function MarketRow({ m, now }: { m: MarketSummaryDto; now: number }) {
 
 export function MarketListHeader() {
   return (
-    <div className="hidden grid-cols-[minmax(0,1fr)_9rem_7rem_7rem] gap-x-6 border-b border-line pb-2 text-xs font-semibold text-muted md:grid">
+    <div className="label hidden grid-cols-[minmax(0,1fr)_9rem_7rem_7rem] gap-x-6 border-b border-line py-3 md:grid">
       <span>Market</span>
       <span>Chance of Yes · 24h</span>
       <span className="text-right">Volume (MUSD)</span>

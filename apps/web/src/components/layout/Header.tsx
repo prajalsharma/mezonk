@@ -50,15 +50,16 @@ export function Header() {
   }, []);
 
   return (
-    <header className="glass sticky top-0 z-[var(--z-sticky)] border-b">
+    <header className="sticky top-0 z-[var(--z-sticky)] px-3 pt-3 md:px-4">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2">
         Skip to content
       </a>
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 md:px-6">
-        <Link href="/" aria-label="MEZONK home" className="shrink-0">
+      <div className="glass mx-auto flex h-14 max-w-[84rem] items-center gap-3 rounded-xl border px-3 shadow-2 md:px-4">
+        <Link href="/" aria-label="MEZONK home" className="press shrink-0 rounded-md px-1 py-1">
           <Lockup className="hidden sm:inline-flex" />
-          <LogoMark size={26} className="sm:hidden" title="MEZONK" />
+          <LogoMark size={28} className="sm:hidden" title="MEZONK" />
         </Link>
+        <span aria-hidden className="mx-1 hidden h-6 w-px bg-line lg:block" />
         <nav aria-label="Primary" className="hidden items-center gap-0.5 lg:flex">
           {NAV.map((n) => (
             <NavLink key={n.href} href={n.href} active={isActive(path, n.href)}>{n.label}</NavLink>
@@ -71,11 +72,11 @@ export function Header() {
             type="button"
             onClick={() => setPalette(true)}
             aria-label="Search markets (⌘K)"
-            className="press inline-flex h-9 items-center gap-2 rounded-md border border-line bg-surface px-2.5 text-sm text-muted hover:border-ink-2 hover:text-ink md:w-56 md:justify-start"
+            className="press inline-flex h-9 items-center gap-2 rounded-md border border-line bg-sunk/70 px-2.5 text-sm text-muted transition-colors hover:border-ink-2/40 hover:text-ink md:w-60 md:justify-start"
           >
             <Search className="size-4" aria-hidden />
             <span className="hidden md:inline">Search markets</span>
-            <kbd className="ml-auto hidden rounded border border-line px-1.5 text-[11px] md:block">⌘K</kbd>
+            <kbd className="mono ml-auto hidden rounded-sm border border-line bg-surface px-1.5 text-[11px] md:block">⌘K</kbd>
           </button>
           <span className="hidden xl:inline"><NetworkStatus /></span>
           <span className="hidden min-[380px]:inline xl:hidden"><NetworkStatus compact /></span>
@@ -93,7 +94,10 @@ function NavLink({ href, active, children }: { href: string; active: boolean; ch
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={cx("rounded-md px-2.5 py-1.5 text-sm font-semibold transition-colors", active ? "bg-surface-2 text-ink" : "text-ink-2 hover:text-ink")}
+      className={cx(
+        "relative rounded-sm px-3 py-1.5 text-sm font-medium transition-colors duration-150",
+        active ? "bg-surface-2 text-ink ring-1 ring-line" : "text-muted hover:text-ink",
+      )}
     >
       {children}
     </Link>
@@ -106,9 +110,9 @@ export function MobileNav() {
   return (
     <nav
       aria-label="Primary"
-      className="glass fixed inset-x-0 bottom-0 z-[var(--z-sticky)] border-t pb-[env(safe-area-inset-bottom)] lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-[var(--z-sticky)] px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] lg:hidden"
     >
-      <ul className="mx-auto grid max-w-lg grid-cols-5">
+      <ul className="glass mx-auto grid max-w-md grid-cols-5 rounded-xl border shadow-3">
         {NAV.slice(0, 5).map((n) => {
           const active = isActive(path, n.href);
           return (
@@ -116,7 +120,7 @@ export function MobileNav() {
               <Link
                 href={n.href}
                 aria-current={active ? "page" : undefined}
-                className={cx("press flex flex-col items-center gap-0.5 py-2 text-[11px] font-semibold", active ? "text-ink" : "text-muted")}
+                className={cx("press flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium", active ? "text-ink" : "text-muted")}
               >
                 <n.icon className="size-5" aria-hidden />
                 {n.label}

@@ -7,98 +7,106 @@
  * Brand anchors: cream #F2EFE9, ink #14110F, red #FF004D.
  * Contrast targets (WCAG 2.2 AA) are noted beside text tokens.
  */
+/*
+ * MEZONK "Night market" tokens (docs/NEW_DESIGN_LANGUAGE.md). Every colour in the app comes from here.
+ * Dark is the native theme; light is crisp cool white (never cream). Accent = logo red = YES.
+ * Contrast targets (WCAG 2.2 AA) are noted beside text tokens.
+ */
 :root {
   color-scheme: light;
-  --bg: #f2efe9; /* brand cream */
-  --surface: #faf8f4;
-  --surface-2: #e8e4dc;
-  --surface-sunk: #ebe7df;
-  --ink: #14110f; /* 16.4:1 on bg */
-  --ink-2: #4a453e; /* 8.3:1 on bg */
-  --muted: #6b655c; /* 5.0:1 on bg */
-  --border: #d6d0c5;
-  --border-strong: #14110f;
-  --accent: #ff004d; /* brand red: fills, markers, YES */
-  --accent-text: #c8003c; /* 5.2:1 on bg, red used as text */
-  --accent-soft: #ffe0e8;
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --surface-2: #eef1f5; /* raised / hover / selected */
+  --surface-sunk: #e8ebf0; /* inputs, chart wells */
+  --ink: #0b0f19; /* 17.9:1 on bg */
+  --ink-2: #414a5e; /* 8.6:1 */
+  --muted: #5f687c; /* 5.4:1 */
+  --border: #dde2ea;
+  --border-strong: #0b0f19;
+  --accent: #ff004d;
+  --accent-text: #d4003f; /* 5.1:1 on bg */
+  --accent-soft: #ffe3eb;
 
   /* Outcomes follow the split-coin logo: red half = YES, ink half = NO. */
-  --yes: #ff004d; /* fill; put --on-yes text on it (4.8:1) */
-  --on-yes: #14110f;
-  --yes-text: #c8003c; /* 5.2:1 on bg */
-  --yes-soft: #ffe0e8;
-  --no: #14110f; /* fill; put --on-no text on it */
-  --on-no: #f2efe9;
-  --no-text: #14110f;
-  --no-soft: #e3dfd7;
+  --yes: #ff004d;
+  --on-yes: #ffffff;
+  --yes-text: #d4003f;
+  --yes-soft: #ffe3eb;
+  --no: #0b0f19;
+  --on-no: #ffffff;
+  --no-text: #0b0f19;
+  --no-soft: #e4e8ef;
 
-  /* System states, deliberately not the brand red. */
-  --danger: #9a3412; /* 6.4:1 on bg, 5.8:1 on surface-2 */
-  --danger-soft: #f9e2d6;
-  --success: #0a6a40; /* 5.8:1 on bg */
-  --success-soft: #d8eee2;
-  --gain: #0a6a40;
-  --loss: #9a3412;
-  --warn: #8a5a00; /* 5.2:1 on bg */
-  --warn-soft: #f6e7c4;
-  --info: #24518a;
-  --primary: #14110f; /* primary button fill */
-  --on-primary: #f2efe9;
+  --danger: #a33a0b; /* 6.6:1 */
+  --danger-soft: #fde7dc;
+  --success: #037f5e; /* 5.0:1 */
+  --success-soft: #d9f5ec;
+  --gain: #037f5e;
+  --loss: #9a5b00;
+  --warn: #8f5400; /* 5.6:1 */
+  --warn-soft: #fff0d4;
+  --info: #2e57a8;
+  --primary: #0b0f19;
+  --on-primary: #ffffff;
   --focus: #ff004d;
-  --logo-ink: #14110f;
+  --logo-ink: #0b0f19;
   --logo-red: #ff004d;
-  --glass: rgba(250, 248, 244, 0.72);
-  --glass-border: rgba(20, 17, 15, 0.1);
-  --shadow-1: 0 1px 0 rgba(20, 17, 15, 0.04), 0 1px 2px rgba(20, 17, 15, 0.06);
-  --shadow-2: 0 8px 24px -8px rgba(20, 17, 15, 0.18);
-  --shadow-3: 0 18px 48px -16px rgba(20, 17, 15, 0.28);
-  --overlay: rgba(20, 17, 15, 0.45);
+  --glass: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(11, 15, 25, 0.08);
+  --grid-line: rgba(11, 15, 25, 0.045);
+  --glow: rgba(255, 0, 77, 0.1);
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-2: 0 10px 30px -12px rgba(16, 24, 40, 0.18);
+  --shadow-3: 0 24px 60px -20px rgba(16, 24, 40, 0.28);
+  --overlay: rgba(9, 12, 19, 0.5);
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #14110f; /* brand ink */
-  --surface: #1b1815;
-  --surface-2: #26221e;
-  --surface-sunk: #100e0c;
-  --ink: #f2efe9; /* 16.4:1 on bg */
-  --ink-2: #c9c3b9; /* 10.7:1 */
-  --muted: #9a9387; /* 6.2:1 */
-  --border: #332e28;
-  --border-strong: #f2efe9;
+  --bg: #090c13;
+  --surface: #10141d;
+  --surface-2: #171c27;
+  --surface-sunk: #06080d;
+  --ink: #e9edf4; /* 16.8:1 on bg */
+  --ink-2: #a8b0c0; /* 9.0:1 */
+  --muted: #7d8699; /* 5.5:1 */
+  --border: #1f2532;
+  --border-strong: #e9edf4;
   --accent: #ff004d;
-  --accent-text: #ff4d7c; /* 5.9:1 */
-  --accent-soft: #3a1520;
+  --accent-text: #ff4f7e; /* 6.1:1 */
+  --accent-soft: #2a0f18;
 
   --yes: #ff004d;
-  --on-yes: #14110f;
-  --yes-text: #ff4d7c; /* 5.9:1 on bg */
-  --yes-soft: #3a1520;
-  --no: #f2efe9; /* ink half inverts to cream on dark surfaces */
-  --on-no: #14110f;
-  --no-text: #f2efe9;
-  --no-soft: #2c2823;
+  --on-yes: #ffffff;
+  --yes-text: #ff4f7e;
+  --yes-soft: #2a0f18;
+  --no: #e9edf4; /* ink half inverts on dark surfaces */
+  --on-no: #090c13;
+  --no-text: #e9edf4;
+  --no-soft: #1c2230;
 
-  --danger: #fb923c; /* 8.3:1 */
-  --danger-soft: #3a2314;
-  --success: #3fd18c; /* 9.6:1 */
-  --success-soft: #12301f;
-  --gain: #3fd18c;
-  --loss: #fb923c;
-  --warn: #f2b84b;
-  --warn-soft: #362810;
-  --info: #8db4ee;
-  --primary: #f2efe9;
-  --on-primary: #14110f;
-  --focus: #ff4d7c;
-  --logo-ink: #f2efe9;
+  --danger: #ff8a4c; /* 7.9:1 */
+  --danger-soft: #2b160c;
+  --success: #2fd4a7; /* 10.1:1 */
+  --success-soft: #0b241e;
+  --gain: #2fd4a7;
+  --loss: #ffb020;
+  --warn: #ffb020;
+  --warn-soft: #2a1e07;
+  --info: #8fb2ff;
+  --primary: #e9edf4;
+  --on-primary: #090c13;
+  --focus: #ff4f7e;
+  --logo-ink: #e9edf4;
   --logo-red: #ff004d;
-  --glass: rgba(27, 24, 21, 0.72);
-  --glass-border: rgba(242, 239, 233, 0.1);
-  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.3);
-  --shadow-2: 0 12px 32px -12px rgba(0, 0, 0, 0.7);
-  --shadow-3: 0 24px 56px -16px rgba(0, 0, 0, 0.8);
-  --overlay: rgba(0, 0, 0, 0.6);
+  --glass: rgba(16, 20, 29, 0.72);
+  --glass-border: rgba(233, 237, 244, 0.08);
+  --grid-line: rgba(233, 237, 244, 0.04);
+  --glow: rgba(255, 0, 77, 0.16);
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 16px 40px -16px rgba(0, 0, 0, 0.8);
+  --shadow-3: 0 28px 70px -20px rgba(0, 0, 0, 0.9);
+  --overlay: rgba(3, 5, 9, 0.7);
 }
 
 @theme inline {
@@ -135,8 +143,11 @@
   --color-on-primary: var(--on-primary);
   --color-focus: var(--focus);
 
-  --font-sans: var(--font-hanken), "Helvetica Neue", system-ui, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --font-sans: var(--font-geist), "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  --font-display: var(--font-serif), "Times New Roman", serif;
+  --font-brand: var(--font-hanken), var(--font-geist), sans-serif;
+  --color-raised: var(--surface-2);
 
   /* Type scale, ratio ~1.2, fixed rem (product register) */
   --text-xs: 0.75rem;
@@ -155,10 +166,13 @@
   --text-3xl--line-height: 2.5rem;
   --text-4xl: 3.25rem;
   --text-4xl--line-height: 1.05;
+  --text-5xl: 4.25rem;
+  --text-5xl--line-height: 1;
 
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
 
   --shadow-1: var(--shadow-1);
   --shadow-2: var(--shadow-2);
@@ -182,12 +196,11 @@
     font-size: var(--text-base);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
-    font-feature-settings: "ss01";
     font-variant-numeric: tabular-nums;
   }
   h1, h2, h3 {
     text-wrap: balance;
-    letter-spacing: -0.015em;
+    letter-spacing: -0.02em;
   }
   p {
     text-wrap: pretty;
@@ -249,9 +262,77 @@
     transition: background-color 220ms var(--ease-out-quart), color 220ms var(--ease-out-quart), border-color 220ms var(--ease-out-quart) !important;
   }
   .wordmark {
+    font-family: var(--font-brand);
     font-weight: 600;
     letter-spacing: 0.07em;
     text-transform: uppercase;
+  }
+  /* Editorial serif for hero and landing section titles only. */
+  .display {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    line-height: 0.98;
+  }
+  .display em {
+    font-style: italic;
+  }
+  /* Numbers and data labels. */
+  .mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  /* Raised content surface. Not glass: glass is for floating chrome only. */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+  }
+  /* Cards that lift on hover; transform + shadow only. */
+  .card-hover {
+    transition: transform 180ms var(--ease-out-quart), box-shadow 180ms var(--ease-out-quart), border-color 180ms var(--ease-out-quart);
+  }
+  .card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-2);
+    border-color: color-mix(in oklab, var(--border) 50%, var(--ink-2));
+  }
+  /* Faint terminal grid behind hero moments, masked to fade out. */
+  .grid-bg {
+    background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 30%, transparent 75%);
+  }
+  .glow {
+    background: radial-gradient(60% 60% at 70% 30%, var(--glow), transparent 70%);
+  }
+  .live-dot {
+    position: relative;
+  }
+  .live-dot::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 999px;
+    background: var(--accent);
+    opacity: 0.35;
+    animation: ping 1.8s var(--ease-out-quart) infinite;
+  }
+  .ticker {
+    animation: ticker var(--ticker-duration, 60s) linear infinite;
+  }
+  .ticker-wrap:hover .ticker,
+  .ticker-wrap:focus-within .ticker {
+    animation-play-state: paused;
   }
 }
 
@@ -300,6 +381,14 @@ dialog::backdrop {
   }
 }
 
+@keyframes ping {
+  0% { transform: scale(0.6); opacity: 0.5; }
+  80%, 100% { transform: scale(2.2); opacity: 0; }
+}
+@keyframes ticker {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
 @keyframes skeleton {
   0% { opacity: 0.55; }
   50% { opacity: 1; }

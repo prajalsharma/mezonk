@@ -7,10 +7,9 @@ export default function DiscoverPage() {
   return (
     <div className="space-y-12">
       <div className="max-w-2xl space-y-2">
-        <h1 className="text-3xl font-semibold">Discover</h1>
+        <h1 className="display text-5xl md:text-6xl">Discover</h1>
         <p className="text-ink-2">
-          What people are trading on Mezo right now. Every list below is computed from on-chain trades. Nothing is
-          hand-picked or paid for.
+          What people are trading right now. Every list is computed from on-chain trades: nothing is hand-picked or paid for.
         </p>
       </div>
       <DiscoverSections />

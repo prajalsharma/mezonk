@@ -11,31 +11,31 @@ import { ToastProvider } from "@/components/ui/Toast";
 
 function brandTheme(mode: "light" | "dark"): Theme {
   const t = mode === "dark" ? darkTheme() : lightTheme();
-  const ink = mode === "dark" ? "#F2EFE9" : "#14110F";
-  const bg = mode === "dark" ? "#1B1815" : "#FAF8F4";
+  const ink = mode === "dark" ? "#E9EDF4" : "#0B0F19";
+  const bg = mode === "dark" ? "#10141D" : "#FFFFFF";
   return {
     ...t,
     colors: {
       ...t.colors,
       accentColor: ink,
-      accentColorForeground: mode === "dark" ? "#14110F" : "#F2EFE9",
+      accentColorForeground: mode === "dark" ? "#090C13" : "#FFFFFF",
       modalBackground: bg,
-      modalBorder: mode === "dark" ? "#332E28" : "#D6D0C5",
+      modalBorder: mode === "dark" ? "#1F2532" : "#DDE2EA",
       connectButtonBackground: bg,
       modalText: ink,
     },
-    fonts: { body: "var(--font-hanken), system-ui, sans-serif" },
-    radii: { ...t.radii, actionButton: "6px", connectButton: "6px", menuButton: "6px", modal: "10px", modalMobile: "10px" },
+    fonts: { body: "var(--font-geist), system-ui, sans-serif" },
+    radii: { ...t.radii, actionButton: "12px", connectButton: "12px", menuButton: "12px", modal: "20px", modalMobile: "20px" },
   };
 }
 
 function WalletTheme({ children }: { children: ReactNode }) {
   const { resolvedTheme } = useTheme();
-  // The server can't know the visitor's theme; render the light theme until mounted to avoid a hydration mismatch.
+  // The server can't know the visitor's theme; render the dark theme until mounted to avoid a hydration mismatch.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   return (
-    <RainbowKitProvider theme={brandTheme(mounted && resolvedTheme === "dark" ? "dark" : "light")} modalSize="compact">
+    <RainbowKitProvider theme={brandTheme(!mounted || resolvedTheme !== "light" ? "dark" : "light")} modalSize="compact">
       {children}
     </RainbowKitProvider>
   );
@@ -49,7 +49,7 @@ export function Providers({ children }: { children: ReactNode }) {
       }),
   );
   return (
-    <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <ThemeProvider attribute="data-theme" defaultTheme="dark" enableSystem disableTransitionOnChange>
       <WagmiProvider config={wagmiConfig}>
         <QueryClientProvider client={client}>
           <WalletTheme>

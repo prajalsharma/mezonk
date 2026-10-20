@@ -11,7 +11,7 @@ export function Skeleton({ className }: { className?: string }) {
 
 type Tone = "info" | "warn" | "error" | "success";
 const toneStyle: Record<Tone, string> = {
-  info: "bg-surface border-line text-ink",
+  info: "bg-surface-2 border-line text-ink",
   warn: "bg-warn-soft border-warn/40 text-ink",
   error: "bg-danger-soft border-danger/40 text-ink",
   success: "bg-success-soft border-success/40 text-ink",
@@ -40,7 +40,7 @@ export function Notice({
   return (
     <div
       role={tone === "error" ? "alert" : "status"}
-      className={cx("flex gap-3 rounded-md border px-3.5 py-3 text-sm", toneStyle[tone], className)}
+      className={cx("flex gap-3 rounded-md border px-4 py-3.5 text-sm", toneStyle[tone], className)}
     >
       <span className="mt-0.5 shrink-0">{toneIcon[tone]}</span>
       <div className="min-w-0 flex-1 space-y-1">
@@ -64,7 +64,7 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cx("rounded-lg border border-dashed border-line px-6 py-12 text-center", className)}>
+    <div className={cx("grid-bg relative rounded-lg border border-line bg-surface px-6 py-14 text-center", className)}>
       <p className="text-lg font-semibold">{title}</p>
       {children && <div className="mx-auto mt-2 max-w-md text-sm text-ink-2">{children}</div>}
       {action && <div className="mt-5 flex justify-center gap-2">{action}</div>}
@@ -152,7 +152,7 @@ export function Segmented<T extends string>({
   className?: string;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className={cx("grid gap-1 rounded-md bg-surface-2 p-1", className)} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+    <div role="radiogroup" aria-label={label} className={cx("grid gap-1 rounded-md border border-line bg-sunk p-1", className)} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -163,8 +163,8 @@ export function Segmented<T extends string>({
             aria-checked={active}
             onClick={() => onChange(o.value)}
             className={cx(
-              "h-9 rounded-sm px-3 text-sm font-semibold transition-colors duration-150",
-              active ? cx("bg-surface text-ink shadow-1", o.className) : "text-ink-2 hover:text-ink",
+              "h-9 rounded-sm px-3 text-sm font-medium transition-[background-color,color,box-shadow] duration-150",
+              active ? cx("bg-surface-2 text-ink shadow-1 ring-1 ring-line", o.className) : "text-muted hover:text-ink",
             )}
           >
             {o.label}
@@ -190,7 +190,7 @@ export function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <label htmlFor={htmlFor} className="block text-sm font-semibold text-ink">
+      <label htmlFor={htmlFor} className="block text-sm font-medium text-ink">
         {label}
       </label>
       {children}
@@ -206,6 +206,6 @@ export function Field({
 }
 
 export const inputClass =
-  "w-full rounded-md border border-line bg-surface px-3 py-2.5 text-base text-ink placeholder:text-muted " +
-  "transition-colors hover:border-ink-2 focus:border-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-focus " +
-  "aria-[invalid=true]:border-danger disabled:opacity-50";
+  "w-full rounded-md border border-line bg-sunk px-3.5 py-2.5 text-base text-ink placeholder:text-muted " +
+  "transition-[border-color,box-shadow,background-color] duration-150 hover:border-ink-2/40 focus:border-accent focus:bg-surface focus:outline-none " +
+  "focus:shadow-[0_0_0_4px_var(--accent-soft)] aria-[invalid=true]:border-danger disabled:opacity-50";

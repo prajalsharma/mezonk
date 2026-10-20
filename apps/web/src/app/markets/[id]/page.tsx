@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { getMarket } from "@/server/queries";
 import { MarketView, type IndexedMarket } from "./MarketView";
 
@@ -45,5 +46,9 @@ export default async function MarketPage({ params }: Props) {
   const id = Number((await params).id);
   if (!Number.isInteger(id) || id <= 0 || id > 2 ** 31) notFound();
   const { indexed, dbError } = await load(id);
-  return <MarketView id={id} indexed={indexed} dbError={dbError} />;
+  return (
+    <Suspense>
+      <MarketView id={id} indexed={indexed} dbError={dbError} />
+    </Suspense>
+  );
 }
