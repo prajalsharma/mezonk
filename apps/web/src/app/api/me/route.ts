@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { guarded, ok } from "@/lib/api/http";
 import { unauthorized, viewer } from "@/lib/api/session";
 import { getDb, schema } from "@/server/db/client";
+import { myProfile } from "@/server/profiles";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,6 @@ export function GET(req: NextRequest) {
     if (!v) return unauthorized();
     const db = await getDb();
     const [settings] = await db.select().from(schema.userSettings).where(eq(schema.userSettings.wallet, v.wallet));
-    return ok({ roles: v, settings: settings ?? null }, { maxAge: 0 });
+    return ok({ roles: v, settings: settings ?? null, profile: await myProfile(v.wallet) }, { maxAge: 0 });
   });
 }

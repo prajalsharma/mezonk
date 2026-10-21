@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { marketHref } from "@/lib/api/types";
 import type { CSSProperties } from "react";
 import { useMarkets } from "@/hooks/useMarkets";
 import { formatProb } from "@/lib/format";
@@ -25,7 +26,7 @@ export function Ticker() {
         {loop.map((m, i) => (
           <Link
             key={`${m.id}-${i}`}
-            href={`/markets/${m.id}`}
+            href={marketHref(m)}
             aria-hidden={i >= items.length ? true : undefined}
             tabIndex={i >= items.length ? -1 : undefined}
             className="flex items-center gap-3 border-r border-line px-5 py-3 text-sm transition-colors hover:bg-surface-2"

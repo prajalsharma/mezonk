@@ -12,6 +12,7 @@ contracts/broadcast/*/31337/
 *.log
 .DS_Store
 .pglite*/
+.media/
 .vercel
 playwright-report/
 test-results/

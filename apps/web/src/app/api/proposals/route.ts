@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { fail, guarded, ok, pageSchema, parseQuery, rateLimit } from "@/lib/api/http";
 import { unauthorized, viewer } from "@/lib/api/session";
+import { hasCap } from "@/server/roles";
 import { PROPOSAL_STATUS } from "@/lib/governance/proposal";
 import { createProposal, GovernanceError, listProposals } from "@/server/governance";
 
@@ -24,7 +25,7 @@ export function GET(req: NextRequest) {
     const v = await viewer(req);
     const statuses = p.data.status?.split(",").filter((s): s is (typeof PROPOSAL_STATUS)[number] => (PROPOSAL_STATUS as readonly string[]).includes(s));
     if (p.data.queue) {
-      if (!v?.curator) return fail(403, "forbidden", "Curators only");
+      if (!hasCap(v, "market:review")) return fail(403, "forbidden", "Curators only");
       return ok(await listProposals({ status: statuses?.length ? statuses : ["submitted", "under_review", "changes_requested", "approved", "scheduled"], viewer: v, limit: p.data.limit, offset: p.data.offset }), { maxAge: 0 });
     }
     if (p.data.mine) {

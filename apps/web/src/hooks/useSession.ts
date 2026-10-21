@@ -3,7 +3,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useAccount, useSignMessage } from "wagmi";
-import { apiAuth, getSession, setSession, subscribeSession } from "@/lib/api/auth-client";
+import { apiAuth, getSession, setSession, signOutServer, subscribeSession } from "@/lib/api/auth-client";
+import type { PlatformRole, Capability } from "@/lib/auth/capabilities";
 
 const noSession = () => null;
 import { apiGet } from "@/lib/api/types";
@@ -16,8 +17,19 @@ export interface Me {
     creator: boolean;
     resolver: boolean;
     arbitrator: boolean;
+    admin: boolean;
+    suspended: boolean;
     verifiedProjects: string[];
+    platformRoles: PlatformRole[];
+    capabilities: Capability[];
   };
+  profile: {
+    wallet: string;
+    username: string | null;
+    displayName: string | null;
+    bio: string;
+    avatarUrl: string | null;
+  } | null;
   settings: null | {
     displayName: string | null;
     notifyProposals: boolean;
@@ -30,7 +42,7 @@ export interface Me {
 
 /**
  * Wallet sign-in for governed actions (suggesting, reviewing, settings). Trading and claims never need it.
- * `ensure()` signs in lazily: nonce → one plain-text signature → bearer session for this tab.
+ * `ensure()` signs in lazily: nonce → one plain-text signature → HttpOnly session cookie (7 days).
  */
 export function useSession() {
   const { address, isConnected } = useAccount();
@@ -41,12 +53,12 @@ export function useSession() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // A session belongs to one wallet; drop it when a different wallet connects. (A disconnected or
-  // still-reconnecting wallet keeps the token: signedIn is false until the same wallet is back.)
+  // A session belongs to one wallet; switching to a different wallet signs the old one out on the server.
+  // (A disconnected or still-reconnecting wallet keeps the session: signedIn is false until it is back.)
   useEffect(() => {
     const s = getSession();
     if (s && address && s.wallet.toLowerCase() !== address.toLowerCase()) {
-      setSession(null);
+      void signOutServer();
       void qc.invalidateQueries({ queryKey: ["me"] });
     }
   }, [address, qc]);
@@ -66,12 +78,13 @@ export function useSession() {
       const signature = await signMessageAsync({ message: n.message });
       const r = await fetch("/api/auth/session", {
         method: "POST",
+        credentials: "same-origin",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ wallet: address, nonce: n.nonce, issuedAt: n.issuedAt, signature }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error?.message ?? "Sign-in failed");
-      setSession({ token: j.token as string, wallet: address, expiresAt: j.expiresAt as string });
+      setSession({ wallet: address, expiresAt: j.expiresAt as string });
       void qc.invalidateQueries({ queryKey: ["me"] });
       return true;
     } catch (e) {
@@ -83,8 +96,8 @@ export function useSession() {
     }
   }, [address, isConnected, signMessageAsync, qc]);
 
-  const signOut = useCallback(() => {
-    setSession(null);
+  const signOut = useCallback(async () => {
+    await signOutServer();
     void qc.invalidateQueries({ queryKey: ["me"] });
   }, [qc]);
 

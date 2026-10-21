@@ -22,6 +22,8 @@ Testnet first. Mainnet needs an audit, a legal review and explicit authorization
 | `MEZO_RPC_URL` | private RPC for the indexer if the public one rate-limits |
 | `NEXT_PUBLIC_RPC_URL` | a different public RPC for browsers |
 | `INDEXER_*` | tuning |
+| `BLOB_READ_WRITE_TOKEN` | image uploads in production (Vercel Blob). Without it uploads fail with a setup error; the rest of the app works |
+| `ADMIN_BOOTSTRAP_WALLET` | the first administrator (see "Roles" below). Remove after first sign-in |
 
 ### Only for deploying the contract (your machine, never the web host)
 
@@ -78,3 +80,34 @@ Pick a "Test wallet: …" in the connect dialog. These only exist on a localhost
 - **Reconciliation mismatch:** check `/api/indexer/status`, then refresh the market. Chain data always wins.
 - **Pause:** owner calls `pause()`. This stops new markets and trades only; resolution and claims continue.
 - **Failed web deploy:** roll back in the host. The contract and user funds are unaffected.
+
+## Roles
+
+Two kinds of role, held in two places. See docs/USER_PROFILES_AND_RBAC_ARCHITECTURE.md.
+
+| Role | Lives in | Changed by |
+|---|---|---|
+| Administrator | database | another administrator in `/admin`, immediately |
+| Creator, Curator | contract | the contract owner signing `setCreator` / `setCurator`; `/admin` prepares and tracks it |
+| Owner, Resolver, Arbitrator | contract | the owner, outside the app |
+
+**First administrator.** Set `ADMIN_BOOTSTRAP_WALLET`, redeploy, sign in at `/admin` with that wallet. It works once,
+only while no administrator has ever existed. Then remove the variable.
+
+**Grant or revoke an administrator.** `/admin` → Wallets & roles → enter the address → Grant/Revoke with a reason.
+You cannot revoke yourself or the last administrator.
+
+**Grant or revoke creator/curator.** `/admin` → enter the address → Grant/Revoke next to the on-chain role → this creates
+a request. If your connected wallet is the contract owner, press "Sign with connected owner wallet". If the owner is a
+Safe, copy the `to` and `data` into a Safe transaction, execute it, and paste the hash. The request shows "confirmed"
+only after the server finds the successful transaction and reads the new state from the contract.
+
+**Compromised wallet.**
+1. Have the person sign in to MEZONK once with a new wallet they control.
+2. `/admin` → Compromised wallet → old address, new address, what happened → Start incident response.
+   This suspends the old account, signs it out everywhere, moves its administrator role, withdraws its open suggestions
+   and releases its review claims.
+3. Open the new address in Wallets & roles and have the owner sign the queued creator/curator changes (revoke old,
+   grant new). Until they confirm, the old wallet still holds its on-chain flags.
+4. If the old wallet was the contract owner, resolver or arbitrator, the owner (or a new owner via `transferOwnership`)
+   must rotate it on-chain; the report lists this. Markets it already created keep it as creator.

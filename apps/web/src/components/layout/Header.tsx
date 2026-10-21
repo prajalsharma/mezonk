@@ -8,6 +8,7 @@ import { Lockup, LogoMark } from "@/components/brand/Logo";
 import { cx } from "@/components/ui/cx";
 import { useAccount } from "wagmi";
 import { useOnchainRoles } from "@/hooks/useOnchainRoles";
+import { AccountMenu } from "./AccountMenu";
 import { CommandPalette } from "./CommandPalette";
 import { NetworkStatus } from "./NetworkStatus";
 import { ThemeToggle } from "./ThemeToggle";
@@ -81,6 +82,7 @@ export function Header() {
           <span className="hidden xl:inline"><NetworkStatus /></span>
           <span className="hidden min-[380px]:inline xl:hidden"><NetworkStatus compact /></span>
           <ThemeToggle />
+          <AccountMenu />
           <WalletButton />
         </div>
       </div>

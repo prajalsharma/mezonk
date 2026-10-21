@@ -70,6 +70,10 @@ export const proposalInputSchema = z.object({
     .max(8)
     .default([]),
   sponsored: z.boolean().default(false),
+  /** Off-chain presentation (not hashed into the rules): a short summary and uploaded images. */
+  summary: z.string().trim().max(280).default(""),
+  coverMediaId: z.string().uuid().nullable().optional(),
+  contextMediaIds: z.array(z.string().uuid()).max(6).default([]),
 });
 export type ProposalInput = z.infer<typeof proposalInputSchema>;
 

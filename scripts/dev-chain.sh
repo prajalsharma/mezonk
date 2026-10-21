@@ -43,6 +43,7 @@ INDEXER_MODE=embedded
 INDEXER_CONFIRMATIONS=0
 INDEXER_INTERVAL_MS=2000
 PGLITE_DIR=.pglite-local
+MEDIA_STORAGE=local
 ENV
 rm -rf apps/web/.pglite-local
 echo "wrote apps/web/.env.local — now run: pnpm dev   (then: pnpm --filter web seed:local)"

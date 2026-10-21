@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { deployment } from "@/lib/chain/config";
 import { fail, guarded, ok } from "@/lib/api/http";
 import { viewer } from "@/lib/api/session";
+import { hasCap } from "@/server/roles";
 import { approvalDomain, approvalTypes } from "@/lib/governance/approval";
 import { getDb, schema } from "@/server/db/client";
 import { buildApproval, GovernanceError } from "@/server/governance";
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 export function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return guarded(async () => {
     const v = await viewer(req);
-    if (!v?.curator) return fail(403, "forbidden", "Curators only");
+    if (!hasCap(v, "market:review")) return fail(403, "forbidden", "Curators only");
     const { id } = await params;
     if (!z.string().uuid().safeParse(id).success) return fail(400, "bad_request", "Invalid proposal id");
     if (!deployment.marketsAddress) return fail(503, "no_deployment", "No market contract configured");

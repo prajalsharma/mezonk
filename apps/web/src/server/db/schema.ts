@@ -13,6 +13,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * Indexed copy of on-chain state. The chain is authoritative; every row here is reproducible
@@ -298,6 +299,8 @@ export const marketProposals = pgTable(
     conflicts: text("conflicts").notNull().default(""),
     rationale: text("rationale").notNull().default(""),
     references_: jsonb("references").notNull().default([]),
+    /** Short off-chain summary shown on cards and the market page (not part of the hashed rules). */
+    summary: text("summary").notNull().default(""),
     sponsored: boolean("sponsored").notNull().default(false),
     assignedCurator: text("assigned_curator"),
     /** Signed approval, present once status = approved/scheduled/published. */
@@ -371,3 +374,186 @@ export const authNonces = pgTable("auth_nonces", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   usedAt: timestamp("used_at", { withTimezone: true }),
 });
+
+// ───────────────────────── Platform identity, RBAC, media, discussion ─────────────────────────
+
+/** Server-side wallet sessions. The cookie holds a random token; only its SHA-256 is stored. */
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: text("id").primaryKey(), // sha256(token), hex
+    wallet: text("wallet").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedReason: text("revoked_reason"),
+  },
+  (t) => [index("sessions_wallet").on(t.wallet)],
+);
+
+/** Per-wallet account status. Absent row = active. */
+export const accounts = pgTable("accounts", {
+  wallet: text("wallet").primaryKey(),
+  status: text("status").notNull().default("active"), // active | suspended
+  statusReason: text("status_reason"),
+  statusBy: text("status_by"),
+  statusAt: timestamp("status_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Uploaded images. Bytes live in object storage; this is metadata and ownership. */
+export const media = pgTable(
+  "media",
+  {
+    id: text("id").primaryKey(),
+    owner: text("owner").notNull(),
+    kind: text("kind").notNull(), // avatar | cover | context
+    status: text("status").notNull().default("pending"), // pending | attached | removed
+    provider: text("provider").notNull(),
+    storageKey: text("storage_key").notNull(),
+    url: text("url").notNull(),
+    mime: text("mime").notNull(),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    bytes: integer("bytes").notNull(),
+    sha256: text("sha256").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    attachedAt: timestamp("attached_at", { withTimezone: true }),
+  },
+  (t) => [index("media_owner").on(t.owner), index("media_status").on(t.status, t.createdAt)],
+);
+
+/** Public identity for a wallet. The wallet is the identity; the username is a mutable, unique handle. */
+export const profiles = pgTable(
+  "profiles",
+  {
+    wallet: text("wallet").primaryKey(),
+    username: text("username").notNull(),
+    usernameNormalized: text("username_normalized").notNull(),
+    displayName: text("display_name").notNull(),
+    bio: text("bio").notNull().default(""),
+    avatarMediaId: text("avatar_media_id").references(() => media.id, { onDelete: "set null" }),
+    hidden: boolean("hidden").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("profiles_username").on(t.usernameNormalized)],
+);
+
+/** Platform (off-chain) role assignments. Never deleted: revocation sets revoked_at. */
+export const roleAssignments = pgTable(
+  "role_assignments",
+  {
+    id: serial("id").primaryKey(),
+    wallet: text("wallet").notNull(),
+    role: text("role").notNull(), // ADMINISTRATOR
+    grantedBy: text("granted_by").notNull(),
+    grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
+    reason: text("reason").notNull().default(""),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedBy: text("revoked_by"),
+    revokeReason: text("revoke_reason"),
+  },
+  (t) => [
+    uniqueIndex("role_assignments_active").on(t.wallet, t.role).where(sql`${t.revokedAt} is null`),
+    index("role_assignments_wallet").on(t.wallet),
+  ],
+);
+
+/** On-chain role changes (setCreator / setCurator) requested in the admin UI and their real transactions. */
+export const roleOperations = pgTable(
+  "role_operations",
+  {
+    id: text("id").primaryKey(),
+    fn: text("fn").notNull(), // setCreator | setCurator
+    target: text("target").notNull(),
+    grant: boolean("grant").notNull(),
+    requestedBy: text("requested_by").notNull(),
+    reason: text("reason").notNull().default(""),
+    status: text("status").notNull().default("awaiting_signature"), // awaiting_signature | submitted | confirmed | failed
+    txHash: text("tx_hash"),
+    error: text("error"),
+    confirmedBlock: bigint("confirmed_block", { mode: "bigint" }),
+    incidentId: text("incident_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("role_operations_tx").on(t.txHash), index("role_operations_target").on(t.target)],
+);
+
+/** Compromised-wallet incidents: what was replaced, by whom, and the resulting report. Append-only. */
+export const walletReplacements = pgTable("wallet_replacements", {
+  id: text("id").primaryKey(),
+  oldWallet: text("old_wallet").notNull(),
+  newWallet: text("new_wallet").notNull(),
+  performedBy: text("performed_by").notNull(),
+  reason: text("reason").notNull(),
+  report: jsonb("report").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Images attached to a proposal; shown on the published market through the proposal↔market link. */
+export const proposalMedia = pgTable(
+  "proposal_media",
+  {
+    proposalId: text("proposal_id")
+      .notNull()
+      .references(() => marketProposals.id, { onDelete: "cascade" }),
+    mediaId: text("media_id")
+      .notNull()
+      .references(() => media.id, { onDelete: "cascade" }),
+    role: text("role").notNull(), // cover | context
+    position: integer("position").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.proposalId, t.mediaId] })],
+);
+
+/** Public URL slugs. Immutable once assigned; the market id stays the canonical identifier. */
+export const marketSlugs = pgTable(
+  "market_slugs",
+  {
+    slug: text("slug").primaryKey(),
+    marketId: integer("market_id")
+      .notNull()
+      .references(() => markets.marketId, { onDelete: "cascade" }),
+    isCurrent: boolean("is_current").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("market_slugs_current").on(t.marketId).where(sql`${t.isCurrent}`)],
+);
+
+/** Discussion under a market. Bound to the numeric market id, never to the slug. */
+export const comments = pgTable(
+  "comments",
+  {
+    id: serial("id").primaryKey(),
+    marketId: integer("market_id")
+      .notNull()
+      .references(() => markets.marketId, { onDelete: "cascade" }),
+    author: text("author").notNull(),
+    body: text("body").notNull(),
+    status: text("status").notNull().default("visible"), // visible | hidden | deleted
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    editedAt: timestamp("edited_at", { withTimezone: true }),
+    moderatedBy: text("moderated_by"),
+    moderationReason: text("moderation_reason"),
+  },
+  (t) => [index("comments_market").on(t.marketId, t.id), index("comments_author").on(t.author)],
+);
+
+export const commentReports = pgTable(
+  "comment_reports",
+  {
+    id: serial("id").primaryKey(),
+    commentId: integer("comment_id")
+      .notNull()
+      .references(() => comments.id, { onDelete: "cascade" }),
+    reporter: text("reporter").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolvedBy: text("resolved_by"),
+  },
+  (t) => [uniqueIndex("comment_reports_once").on(t.commentId, t.reporter)],
+);

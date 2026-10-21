@@ -19,6 +19,7 @@
     "@electric-sql/pglite": "0.3.11",
     "@rainbow-me/rainbowkit": "2.2.9",
     "@tanstack/react-query": "5.90.5",
+    "@vercel/blob": "1.1.1",
     "@wagmi/core": "2.22.1",
     "drizzle-orm": "0.45.4",
     "lucide-react": "0.548.0",
@@ -29,6 +30,7 @@
     "react-dom": "19.1.0",
     "recharts": "3.3.0",
     "server-only": "0.0.1",
+    "sharp": "0.35.5",
     "viem": "2.38.6",
     "wagmi": "2.19.5",
     "zod": "3.25.76"

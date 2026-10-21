@@ -89,7 +89,7 @@ export function SettingsView() {
             {roleList.length > 0 && <p className="text-ink-2">Protocol roles (from the contract): {roleList.join(", ")}.</p>}
             {roles && roles.verifiedProjects.length > 0 && <p className="text-ink-2">Verified representative of: {roles.verifiedProjects.join(", ")}.</p>}
             {session.signedIn ? (
-              <Button size="sm" variant="ghost" onClick={session.signOut}>Sign out of this tab</Button>
+              <Button size="sm" variant="ghost" onClick={session.signOut}>Sign out</Button>
             ) : (
               <Button size="sm" variant="secondary" loading={session.busy} onClick={() => session.ensure()}>Sign in to load preferences</Button>
             )}

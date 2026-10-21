@@ -1,48 +1,39 @@
 "use client";
 
-/** Bearer token for wallet sessions, kept in sessionStorage (cleared when the tab closes). */
-const KEY = "mezonk:session";
-
+/**
+ * Wallet session state in the browser. The session token itself lives in an HttpOnly cookie that page
+ * scripts cannot read; this store only remembers which wallet the server says is signed in.
+ */
 export interface Session {
-  token: string;
   wallet: string;
-  expiresAt: string;
+  expiresAt?: string;
 }
 
-// One in-memory snapshot shared by every hook instance, so a sign-in in one component is seen by all.
 let snapshot: Session | null | undefined;
 const listeners = new Set<() => void>();
+let probing: Promise<void> | null = null;
 
-function readStorage(): Session | null {
-  try {
-    const raw = sessionStorage.getItem(KEY);
-    if (!raw) return null;
-    const s = JSON.parse(raw) as Session;
-    if (new Date(s.expiresAt).getTime() < Date.now()) return null;
-    return s;
-  } catch {
-    return null;
-  }
+/** Asks the server once per page load whether the cookie is still a valid session. */
+function probe() {
+  probing ??= fetch("/api/auth/session", { credentials: "same-origin", cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : { wallet: null }))
+    .then((j: { wallet: string | null }) => setSession(j.wallet ? { wallet: j.wallet } : null))
+    .catch(() => setSession(null));
 }
 
 export function getSession(): Session | null {
-  if (snapshot === undefined) snapshot = readStorage();
-  else if (snapshot && new Date(snapshot.expiresAt).getTime() < Date.now()) snapshot = null;
+  if (snapshot === undefined) {
+    snapshot = null;
+    if (typeof window !== "undefined") probe();
+  }
   return snapshot;
 }
 
 export function setSession(s: Session | null) {
   snapshot = s;
-  try {
-    if (s) sessionStorage.setItem(KEY, JSON.stringify(s));
-    else sessionStorage.removeItem(KEY);
-  } catch {
-    /* storage unavailable */
-  }
   for (const l of listeners) l();
 }
 
-/** For useSyncExternalStore. */
 export function subscribeSession(listener: () => void) {
   listeners.add(listener);
   return () => {
@@ -50,13 +41,20 @@ export function subscribeSession(listener: () => void) {
   };
 }
 
+/** Same-origin JSON call with the session cookie. A 401 means the session is gone: drop local state. */
 export async function apiAuth<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const s = getSession();
   const r = await fetch(url, {
     ...init,
-    headers: { "content-type": "application/json", ...(s ? { authorization: `Bearer ${s.token}` } : {}), ...(init.headers ?? {}) },
+    credentials: "same-origin",
+    headers: { ...(init.body instanceof FormData ? {} : { "content-type": "application/json" }), ...(init.headers ?? {}) },
   });
-  const body = await r.json().catch(() => null);
+  const body = r.status === 204 ? null : await r.json().catch(() => null);
+  if (r.status === 401) setSession(null);
   if (!r.ok) throw new Error(body?.error?.message ?? `Request failed (${r.status})`);
   return body as T;
+}
+
+export async function signOutServer() {
+  await fetch("/api/auth/session", { method: "DELETE", credentials: "same-origin" }).catch(() => undefined);
+  setSession(null);
 }

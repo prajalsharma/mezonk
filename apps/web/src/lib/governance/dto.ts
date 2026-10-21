@@ -18,6 +18,7 @@ export interface ProposalDto {
   rationale: string;
   references: Array<{ url: string; label: string }>;
   sponsored: boolean;
+  summary: string;
   conflicts: string;
   marketId: number | null;
   submittedAt: string | null;
@@ -45,6 +46,7 @@ export interface ReviewDto {
 
 export interface ProposalDetailDto {
   proposal: ProposalDto;
+  media: Array<{ id: string; url: string; width: number; height: number; role: string }>;
   reviews: ReviewDto[];
   project: { id: string; name: string; status: string; website: string | null } | null;
   authorIsVerifiedRep: boolean;

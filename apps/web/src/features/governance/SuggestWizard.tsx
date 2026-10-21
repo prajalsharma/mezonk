@@ -10,6 +10,7 @@ import { Button, ButtonLink } from "@/components/ui/Button";
 import { cx } from "@/components/ui/cx";
 import { Field, KeyValue, Notice, inputClass } from "@/components/ui/primitives";
 import { Select } from "@/components/ui/Select";
+import { ImageUpload, type UploadedImage } from "@/components/ui/ImageUpload";
 import { ProbabilityBar } from "@/components/markets/Probability";
 import { WalletButton } from "@/components/wallet/WalletButton";
 import { useMe, useSession } from "@/hooks/useSession";
@@ -44,6 +45,9 @@ interface Form {
   conflicts: string;
   rationale: string;
   references: Array<{ url: string; label: string }>;
+  summary: string;
+  cover: UploadedImage | null;
+  contextImages: UploadedImage[];
 }
 
 const empty: Form = {
@@ -67,13 +71,16 @@ const empty: Form = {
   conflicts: "",
   rationale: "",
   references: [{ url: "", label: "" }],
+  summary: "",
+  cover: null,
+  contextImages: [],
 };
 
 const utc = (local: string) => (local ? new Date(`${local}:00Z`) : null);
 const fromIso = (iso: string) => new Date(iso).toISOString().slice(0, 16);
 
 /** Rebuilds the form from a saved proposal (editing after "changes requested", or resuming a server draft). */
-function fromProposal(p: ProposalDto): Form {
+function fromProposal(p: ProposalDto, media: Array<UploadedImage & { role: string }> = []): Form {
   const m = p.metadata;
   const fb = m.rules.ambiguity.match(/Fallback source: (.*)$/);
   return {
@@ -97,6 +104,9 @@ function fromProposal(p: ProposalDto): Form {
     conflicts: p.conflicts,
     rationale: p.rationale,
     references: p.references.length ? p.references : [{ url: "", label: "" }],
+    summary: p.summary ?? "",
+    cover: media.find((m) => m.role === "cover") ?? null,
+    contextImages: media.filter((m) => m.role === "context"),
   };
 }
 
@@ -176,9 +186,9 @@ export function SuggestWizard() {
     (async () => {
       if (!(await session.ensure())) return;
       try {
-        const d = await apiAuth<{ proposal: ProposalDto }>(`/api/proposals/${editId}`);
+        const d = await apiAuth<{ proposal: ProposalDto; media: Array<UploadedImage & { role: string }> }>(`/api/proposals/${editId}`);
         if (cancelled) return;
-        setF(fromProposal(d.proposal));
+        setF(fromProposal(d.proposal, d.media));
         setDraftId(d.proposal.id);
         setEditStatus(d.proposal.status);
       } catch (e) {
@@ -230,6 +240,9 @@ export function SuggestWizard() {
           conflicts: f.conflicts,
           rationale: f.rationale,
           references: f.references.filter((r) => r.url.trim()).map((r) => ({ url: r.url.trim(), label: r.label.trim() })),
+          summary: f.summary.trim(),
+          coverMediaId: f.cover?.id ?? null,
+          contextMediaIds: f.contextImages.map((m) => m.id),
           sponsored: f.sponsored,
         }
       : null;
@@ -344,9 +357,13 @@ export function SuggestWizard() {
                 {CATEGORIES.map((c) => <option key={c} value={c}>{categoryLabel[c]}</option>)}
               </Select>
             </Field>
-            <Field label="Context (optional)" htmlFor="desc" hint="Background traders should know. Up to 1,200 characters.">
+            <Field label="One-line summary (optional)" htmlFor="sum" hint={`${f.summary.length}/280. Shown under the question on the market page. Not part of the rules.`}>
+              <input id="sum" value={f.summary} maxLength={280} onChange={(e) => set("summary", e.target.value)} className={inputClass} />
+            </Field>
+            <Field label="Context (optional)" htmlFor="desc" hint="Background traders should know. Up to 1,200 characters. Becomes part of the on-chain rules.">
               <textarea id="desc" rows={3} maxLength={1200} value={f.description} onChange={(e) => set("description", e.target.value)} className={inputClass} />
             </Field>
+            <ImageUpload kind="cover" label="Cover image (optional)" value={f.cover} onChange={(v) => set("cover", v)} hint="Shown at the top of the market page. PNG, JPEG, WebP or GIF up to 5 MB. Sign-in needed to upload." />
           </section>
         )}
 
@@ -405,6 +422,18 @@ export function SuggestWizard() {
             <Field label="Fallback source and rule (optional)" htmlFor="fb" hint="Used only if the primary source is unavailable. Say which one and how.">
               <textarea id="fb" rows={2} value={f.fallback} onChange={(e) => set("fallback", e.target.value)} placeholder="If DefiLlama is down, use the Mezo explorer's TVL figure at the same time." className={inputClass} />
             </Field>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-semibold">Context images (optional, up to 6)</legend>
+              <p className="text-sm text-muted">Screenshots or charts that help traders. They illustrate; only the written rules decide the outcome.</p>
+              <div className="flex flex-wrap gap-3">
+                {f.contextImages.map((img, i) => (
+                  <ImageUpload key={img.id} kind="context" shape="square" label={`Image ${i + 1}`} value={img} onChange={(v) => set("contextImages", v ? f.contextImages.map((x, j) => (j === i ? v : x)) : f.contextImages.filter((_, j) => j !== i))} />
+                ))}
+                {f.contextImages.length < 6 && (
+                  <ImageUpload key={`new-${f.contextImages.length}`} kind="context" shape="square" label="Add image" value={null} onChange={(v) => v && set("contextImages", [...f.contextImages, v])} />
+                )}
+              </div>
+            </fieldset>
             <fieldset className="space-y-2">
               <legend className="text-sm font-semibold">Supporting references (optional)</legend>
               {f.references.map((r, i) => (

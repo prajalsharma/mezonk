@@ -13,6 +13,7 @@ Binary prediction market on Mezo settled in MUSD. `contracts/` (Foundry) + `apps
 - **Explorer links only for verified public networks** (`hasExplorer`); never on local forks.
 - **The contract is not upgradeable.** Interface changes mean a new deployment (see docs/RESOLUTION_DESIGN.md §8).
 - Permissions for UI actions come from `lib/market/permissions.ts` only. Don't scatter address checks.
+- Backend capabilities (profiles, comments, media, admin) come from `apps/web/src/lib/auth/capabilities.ts` via `hasCap`/`requireCap`. Never trust a role, wallet or author from the request body. Creator/curator live on-chain; ADMINISTRATOR and suspension live in the DB (see docs/USER_PROFILES_AND_RBAC_ARCHITECTURE.md).
 - Design: tokens in `src/app/globals.css`. Brand (split-coin logo, 2026-10-20): **red = YES, ink = NO**; errors use the separate `--danger` token, never the YES red. Glass only on floating surfaces (nav overlay, command palette, popovers). No eyebrow labels, pills or gradient text.
 - Market creation is governed: approved creators publish curator-signed proposals (see docs/MARKET_GOVERNANCE.md). Never add a path that lets a wallet publish without a curator approval.
 

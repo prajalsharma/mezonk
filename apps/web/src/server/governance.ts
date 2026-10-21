@@ -15,7 +15,8 @@ import { metadataHash, reviewMetadata, serializeMetadata, type MarketMetadata } 
 import { publicClient } from "@/server/chain";
 import { getDb, schema } from "@/server/db/client";
 import { listMarkets } from "@/server/queries";
-import { getRoles, type Roles } from "@/server/roles";
+import { profilesFor } from "@/server/profiles";
+import { getRoles, hasCap, type Roles } from "@/server/roles";
 
 const { marketProposals, proposalReviews, auditLog, projects, projectRepresentatives } = schema;
 
@@ -35,7 +36,7 @@ export type ProposalRow = typeof marketProposals.$inferSelect;
 
 /** Public view: strips the author's private fields when the viewer isn't the author or a curator. */
 export function publicProposal(p: ProposalRow, viewer?: Roles | null) {
-  const privileged = !!viewer && (viewer.curator || viewer.owner || viewer.wallet === p.author);
+  const privileged = !!viewer && (hasCap(viewer, "market:review") || viewer.admin || viewer.wallet === p.author);
   return {
     id: p.id,
     author: p.author,
@@ -51,6 +52,7 @@ export function publicProposal(p: ProposalRow, viewer?: Roles | null) {
     rationale: p.rationale,
     references: p.references_,
     sponsored: p.sponsored,
+    summary: p.summary,
     conflicts: p.conflicts,
     marketId: p.marketId,
     submittedAt: p.submittedAt?.toISOString() ?? null,
@@ -115,6 +117,7 @@ export async function checkProposal(input: ProposalInput, excludeId?: string) {
 
 export async function createProposal(author: string, raw: unknown) {
   const input = proposalInputSchema.parse(raw);
+  await validateProposalMedia(author, input); // before any write, so a bad image leaves nothing behind
   const db = await getDb();
   const id = randomUUID();
   const mh = metadataHash(serializeMetadata(input.metadata));
@@ -134,8 +137,10 @@ export async function createProposal(author: string, raw: unknown) {
       rationale: input.rationale,
       references_: input.references,
       sponsored: input.sponsored,
+      summary: input.summary,
     })
     .returning();
+  await setProposalMedia(id, author, input);
   await audit(author, "proposal.create", "proposal", id);
   return row!;
 }
@@ -147,6 +152,7 @@ export async function updateProposal(id: string, author: string, raw: unknown) {
   if (p.author !== author.toLowerCase()) throw deny(403, "forbidden", "Only the author can edit a proposal");
   if (!["draft", "changes_requested"].includes(p.status)) throw deny(409, "locked", "This proposal can't be edited in its current state");
   const input = proposalInputSchema.parse(raw);
+  await validateProposalMedia(author, input);
   const mh = metadataHash(serializeMetadata(input.metadata));
   const [row] = await db
     .update(marketProposals)
@@ -162,11 +168,13 @@ export async function updateProposal(id: string, author: string, raw: unknown) {
       rationale: input.rationale,
       references_: input.references,
       sponsored: input.sponsored,
+      summary: input.summary,
       version: p.metadataHash === mh ? p.version : p.version + 1,
       updatedAt: new Date(),
     })
     .where(eq(marketProposals.id, id))
     .returning();
+  await setProposalMedia(id, author, input);
   await audit(author, "proposal.update", "proposal", id, { version: row!.version });
   return row!;
 }
@@ -236,7 +244,7 @@ export async function curatorAction(
     publisher?: string;
   },
 ) {
-  if (!curator.curator) throw deny(403, "forbidden", "Only an on-chain approved curator can review proposals");
+  if (!hasCap(curator, "market:review")) throw deny(403, "forbidden", "Only an on-chain approved curator can review proposals");
   const db = await getDb();
   const [p] = await db.select().from(marketProposals).where(eq(marketProposals.id, id));
   if (!p) throw deny(404, "not_found", "No such proposal");
@@ -359,7 +367,7 @@ export async function getProposal(id: string, viewer?: Roles | null) {
   const db = await getDb();
   const [p] = await db.select().from(marketProposals).where(eq(marketProposals.id, id));
   if (!p) return null;
-  const privileged = !!viewer && (viewer.curator || viewer.owner || viewer.wallet === p.author);
+  const privileged = !!viewer && (hasCap(viewer, "market:review") || viewer.admin || viewer.wallet === p.author);
   if (p.status === "draft" && !privileged) return null;
   const reviews = await db
     .select()
@@ -375,6 +383,7 @@ export async function getProposal(id: string, viewer?: Roles | null) {
     : null;
   return {
     proposal: publicProposal(p, viewer),
+    media: await proposalMediaList(id),
     reviews: reviews.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),
     project: project ? { id: project.id, name: project.name, status: project.status, website: project.website } : null,
     authorIsVerifiedRep: rep?.status === "verified",
@@ -405,7 +414,7 @@ export async function createProject(wallet: string, input: { id: string; name: s
 }
 
 export async function reviewProject(curator: Roles, projectId: string, wallet: string, verdict: "verified" | "revoked", reason: string) {
-  if (!curator.curator) throw deny(403, "forbidden", "Only a curator can verify project representatives");
+  if (!hasCap(curator, "project:verify")) throw deny(403, "forbidden", "Only a curator or administrator can verify project representatives");
   const db = await getDb();
   const [rep] = await db.select().from(projectRepresentatives).where(and(eq(projectRepresentatives.projectId, projectId), eq(projectRepresentatives.wallet, wallet.toLowerCase())));
   if (!rep) throw deny(404, "not_found", "No such representative claim");
@@ -434,3 +443,62 @@ export async function publicAudit(subjectType: string, subjectId: string) {
 }
 
 export { getRoles };
+
+// ───────────────────────────── Proposal images ─────────────────────────────
+
+/**
+ * Replaces a proposal's cover and context images. Only images uploaded by the proposal's author, of the
+ * right kind and not removed, can be attached. Runs in one transaction.
+ */
+async function validateProposalMedia(author: string, input: ProposalInput) {
+  const ids = [...(input.coverMediaId ? [input.coverMediaId] : []), ...input.contextMediaIds];
+  const db = await getDb();
+  const rows = ids.length ? await db.select().from(schema.media).where(inArray(schema.media.id, ids)) : [];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  for (const id of ids) {
+    const m = byId.get(id);
+    const wantKind = id === input.coverMediaId ? "cover" : "context";
+    if (!m || m.owner !== author.toLowerCase() || m.kind !== wantKind || m.status === "removed") {
+      throw deny(422, "bad_media", "One of the images can't be attached to this suggestion");
+    }
+  }
+  return ids;
+}
+
+async function setProposalMedia(proposalId: string, author: string, input: ProposalInput) {
+  const ids = await validateProposalMedia(author, input);
+  const db = await getDb();
+  await db.transaction(async (tx) => {
+    await tx.delete(schema.proposalMedia).where(eq(schema.proposalMedia.proposalId, proposalId));
+    if (input.coverMediaId) await tx.insert(schema.proposalMedia).values({ proposalId, mediaId: input.coverMediaId, role: "cover", position: 0 });
+    for (const [i, mid] of input.contextMediaIds.entries()) {
+      await tx.insert(schema.proposalMedia).values({ proposalId, mediaId: mid, role: "context", position: i + 1 }).onConflictDoNothing();
+    }
+    if (ids.length) await tx.update(schema.media).set({ status: "attached", attachedAt: new Date() }).where(inArray(schema.media.id, ids));
+  });
+}
+
+export async function proposalMediaList(proposalId: string) {
+  const db = await getDb();
+  const rows = await db
+    .select({ id: schema.media.id, url: schema.media.url, width: schema.media.width, height: schema.media.height, role: schema.proposalMedia.role, position: schema.proposalMedia.position, status: schema.media.status })
+    .from(schema.proposalMedia)
+    .innerJoin(schema.media, eq(schema.media.id, schema.proposalMedia.mediaId))
+    .where(eq(schema.proposalMedia.proposalId, proposalId))
+    .orderBy(schema.proposalMedia.position);
+  return rows.filter((r) => r.status !== "removed").map(({ status: _s, ...r }) => r);
+}
+
+/** Everything the market page shows beyond chain data: who made it, the summary and images from its proposal. */
+export async function marketPresentation(marketId: number, creator: string) {
+  const db = await getDb();
+  const [p] = await db.select().from(marketProposals).where(eq(marketProposals.marketId, marketId));
+  const people = await profilesFor([creator, ...(p ? [p.author] : [])]);
+  return {
+    creator: people.get(creator.toLowerCase())!,
+    suggestedBy: p && p.author !== creator.toLowerCase() ? people.get(p.author)! : null,
+    proposalId: p?.id ?? null,
+    summary: p?.summary ?? "",
+    media: p ? await proposalMediaList(p.id) : [],
+  };
+}

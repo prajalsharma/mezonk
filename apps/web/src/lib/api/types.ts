@@ -18,6 +18,7 @@ export interface MarketSummaryDto {
   stage: Omit<StageInfo, "deadline"> & { deadline: string | null };
   finalOutcome: number | null;
   trendingScore: number;
+  slug: string | null;
 }
 
 export interface MarketListDto {
@@ -53,3 +54,7 @@ export async function apiGet<T>(url: string): Promise<T> {
   }
   return body as T;
 }
+
+/** Canonical public URL of a market: its slug when assigned, else the numeric id (which redirects). */
+export const marketHref = (m: { id: number; slug?: string | null }, side?: "yes" | "no") =>
+  `/markets/${m.slug ?? m.id}${side ? `?side=${side}` : ""}`;

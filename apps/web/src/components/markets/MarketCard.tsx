@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import { cx } from "@/components/ui/cx";
 import { Skeleton } from "@/components/ui/primitives";
-import type { MarketSummaryDto } from "@/lib/api/types";
+import { type MarketSummaryDto, marketHref } from "@/lib/api/types";
 import { formatMusd, formatPrice, formatProb, relativeTime } from "@/lib/format";
 import { categoryLabel, type Category } from "@/lib/market/metadata";
 import { Change, ProbabilityBar } from "./Probability";
@@ -93,7 +93,7 @@ export function MarketCard({ m, now, index = 0, featured = false }: { m: MarketS
       </header>
 
       <h3 className={cx("font-medium leading-snug text-ink", featured ? "text-lg md:text-xl" : "line-clamp-3 text-[0.9375rem]")}>
-        <Link href={`/markets/${m.id}`} className="outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-focus">
+        <Link href={marketHref(m)} className="outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-focus">
           {m.question}
         </Link>
       </h3>
@@ -118,7 +118,7 @@ export function MarketCard({ m, now, index = 0, featured = false }: { m: MarketS
       ) : open ? (
         <div className="relative z-10 grid grid-cols-2 gap-2">
           <Link
-            href={`/markets/${m.id}?side=yes`}
+            href={marketHref(m, "yes")}
             aria-label={`Buy Yes at ${formatPrice(yes)} MUSD: ${m.question}`}
             className="press flex h-11 items-center justify-between rounded-md bg-yes-soft px-3 text-sm font-semibold text-yes-text ring-1 ring-yes/25 transition-colors hover:bg-yes hover:text-on-yes"
           >
@@ -126,7 +126,7 @@ export function MarketCard({ m, now, index = 0, featured = false }: { m: MarketS
             <span className="mono">{formatPrice(yes)}</span>
           </Link>
           <Link
-            href={`/markets/${m.id}?side=no`}
+            href={marketHref(m, "no")}
             aria-label={`Buy No at ${formatPrice(1 - yes)} MUSD: ${m.question}`}
             className="press flex h-11 items-center justify-between rounded-md bg-no-soft px-3 text-sm font-semibold text-no-text ring-1 ring-line transition-colors hover:bg-no hover:text-on-no"
           >

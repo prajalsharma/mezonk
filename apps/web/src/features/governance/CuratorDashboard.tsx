@@ -13,7 +13,7 @@ import { apiGet } from "@/lib/api/types";
 import type { ProjectDto, ProposalDto } from "@/lib/governance/dto";
 import { ProposalRow } from "./ProposalBits";
 
-type Tab = "queue" | "mine" | "decided" | "projects";
+type Tab = "queue" | "mine" | "decided" | "projects" | "reports";
 
 /** Curator home: what needs a decision, what's mine, what was decided, and representative claims to verify. */
 export function CuratorDashboard() {
@@ -89,12 +89,13 @@ export function CuratorDashboard() {
         value={tab}
         onChange={setTab}
         label="Section"
-        className="w-full sm:max-w-lg"
+        className="w-full sm:max-w-xl"
         options={[
           { value: "queue", label: "Queue" },
           { value: "mine", label: "Yours" },
           { value: "decided", label: "Decided" },
           { value: "projects", label: "Projects" },
+          { value: "reports", label: "Reports" },
         ]}
       />
 
@@ -133,6 +134,7 @@ export function CuratorDashboard() {
           {decided.isLoading ? <Skeleton className="mt-3 h-14" /> : list(decided.data?.items ?? [], "No decisions yet.")}
         </section>
       )}
+      {tab === "reports" && <ReportsTab />}
       {tab === "projects" && (
         <section aria-labelledby="proj" className="space-y-4">
           <h2 id="proj" className="text-lg font-semibold">Project representatives</h2>
@@ -190,5 +192,60 @@ function RepRow({ projectId, rep, you, onDone }: { projectId: string; rep: Proje
       {!self && rep.status === "verified" && <Button size="sm" variant="ghost" loading={busy} onClick={() => verdict("revoked")}>Revoke</Button>}
       {err && <span className="text-danger">{err}</span>}
     </li>
+  );
+}
+
+interface ReportRow {
+  reportId: number;
+  reason: string;
+  reporter: string;
+  createdAt: string;
+  comment: { id: number; marketId: number; author: string; body: string | null; status: string };
+}
+
+/** Reported comments. Hiding or restoring is audited on the server and resolves every open report on that comment. */
+function ReportsTab() {
+  const q = useQuery({ queryKey: ["reports"], queryFn: () => apiAuth<{ reports: ReportRow[] }>("/api/curate/reports"), refetchInterval: 30_000 });
+  const [err, setErr] = useState<string | null>(null);
+  async function act(id: number, action: "hide" | "restore") {
+    const reason = window.prompt(action === "hide" ? "Why hide this comment? (shown to the author)" : "Why keep it visible?")?.trim();
+    if (!reason) return;
+    setErr(null);
+    try {
+      await apiAuth(`/api/comments/${id}/moderate`, { method: "POST", body: JSON.stringify({ action, reason }) });
+      await q.refetch();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+  if (q.isLoading) return <Skeleton className="h-14" />;
+  if (q.isError) return <Notice tone="error" title="Couldn't load reports">{(q.error as Error).message}</Notice>;
+  const rows = q.data?.reports ?? [];
+  return (
+    <section aria-labelledby="reports-h" className="space-y-3">
+      <h2 id="reports-h" className="text-lg font-semibold">Reported comments</h2>
+      {err && <p className="text-sm text-danger" role="alert">{err}</p>}
+      {rows.length === 0 ? (
+        <EmptyState title="No open reports" />
+      ) : (
+        <ul className="divide-y divide-line">
+          {rows.map((r) => (
+            <li key={r.reportId} className="space-y-2 py-4">
+              <p className="text-sm text-ink-2">
+                Reported: <span className="text-ink">{r.reason}</span> · by <Address address={r.reporter} label="Reporter" />
+              </p>
+              <blockquote className="whitespace-pre-wrap break-words rounded-md bg-sunk p-3 text-sm">{r.comment.body ?? "(deleted by author)"}</blockquote>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-muted">by <Address address={r.comment.author} label="Author" /> on</span>
+                <a href={`/markets/${r.comment.marketId}#discussion`} className="underline decoration-line underline-offset-2">market #{r.comment.marketId}</a>
+                <span className="flex-1" />
+                {r.comment.status === "visible" && <Button size="sm" variant="danger" onClick={() => act(r.comment.id, "hide")}>Hide</Button>}
+                <Button size="sm" variant="ghost" onClick={() => act(r.comment.id, "restore")}>{r.comment.status === "hidden" ? "Restore" : "Dismiss"}</Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

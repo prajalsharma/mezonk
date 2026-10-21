@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Database drivers load native/WASM assets at runtime; keep them out of the server bundle.
-  serverExternalPackages: ["@electric-sql/pglite", "postgres", "drizzle-orm"],
+  serverExternalPackages: ["@electric-sql/pglite", "postgres", "drizzle-orm", "sharp"],
   poweredByHeader: false,
   webpack(config) {
     // Optional peer modules pulled in by wallet SDK barrels (Coinbase CDP x402, WalletConnect logging).

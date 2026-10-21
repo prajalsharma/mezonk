@@ -7,6 +7,7 @@ import { publicClient } from "@/server/chain";
 import { getDb, schema, type Db } from "@/server/db/client";
 import { replayMarket, type StoredEvent } from "./replay";
 import { linkPublishedMarket } from "@/server/governance";
+import { ensureSlugs } from "@/server/slugs";
 import { toJson } from "./serialize";
 
 const { chainEvents, markets, trades, positions, resolutionProposals, disputes, indexerState } = schema;
@@ -158,6 +159,8 @@ async function tick(): Promise<TickResult> {
 
     // 3. Rebuild derived tables for every touched market.
     for (const id of touched) await rebuildMarket(id);
+    // Public slugs for new markets (and the one-time backfill for existing ones). Never rewrites a slug.
+    await ensureSlugs().catch((e) => console.error("[indexer] slugs", e));
 
     await db
       .update(indexerState)

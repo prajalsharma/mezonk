@@ -95,7 +95,12 @@ export function ProposalView({ id }: { id: string }) {
             <span>v{p.version}</span>
             {p.sponsored && <span className="text-warn">Proposed by the project measured</span>}
           </div>
+          {q.data.media?.find((m) => m.role === "cover") && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={q.data.media.find((m) => m.role === "cover")!.url} alt="" className="aspect-[21/9] w-full rounded-lg border border-line object-cover" />
+          )}
           <h1 className="text-balance text-2xl font-semibold leading-tight sm:text-3xl">{p.metadata.question}</h1>
+          {p.summary && <p className="max-w-2xl text-lg text-ink-2">{p.summary}</p>}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-2">
             <ProposalStatusDot status={p.status} />
             <span>Suggested by <Address address={p.author} you={address} label="Author" /></span>

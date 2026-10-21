@@ -6,6 +6,7 @@ import { buildTimeline, type TimelineEventInput } from "@/lib/market/timeline";
 import { evidenceHash, parseEvidence } from "@/lib/market/evidence";
 import { getDb, schema } from "@/server/db/client";
 import { chainNowMs } from "@/server/chain";
+import { slugsFor } from "@/server/slugs";
 
 const { markets, trades, chainEvents, positions, resolutionProposals, disputes, indexerState, evidence, evidenceDocuments } =
   schema;
@@ -29,6 +30,8 @@ export interface MarketSummary {
   stage: ReturnType<typeof deriveStage>;
   finalOutcome: number | null;
   trendingScore: number;
+  /** Public URL slug; null until the indexer assigns one (seconds after creation). */
+  slug: string | null;
 }
 
 /**
@@ -93,6 +96,7 @@ function summarize(m: MarketRow, s: { vol: bigint; traders: number; price24h: nu
     stage,
     finalOutcome: m.finalOutcome,
     trendingScore: trendingScore(s.vol, s.traders, stage.stage === "open"),
+    slug: null,
   };
 }
 
@@ -153,7 +157,9 @@ export async function listMarkets(p: ListParams) {
     movement: (a, b) => Math.abs(b.priceYes - b.priceYes24hAgo) - Math.abs(a.priceYes - a.priceYes24hAgo),
   };
   list.sort(sorters[p.sort ?? "newest"]);
-  return { total: list.length, items: list.slice(p.offset, p.offset + p.limit) };
+  const items = list.slice(p.offset, p.offset + p.limit);
+  const slugs = await slugsFor(items.map((m) => m.id));
+  return { total: list.length, items: items.map((m) => ({ ...m, slug: slugs.get(m.id) ?? null })) };
 }
 
 export async function getMarket(id: number) {
@@ -165,7 +171,8 @@ export async function getMarket(id: number) {
   if (!m) return null;
   const now = await chainNowMs();
   const s = await stats24h([id], now);
-  return { row: m, summary: summarize(m, s.get(id)!, now) };
+  const slug = (await slugsFor([id])).get(id) ?? null;
+  return { row: m, summary: { ...summarize(m, s.get(id)!, now), slug } };
 }
 
 export async function getHistory(id: number) {

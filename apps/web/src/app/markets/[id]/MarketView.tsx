@@ -13,6 +13,8 @@ import { ActivityList } from "@/components/markets/ActivityList";
 import { PriceChart } from "@/components/markets/PriceChart";
 import { Change, LiveProbability, ProbabilityBar } from "@/components/markets/Probability";
 import { CategoryGlyph } from "@/components/markets/MarketCard";
+import { UserChip, type PublicPerson } from "@/components/profile/UserChip";
+import { Discussion } from "@/features/comments/Discussion";
 import { cx } from "@/components/ui/cx";
 import { RulesPanel } from "@/components/markets/RulesPanel";
 import { StageStatus } from "@/components/markets/StageStatus";
@@ -40,6 +42,13 @@ export interface IndexedMarket {
   tradeCount: number;
   traderCount: number;
   priceYes24hAgo: number;
+  presentation: {
+    creator: PublicPerson;
+    suggestedBy: PublicPerson | null;
+    proposalId: string | null;
+    summary: string;
+    media: Array<{ id: string; url: string; width: number; height: number; role: string }>;
+  } | null;
 }
 
 function ShareButton() {
@@ -116,10 +125,14 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
     ["chart", "Chart"],
     ...(indexed ? ([["rules", "Rules"]] as Array<[string, string]>) : []),
     ["resolution", "Resolution"],
+    ...(indexed ? ([["discussion", "Discussion"]] as Array<[string, string]>) : []),
     ...(indexed ? ([["activity", "Activity"]] as Array<[string, string]>) : []),
     ["contract", "On-chain"],
   ];
   const open = stage?.stage === "open";
+  const pres = indexed?.presentation ?? null;
+  const cover = pres?.media.find((x) => x.role === "cover") ?? null;
+  const gallery = pres?.media.filter((x) => x.role === "context") ?? [];
 
   return (
     <div className="space-y-6">
@@ -134,7 +147,11 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
         <div className="min-w-0 space-y-6">
           {/* Hero band: question, state, and the two outcomes as the primary objects. */}
           <header className="panel relative overflow-hidden p-5 md:p-7">
-            <div aria-hidden className="grid-bg absolute inset-0" />
+            {cover && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={cover.url} alt="" width={cover.width} height={cover.height} className="-mx-5 -mt-5 mb-5 block aspect-[21/9] w-[calc(100%+2.5rem)] max-w-none object-cover md:-mx-7 md:-mt-7 md:mb-7 md:w-[calc(100%+3.5rem)]" />
+            )}
+            {!cover && <div aria-hidden className="grid-bg absolute inset-0" />}
             <div className="relative space-y-5">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
                 <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-ink-2">
@@ -149,6 +166,18 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
                 </span>
               </div>
               <h1 className="max-w-3xl text-[1.75rem] font-medium leading-[1.15] tracking-tight md:text-[2.5rem]">{question}</h1>
+              {pres?.summary && <p className="max-w-2xl text-lg text-ink-2">{pres.summary}</p>}
+              {pres && (
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                  <UserChip person={pres.creator} sub="created this market" />
+                  {pres.suggestedBy && <UserChip person={pres.suggestedBy} sub="suggested it" />}
+                  {pres.proposalId && (
+                    <Link href={`/proposals/${pres.proposalId}`} className="text-sm text-ink-2 underline decoration-line underline-offset-4 hover:text-ink">
+                      Review history
+                    </Link>
+                  )}
+                </div>
+              )}
 
               {m?.finalized && (
                 <div
@@ -248,10 +277,32 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
             {indexed ? <PriceChart marketId={id} /> : <p className="text-sm text-muted">Price history needs the market index, which is unavailable.</p>}
           </section>
 
-          {rules && <div className="panel scroll-mt-32 p-5 md:p-6">{rules}</div>}
+          {rules && (
+            <div className="panel scroll-mt-32 space-y-6 p-5 md:p-6">
+              {rules}
+              {gallery.length > 0 && (
+                <section aria-labelledby="context-images" className="space-y-3 border-t border-line pt-5">
+                  <h3 id="context-images" className="font-medium">Context images</h3>
+                  <ul className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                    {gallery.map((g) => (
+                      <li key={g.id}>
+                        <a href={g.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-md border border-line">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={g.url} alt="Context image supplied by the author" width={g.width} height={g.height} loading="lazy" className="aspect-[4/3] w-full object-cover transition-transform duration-300 hover:scale-[1.03]" />
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-muted">Supplied by the market&apos;s author for context. The written rules above decide the outcome.</p>
+                </section>
+              )}
+            </div>
+          )}
           <div className="panel scroll-mt-32 p-5 md:p-6">
             <ResolutionPanel marketId={id} chain={chain} question={question} structured={indexed?.structured ?? false} rules={rules} />
           </div>
+
+          {indexed && <Discussion marketId={id} />}
 
           {indexed && (
             <section aria-labelledby="activity" className="panel scroll-mt-32 space-y-3 p-5 md:p-6">

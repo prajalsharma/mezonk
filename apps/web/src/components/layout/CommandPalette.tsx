@@ -5,7 +5,7 @@ import { ArrowRight, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cx } from "@/components/ui/cx";
-import { apiGet, type MarketListDto } from "@/lib/api/types";
+import { apiGet, type MarketListDto, marketHref } from "@/lib/api/types";
 import { formatProb } from "@/lib/format";
 
 const PAGES = [
@@ -51,7 +51,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const items = useMemo(() => {
     const ql = q.trim().toLowerCase();
     const pages = PAGES.filter((p) => !ql || p.label.toLowerCase().includes(ql)).map((p) => ({ kind: "page" as const, ...p }));
-    const ms = (markets.data?.items ?? []).map((m) => ({ kind: "market" as const, href: `/markets/${m.id}`, label: m.question, price: m.priceYes, stage: m.stage.label }));
+    const ms = (markets.data?.items ?? []).map((m) => ({ kind: "market" as const, href: marketHref(m), label: m.question, price: m.priceYes, stage: m.stage.label }));
     return [...ms, ...pages];
   }, [q, markets.data]);
 

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Change, ProbabilityBar } from "./Probability";
 import { StageStatus } from "./StageStatus";
 import { Skeleton } from "@/components/ui/primitives";
-import type { MarketSummaryDto } from "@/lib/api/types";
+import { type MarketSummaryDto, marketHref } from "@/lib/api/types";
 import { formatMusd, formatProb, relativeTime } from "@/lib/format";
 import { categoryLabel, type Category } from "@/lib/market/metadata";
 
@@ -20,7 +20,7 @@ export function MarketRow({ m, now }: { m: MarketSummaryDto; now: number }) {
           {open && thin && <span className="text-warn">Thin liquidity</span>}
           {!m.structured && <span className="text-warn">Unstructured rules</span>}
         </div>
-        <Link href={`/markets/${m.id}`} className="block text-[0.9375rem] font-medium leading-snug text-ink after:absolute after:inset-0 group-hover:text-accent-text">
+        <Link href={marketHref(m)} className="block text-[0.9375rem] font-medium leading-snug text-ink after:absolute after:inset-0 group-hover:text-accent-text">
           {m.question}
         </Link>
       </div>

@@ -10,7 +10,7 @@ import { CategoryGlyph, MarketGrid, MarketStatusChip } from "@/components/market
 import { Change, ProbabilityBar } from "@/components/markets/Probability";
 import { Sparkline } from "@/components/markets/Sparkline";
 import { useMarkets } from "@/hooks/useMarkets";
-import type { MarketSummaryDto } from "@/lib/api/types";
+import { type MarketSummaryDto, marketHref } from "@/lib/api/types";
 import { formatMusd, formatPrice, formatProb } from "@/lib/format";
 import { CATEGORIES, categoryLabel, type Category } from "@/lib/market/metadata";
 
@@ -58,7 +58,7 @@ export function HeroTicket() {
                   <span aria-hidden>·</span>
                   <MarketStatusChip m={m} now={now} />
                 </div>
-                <Link href={`/markets/${m.id}`} className="block text-lg font-medium leading-snug hover:underline decoration-line underline-offset-4">
+                <Link href={marketHref(m)} className="block text-lg font-medium leading-snug hover:underline decoration-line underline-offset-4">
                   {m.question}
                 </Link>
               </div>
@@ -81,14 +81,14 @@ export function HeroTicket() {
 
             <div className="grid grid-cols-2 gap-2">
               <Link
-                href={`/markets/${m.id}?side=yes`}
+                href={marketHref(m, "yes")}
                 className="press flex h-12 items-center justify-between rounded-md bg-yes px-4 font-semibold text-on-yes shadow-[0_10px_30px_-12px_var(--accent)] transition-[filter] hover:brightness-110"
               >
                 <span>Buy Yes</span>
                 <span className="mono">{formatPrice(m.priceYes)}</span>
               </Link>
               <Link
-                href={`/markets/${m.id}?side=no`}
+                href={marketHref(m, "no")}
                 className="press flex h-12 items-center justify-between rounded-md bg-no px-4 font-semibold text-on-no transition-[filter] hover:brightness-110"
               >
                 <span>Buy No</span>
