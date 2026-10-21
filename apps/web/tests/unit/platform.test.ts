@@ -9,6 +9,7 @@ import path from "node:path";
 import { NextRequest } from "next/server";
 import sharp from "sharp";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { eq } from "drizzle-orm";
 import { encodeAbiParameters, encodeEventTopics, keccak256, toHex, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 
@@ -33,7 +34,7 @@ vi.mock("@/server/chain", () => ({
       if (functionName === "isCreator") return H.chain.creators.has(a);
       if (functionName === "isCurator") return H.chain.curators.has(a);
       if (functionName === "isResolver") return false;
-      if (functionName === "config") return [100, 5000, 3600, 0, 0, 0, 0, 0n, 0n, 0n, "0x0000000000000000000000000000000000000002"];
+      if (functionName === "config") return { minLiveDuration: 3600, arbitrator: "0x0000000000000000000000000000000000000002" };
       throw new Error(`unmocked ${functionName}`);
     },
     getTransactionReceipt: async ({ hash }: { hash: string }) => {
@@ -46,10 +47,11 @@ vi.mock("@/server/chain", () => ({
   },
 }));
 
-import { mezonkMarketsAbi } from "@/lib/contracts/abi";
+import { factoryAbi } from "@/lib/contracts/abi";
+import { protocolAddresses } from "@/lib/chain/config";
 import { getDb, openDb, schema } from "@/server/db/client";
 import { issueNonce, createSession, loginMessage, type Site } from "@/server/auth";
-import { maybeBootstrapAdmin } from "@/server/admin";
+import { bootstrapWallets, maybeBootstrapAdmin } from "@/server/admin";
 import { ensureSlugs, marketIdForSlug } from "@/server/slugs";
 import { invalidateRoles } from "@/server/roles";
 import { GET as profileGet, PUT as profilePut } from "@/app/api/profile/route";
@@ -68,6 +70,7 @@ import { getRoles } from "@/server/roles";
 
 const SITE: Site = { domain: "localhost:3000", uri: "http://localhost:3000" };
 const MARKETS = process.env.NEXT_PUBLIC_MARKETS_ADDRESS!;
+const FACTORY = protocolAddresses(MARKETS as Hex).factoryAddress;
 
 interface User {
   acct: PrivateKeyAccount;
@@ -203,11 +206,22 @@ describe("profiles", () => {
 });
 
 describe("roles and administration", () => {
-  it("bootstraps exactly one administrator and never again", async () => {
+  it("bootstraps only listed wallets, once each, and never an arbitrary first visitor", async () => {
     expect((await getRoles(admin.w)).admin).toBe(true);
-    process.env.ADMIN_BOOTSTRAP_WALLET = (await newUser()).acct.address;
-    const later = await signIn(privateKeyToAccount(generatePrivateKey()));
-    expect((await getRoles(later.w)).admin).toBe(false);
+    const stranger = await signIn(privateKeyToAccount(generatePrivateKey()));
+    expect((await getRoles(stranger.w)).admin).toBe(false);
+    // Signing in again does not re-grant (durable per-wallet flag).
+    expect(await maybeBootstrapAdmin(admin.w)).toBe(false);
+    const db = await getDb();
+    const rows = await db.select().from(schema.roleAssignments).where(eq(schema.roleAssignments.wallet, admin.w));
+    expect(rows.length).toBe(1);
+  });
+  it("fails closed on malformed INITIAL_ADMIN_WALLETS", () => {
+    const keep = process.env.ADMIN_BOOTSTRAP_WALLET;
+    process.env.INITIAL_ADMIN_WALLETS = "0x0000000000000000000000000000000000000abc,not-an-address";
+    expect(bootstrapWallets()).toEqual([]);
+    delete process.env.INITIAL_ADMIN_WALLETS;
+    process.env.ADMIN_BOOTSTRAP_WALLET = keep;
   });
   it("members and curators cannot grant roles; curators cannot make themselves admin", async () => {
     const member = await newUser();
@@ -232,6 +246,14 @@ describe("roles and administration", () => {
     expect(log.some((l) => l.action === "role.grant" && l.subjectId === other.w)).toBe(true);
     expect(log.some((l) => l.action === "role.revoke" && l.subjectId === other.w)).toBe(true);
   });
+  it("closes the bootstrap once routine administration starts", async () => {
+    const lateKey = generatePrivateKey();
+    process.env.INITIAL_ADMIN_WALLETS = privateKeyToAccount(lateKey).address;
+    const late = await signIn(privateKeyToAccount(lateKey));
+    expect((await getRoles(late.w)).admin).toBe(false);
+    delete process.env.INITIAL_ADMIN_WALLETS;
+  });
+;
   it("concurrent identical grants produce one active assignment", async () => {
     const t = await newUser();
     const body = { action: "grant_admin", reason: "race test" };
@@ -282,11 +304,11 @@ describe("on-chain role operations are never reported before confirmation", () =
     expect(r.operation.status).toBe("failed");
 
     const h2 = keccak256(toHex("real tx")) as Hex;
-    const topics = encodeEventTopics({ abi: mezonkMarketsAbi, eventName: "CuratorUpdated", args: { curator: target as Hex } });
+    const topics = encodeEventTopics({ abi: factoryAbi, eventName: "CuratorUpdated", args: { curator: target as Hex } });
     H.chain.receipts.set(h2.toLowerCase(), {
       status: "success",
       blockNumber: 11n,
-      logs: [{ address: MARKETS, topics, data: encodeAbiParameters([{ type: "bool" }], [true]), blockNumber: 11n, logIndex: 0, transactionHash: h2, transactionIndex: 0, blockHash: h2, removed: false }],
+      logs: [{ address: FACTORY, topics, data: encodeAbiParameters([{ type: "bool" }], [true]), blockNumber: 11n, logIndex: 0, transactionHash: h2, transactionIndex: 0, blockHash: h2, removed: false }],
     });
     H.chain.curators.add(target);
     r = await json(await roleOpAttach(req(`/api/admin/role-ops/${op.id}`, { method: "POST", token: admin.token, body: { txHash: h2 } }), P({ id: op.id })));

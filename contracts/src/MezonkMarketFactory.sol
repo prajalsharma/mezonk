@@ -106,7 +106,9 @@ contract MezonkMarketFactory is Ownable2Step, EIP712 {
             a.creator != msg.sender || a.resolver != p.resolver || a.closeTime != p.closeTime
                 || a.policyId != p.policyId || a.metadataHash != keccak256(bytes(p.metadata))
         ) revert ApprovalMismatch();
-        if (!SignatureChecker.isValidSignatureNow(curator, approvalDigest(a), sig)) revert BadApprovalSignature();
+        if (!SignatureChecker.isValidSignatureNow(curator, approvalDigest(a), sig)) {
+            revert BadApprovalSignature();
+        }
         approvalUsed[a.nonce] = true;
 
         marketId = exchange.openMarket(msg.sender, p.resolver, p.policyId, p.closeTime, p.metadata, _config);
@@ -147,9 +149,10 @@ contract MezonkMarketFactory is Ownable2Step, EIP712 {
     function _setConfig(IMezonkExchange.Config memory c) internal {
         if (
             c.minLiveDuration == 0 || c.maxDuration > 730 days || c.maxDuration < c.minLiveDuration
-                || c.proposalWindow == 0 || c.proposalWindow > MAX_WINDOW || c.challengeWindow < MIN_CHALLENGE_WINDOW
-                || c.challengeWindow > MAX_WINDOW || c.arbitrationWindow == 0 || c.arbitrationWindow > MAX_WINDOW
-                || c.disputeBond == 0 || c.arbitrator == address(0)
+                || c.proposalWindow == 0 || c.proposalWindow > MAX_WINDOW
+                || c.challengeWindow < MIN_CHALLENGE_WINDOW || c.challengeWindow > MAX_WINDOW
+                || c.arbitrationWindow == 0 || c.arbitrationWindow > MAX_WINDOW || c.disputeBond == 0
+                || c.arbitrator == address(0)
         ) revert InvalidConfig();
         _config = c;
         emit ConfigUpdated(c);

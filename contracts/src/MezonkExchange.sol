@@ -127,7 +127,6 @@ contract MezonkExchange is IMezonkExchange, Ownable2Step, Pausable, ReentrancyGu
         return _stage(_market(marketId));
     }
 
-
     /// @notice Best resting YES bid and ask in cents (0 = none on that side). Signed orders are off-chain.
     function bestPrices(uint256 marketId) public view returns (uint8 bid, uint8 ask) {
         uint256[2] storage lv = _levels[marketId];
@@ -154,7 +153,8 @@ contract MezonkExchange is IMezonkExchange, Ownable2Step, Pausable, ReentrancyGu
                 g.askDepth += depthAt[marketId][1][y];
             }
         }
-        g.spreadOk = g.bestBid != 0 && g.bestAsk != 0 && g.bestAsk > g.bestBid && g.bestAsk - g.bestBid <= p.maxSpread;
+        g.spreadOk =
+            g.bestBid != 0 && g.bestAsk != 0 && g.bestAsk > g.bestBid && g.bestAsk - g.bestBid <= p.maxSpread;
         g.depthOk = g.bidDepth >= p.minBidDepth && g.askDepth >= p.minAskDepth;
         g.seedersOk = g.seeders >= p.minSeeders;
     }
@@ -179,8 +179,6 @@ contract MezonkExchange is IMezonkExchange, Ownable2Step, Pausable, ReentrancyGu
         );
     }
 
-
-
     // ═════════════════════════════ Publication ═════════════════════════════
 
     /// @notice Opens a market in SEEDING. Only the factory calls this, after verifying the curator approval.
@@ -195,7 +193,10 @@ contract MezonkExchange is IMezonkExchange, Ownable2Step, Pausable, ReentrancyGu
         if (msg.sender != address(factory)) revert NotFactory();
         if (!policyActive[policyId]) revert PolicyInactive();
         uint64 seedingDeadline = uint64(block.timestamp) + _policies[policyId].seedingPeriod;
-        if (closeTime < uint256(seedingDeadline) + c.minLiveDuration || closeTime > block.timestamp + c.maxDuration) {
+        if (
+            closeTime < uint256(seedingDeadline) + c.minLiveDuration
+                || closeTime > block.timestamp + c.maxDuration
+        ) {
             revert InvalidParams();
         }
         marketId = ++marketCount;
@@ -258,7 +259,10 @@ contract MezonkExchange is IMezonkExchange, Ownable2Step, Pausable, ReentrancyGu
         emit Merged(marketId, msg.sender, amount);
     }
 
-    function transferShares(uint256 marketId, uint8 outcome, address to, uint256 amount) external nonReentrant {
+    function transferShares(uint256 marketId, uint8 outcome, address to, uint256 amount)
+        external
+        nonReentrant
+    {
         _market(marketId);
         if (outcome > NO || to == address(0) || to == msg.sender) revert InvalidParams();
         _lot(amount);
@@ -453,12 +457,24 @@ contract MezonkExchange is IMezonkExchange, Ownable2Step, Pausable, ReentrancyGu
         if (o.side == Side.Buy) escrowedCollateral -= _cost(q, o.price);
         _settle(m, c, o.maker, o.outcome, o.side, o.price, q, complement);
         emit Fill(
-            c.marketId, bytes32(id), c.taker, o.maker, true, o.outcome, o.side, o.price, q, complement, _fee(c, q, takerPrice)
+            c.marketId,
+            bytes32(id),
+            c.taker,
+            o.maker,
+            true,
+            o.outcome,
+            o.side,
+            o.price,
+            q,
+            complement,
+            _fee(c, q, takerPrice)
         );
     }
 
     function _takeSigned(Market storage m, Ctx memory c, Order calldata o, bytes calldata sig) internal {
-        if (o.marketId != c.marketId || o.outcome > NO || o.price == 0 || o.price > 99) revert InvalidParams();
+        if (o.marketId != c.marketId || o.outcome > NO || o.price == 0 || o.price > 99) {
+            revert InvalidParams();
+        }
         if (o.maker == c.taker) revert SelfTrade();
         bytes32 h = orderHash(o);
         if (!SignatureChecker.isValidSignatureNow(o.maker, h, sig)) revert BadOrderSignature();
@@ -487,7 +503,19 @@ contract MezonkExchange is IMezonkExchange, Ownable2Step, Pausable, ReentrancyGu
         }
         filledOf[h] += q;
         _settle(m, c, o.maker, o.outcome, o.side, o.price, q, complement);
-        emit Fill(c.marketId, h, c.taker, o.maker, false, o.outcome, o.side, o.price, q, complement, _fee(c, q, takerPrice));
+        emit Fill(
+            c.marketId,
+            h,
+            c.taker,
+            o.maker,
+            false,
+            o.outcome,
+            o.side,
+            o.price,
+            q,
+            complement,
+            _fee(c, q, takerPrice)
+        );
     }
 
     /// @dev Moves shares and collateral for one fill. The maker's side has already been secured: a buy maker's
@@ -606,14 +634,14 @@ contract MezonkExchange is IMezonkExchange, Ownable2Step, Pausable, ReentrancyGu
 
     // ═════════════════════════════ Admin ═════════════════════════════
 
-
     /// @notice Adds an immutable policy version. Existing markets keep the policy they were published under.
     function addPolicy(Policy calldata p) external onlyOwner returns (uint32 id) {
         if (
             p.minBidDepth == 0 || p.minAskDepth == 0 || p.minBidDepth % LOT != 0 || p.minAskDepth % LOT != 0
                 || p.minSeeders == 0 || p.maxSpread == 0 || p.maxSpread > 98 || p.band > 98
                 || p.seedingPeriod < 1 hours || p.seedingPeriod > 60 days || p.minRest > 7 days
-                || p.takerFeeBps > MAX_FEE_BPS || uint256(p.rebateShareBps) + p.referralShareBps > MAX_INCENTIVE_SHARE_BPS
+                || p.takerFeeBps > MAX_FEE_BPS
+                || uint256(p.rebateShareBps) + p.referralShareBps > MAX_INCENTIVE_SHARE_BPS
                 || p.rebatePeriod > 365 days || p.claimWindow < 7 days || p.claimWindow > 365 days
         ) revert InvalidConfig();
         id = ++policyCount;
@@ -629,9 +657,6 @@ contract MezonkExchange is IMezonkExchange, Ownable2Step, Pausable, ReentrancyGu
         policyActive[id] = active;
         emit PolicyActiveSet(id, active);
     }
-
-
-
 
     function pause() external onlyOwner {
         _pause();
@@ -673,7 +698,11 @@ contract MezonkExchange is IMezonkExchange, Ownable2Step, Pausable, ReentrancyGu
     }
 
     /// @dev YES-price book position. Bids want YES (buy YES / sell NO); asks offer YES (sell YES / buy NO).
-    function _bookPosition(uint8 outcome, Side side, uint8 price) internal pure returns (uint8 bookSide, uint8 y) {
+    function _bookPosition(uint8 outcome, Side side, uint8 price)
+        internal
+        pure
+        returns (uint8 bookSide, uint8 y)
+    {
         bool bid = (outcome == YES) == (side == Side.Buy);
         bookSide = bid ? 0 : 1;
         y = outcome == YES ? price : 100 - price;
@@ -695,7 +724,8 @@ contract MezonkExchange is IMezonkExchange, Ownable2Step, Pausable, ReentrancyGu
         uint256 before = seedWeight[marketId][who];
         uint256 next = dir > 0 ? before + amount : before - amount;
         seedWeight[marketId][who] = next;
-        totalSeedWeight[marketId] = dir > 0 ? totalSeedWeight[marketId] + amount : totalSeedWeight[marketId] - amount;
+        totalSeedWeight[marketId] =
+            dir > 0 ? totalSeedWeight[marketId] + amount : totalSeedWeight[marketId] - amount;
         bool was = before >= p.minSeederNotional && before > 0;
         bool now_ = next >= p.minSeederNotional && next > 0;
         if (!was && now_) seederCount[marketId] += 1;
@@ -742,5 +772,4 @@ contract MezonkExchange is IMezonkExchange, Ownable2Step, Pausable, ReentrancyGu
         collateralToken.safeTransferFrom(from, address(this), amount);
         if (collateralToken.balanceOf(address(this)) - before != amount) revert UnsupportedToken();
     }
-
 }

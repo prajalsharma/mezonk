@@ -73,7 +73,8 @@ export function EmptyState({
 }
 
 /** Contextual explanation. Opens on hover, focus or tap; described-by for screen readers. */
-export function Hint({ label, children }: { label: string; children: ReactNode }) {
+/** `align="end"` anchors the bubble to the right of the "?" so hints near the right edge stay on screen. */
+export function Hint({ label, children, align = "center" }: { label: string; children: ReactNode; align?: "center" | "end" }) {
   const id = useId();
   const [open, setOpen] = useState(false);
   return (
@@ -96,8 +97,13 @@ export function Hint({ label, children }: { label: string; children: ReactNode }
         id={id}
         role="tooltip"
         className={cx(
-          "absolute bottom-full left-1/2 z-[var(--z-tooltip)] mb-2 w-64 -translate-x-1/2 rounded-md border border-line bg-surface px-3 py-2 text-xs font-normal leading-relaxed text-ink-2 shadow-2",
-          open ? "block" : "sr-only",
+          // Closed: screen-reader only and zero-width, so it can never widen the page.
+          open
+            ? cx(
+                "absolute bottom-full z-[var(--z-tooltip)] mb-2 block w-64 max-w-[calc(100vw-2rem)] rounded-md border border-line bg-surface px-3 py-2 text-xs font-normal leading-relaxed text-ink-2 shadow-2",
+                align === "end" ? "right-0" : "left-1/2 -translate-x-1/2",
+              )
+            : "sr-only",
         )}
       >
         {children}

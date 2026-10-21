@@ -1,4 +1,4 @@
-import { defineChain, getAddress, isAddress, type Address, type Chain } from "viem";
+import { defineChain, getAddress, getContractAddress, isAddress, type Address, type Chain } from "viem";
 
 /**
  * Single source of truth for networks, tokens and protocol deployments.
@@ -56,7 +56,12 @@ export interface Deployment {
   chainId: number;
   rpcUrl: string;
   isLocalFork: boolean;
+  /** MezonkExchange (env NEXT_PUBLIC_MARKETS_ADDRESS). Holds collateral, shares, orders. */
   marketsAddress: Address | null;
+  /** Created by the exchange constructor (contract nonces 1, 2, 3), so derived rather than configured. */
+  resolutionAddress: Address | null;
+  factoryAddress: Address | null;
+  incentivesAddress: Address | null;
   deployBlock: bigint;
   musd: Address;
   explorer: string;
@@ -83,15 +88,30 @@ function readDeployment(): Deployment {
     explorer: baseChain.blockExplorers.default.url,
   };
 
+  const none = { marketsAddress: null, resolutionAddress: null, factoryAddress: null, incentivesAddress: null };
   if (chainId !== MEZO_TESTNET_ID && chainId !== MEZO_MAINNET_ID) {
-    return { ...base, marketsAddress: null, ready: false, reason: "unsupported-chain" };
+    return { ...base, ...none, ready: false, reason: "unsupported-chain" };
   }
   if (chainId === MEZO_MAINNET_ID && process.env.NEXT_PUBLIC_ENABLE_MAINNET !== "true") {
-    return { ...base, marketsAddress: null, ready: false, reason: "mainnet-disabled" };
+    return { ...base, ...none, ready: false, reason: "mainnet-disabled" };
   }
-  if (!rawAddress) return { ...base, marketsAddress: null, ready: false, reason: "no-deployment" };
-  if (!isAddress(rawAddress)) return { ...base, marketsAddress: null, ready: false, reason: "invalid-address" };
-  return { ...base, marketsAddress: getAddress(rawAddress), ready: true, reason: "ok" };
+  if (!rawAddress) return { ...base, ...none, ready: false, reason: "no-deployment" };
+  if (!isAddress(rawAddress)) return { ...base, ...none, ready: false, reason: "invalid-address" };
+  const ex = getAddress(rawAddress);
+  return { ...base, ...protocolAddresses(ex), ready: true, reason: "ok" };
+}
+
+/**
+ * The exchange constructor deploys MezonkResolution, MezonkMarketFactory and MezonkIncentives in that order,
+ * so their addresses are CREATE addresses of the exchange at nonces 1, 2, 3. /api/health confirms them on-chain.
+ */
+export function protocolAddresses(exchange: Address) {
+  return {
+    marketsAddress: exchange,
+    resolutionAddress: getContractAddress({ from: exchange, nonce: 1n }),
+    factoryAddress: getContractAddress({ from: exchange, nonce: 2n }),
+    incentivesAddress: getContractAddress({ from: exchange, nonce: 3n }),
+  };
 }
 
 export const deployment = readDeployment();

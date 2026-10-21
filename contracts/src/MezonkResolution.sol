@@ -123,11 +123,19 @@ contract MezonkResolution is ReentrancyGuard {
         _pull(msg.sender, m.proposerBond);
         lockedBonds += m.proposerBond;
         emit OutcomeProposed(
-            marketId, msg.sender, outcome, evidenceHash, evidenceURI, uint64(block.timestamp) + m.challengeWindow
+            marketId,
+            msg.sender,
+            outcome,
+            evidenceHash,
+            evidenceURI,
+            uint64(block.timestamp) + m.challengeWindow
         );
     }
 
-    function dispute(uint256 marketId, bytes32 evidenceHash, string calldata evidenceURI) external nonReentrant {
+    function dispute(uint256 marketId, bytes32 evidenceHash, string calldata evidenceURI)
+        external
+        nonReentrant
+    {
         IMezonkExchange.Market memory m = exchange.getMarket(marketId);
         RStage st = stageOf(marketId);
         if (st != RStage.Proposed) revert WrongStage(st);
@@ -195,9 +203,12 @@ contract MezonkResolution is ReentrancyGuard {
         emit BondWithdrawn(msg.sender, amount);
     }
 
-    function _finalize(uint256 marketId, State storage s, IMezonkExchange.Outcome outcome, FinalizeReason reason)
-        internal
-    {
+    function _finalize(
+        uint256 marketId,
+        State storage s,
+        IMezonkExchange.Outcome outcome,
+        FinalizeReason reason
+    ) internal {
         s.finalized = true;
         emit MarketFinalized(marketId, outcome, reason);
         exchange.settle(marketId, outcome);

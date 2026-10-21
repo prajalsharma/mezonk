@@ -1,4 +1,4 @@
-/** Lifecycle derivation shared by server and client. Mirrors MezonkMarkets._stage + finalize rules. */
+/** Lifecycle derivation shared by server and client. Mirrors MezonkExchange._stage + MezonkResolution rules. */
 
 export const OUTCOME = { None: 0, Yes: 1, No: 2, Invalid: 3 } as const;
 export type OutcomeCode = (typeof OUTCOME)[keyof typeof OUTCOME];
@@ -7,10 +7,14 @@ export const outcomeLabel = (o: number | null | undefined) =>
 
 export const FINALIZE_REASON = ["Undisputed", "Arbitrated", "No proposal in time", "Arbitrator missed deadline"];
 
-export type Stage = "open" | "closed" | "proposed" | "disputed" | "resolved" | "invalid";
+/** seeding: published, collecting funded seed orders, no trading. failed: seeding deadline passed; refunds only. */
+export type Stage = "seeding" | "failed" | "open" | "closed" | "proposed" | "disputed" | "resolved" | "invalid";
 
 export interface StageInput {
   closeTime: Date | string;
+  /** Order-book markets only; v1 markets omit both and are live from creation. */
+  seedingDeadline?: Date | string | null;
+  graduatedAt?: Date | string | null;
   proposalWindow: number;
   proposedAt?: Date | string | null;
   challengeDeadline?: Date | string | null;
@@ -44,6 +48,12 @@ export function deriveStage(m: StageInput, now = Date.now()): StageInfo {
           deadlineLabel: null,
         };
   }
+  const seedingDeadline = d(m.seedingDeadline);
+  if (seedingDeadline && !d(m.graduatedAt)) {
+    return now > seedingDeadline.getTime()
+      ? { stage: "failed", label: "Seeding failed · refunds open", finalizable: false, deadline: null, deadlineLabel: null }
+      : { stage: "seeding", label: "Seeding", finalizable: false, deadline: seedingDeadline, deadlineLabel: "Seeding ends" };
+  }
   const disputed = d(m.disputedAt);
   if (disputed) {
     const dl = d(m.arbitrationDeadline);
@@ -76,5 +86,5 @@ export function deriveStage(m: StageInput, now = Date.now()): StageInfo {
       deadlineLabel: "Proposal deadline",
     };
   }
-  return { stage: "open", label: "Open", finalizable: false, deadline: close, deadlineLabel: "Trading closes" };
+  return { stage: "open", label: "Live", finalizable: false, deadline: close, deadlineLabel: "Trading closes" };
 }

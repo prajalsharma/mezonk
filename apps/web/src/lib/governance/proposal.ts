@@ -105,6 +105,7 @@ export const reviewActionSchema = z.object({
       creator: z.string(),
       resolver: z.string(),
       closeTime: z.string(),
+      policyId: z.string(),
       deadline: z.string(),
       nonce: z.string(),
     })

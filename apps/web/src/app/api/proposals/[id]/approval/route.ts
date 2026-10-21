@@ -24,7 +24,7 @@ export function GET(req: NextRequest, { params }: { params: Promise<{ id: string
     if (!p) return fail(404, "not_found", "No such proposal");
     try {
       const approval = await buildApproval(p);
-      return ok({ domain: approvalDomain(deployment.chainId, deployment.marketsAddress), types: approvalTypes, primaryType: "MarketApproval", approval }, { maxAge: 0 });
+      return ok({ domain: approvalDomain(deployment.chainId, deployment.factoryAddress!), types: approvalTypes, primaryType: "MarketApproval", approval }, { maxAge: 0 });
     } catch (e) {
       if (e instanceof GovernanceError) return fail(e.status, e.code, e.message);
       throw e;

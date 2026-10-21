@@ -3,6 +3,8 @@ import type { Stage } from "@/lib/market/stage";
 import { cx } from "@/components/ui/cx";
 
 const tone: Record<Stage, "yes" | "no" | "warn" | "muted" | "accent" | "info"> = {
+  seeding: "info",
+  failed: "muted",
   open: "yes",
   closed: "muted",
   proposed: "info",

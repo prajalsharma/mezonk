@@ -138,9 +138,9 @@ export function DiscoverSections() {
           title="Thin liquidity"
           query={{ sort: "thin", status: "open" }}
           more="/markets?sort=thin&status=open"
-          empty="Every open market has at least 100 MUSD of collateral."
-          filter={(m) => BigInt(m.liquidity) < 100n * 10n ** 18n}
-          hint="Under 100 MUSD of collateral. Small trades move these prices a lot, so check the price impact in the quote."
+          empty="Every live market has a two-sided book with a spread of 10¢ or less."
+          filter={(m) => m.lowLiquidity}
+          hint="One side of the book is empty or the spread is wide. Market orders may fill only partly; consider a limit order."
         />
         <Section title="Awaiting resolution" query={{ status: "resolving", sort: "closing" }} more="/markets?status=resolving" empty="No markets are being resolved right now." />
         <RecentlyViewed />
@@ -149,8 +149,8 @@ export function DiscoverSections() {
         <div className="panel space-y-2 p-6 text-sm">
           <h2 className="font-semibold">How a market works</h2>
           <ol className="list-decimal space-y-1.5 pl-4 text-ink-2">
-            <li>Buy Yes or No shares with MUSD. The price is the market&apos;s implied chance, 0 to 1.</li>
-            <li>Sell back to the pool any time before trading closes.</li>
+            <li>A market launches once funded orders sit on both sides of its book.</li>
+            <li>Buy Yes or No from other people&apos;s orders, or post your own price. The price is the market&apos;s implied chance.</li>
             <li>After close, a resolver proposes the outcome with evidence. Anyone can dispute it.</li>
             <li>Each winning share then redeems for 1 MUSD.</li>
           </ol>

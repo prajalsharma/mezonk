@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cx } from "@/components/ui/cx";
-import { formatProb } from "@/lib/format";
+import { formatProb, marketSignal } from "@/lib/format";
 
 /**
  * YES/NO split bar in the brand's split-coin language: the red (YES) half sits a touch lower,
@@ -93,6 +93,18 @@ export function LiveProbability({ value, precise = false, className }: { value: 
       className={cx("tnum inline-block rounded px-0.5 -mx-0.5", flash === "yes" && "animate-[flash-yes_900ms_ease-out]", flash === "no" && "animate-[flash-no_900ms_ease-out]", className)}
     >
       {formatProb(shown, precise)}
+    </span>
+  );
+}
+
+/** "What the market thinks", labelled by where the number comes from (trade, book midpoint, or nothing). */
+export function SignalValue({ m, className }: { m: { priceYes: number | null; bestBid: number | null; bestAsk: number | null }; className?: string }) {
+  const s = marketSignal(m);
+  if (s.kind === "none") return <span className={cx("text-muted", className)} title="No trades and no two-sided book yet">—</span>;
+  return (
+    <span className={cx(s.kind === "indicative" && "text-ink-2", className)} title={s.kind === "trade" ? "Last trade" : "Book midpoint (indicative, not a trade)"}>
+      {s.kind === "indicative" ? "~" : ""}
+      {formatProb(s.p)}
     </span>
   );
 }

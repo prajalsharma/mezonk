@@ -1,6 +1,6 @@
 /**
- * Shared test/seed helper: sign a MarketApproval as a curator and build createMarket args.
- * Only ever used with the public anvil test keys on a local chain.
+ * Shared test/seed helper: sign a MarketApproval as a curator and build MezonkMarketFactory.createMarket args.
+ * `contract` is the factory (the EIP-712 verifying contract). Only ever used with public anvil test keys locally.
  */
 import { keccak256, toBytes, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -10,8 +10,7 @@ export interface CreateParams {
   metadata: string;
   closeTime: bigint;
   resolver: Address;
-  initialLiquidity: bigint;
-  initialYesProbBps: number;
+  policyId: number;
 }
 
 let counter = 0;
@@ -30,6 +29,7 @@ export async function signedCreateArgs(
     creator,
     resolver: p.resolver,
     closeTime: p.closeTime,
+    policyId: p.policyId,
     deadline: nowSec + 86_400n,
     nonce: keccak256(toBytes(`seed:${Date.now()}:${++counter}`)),
   };

@@ -5,7 +5,8 @@
  * enforces every permission; this only decides what to show.
  */
 
-export const CHAIN_STAGE = { Open: 0, Closed: 1, Proposed: 2, Disputed: 3, Finalized: 4 } as const;
+/** Resolution-facing stage. NotLive = still seeding or seeding failed: nothing to resolve. */
+export const CHAIN_STAGE = { Open: 0, Closed: 1, Proposed: 2, Disputed: 3, Finalized: 4, NotLive: 5 } as const;
 
 export type Role =
   | "visitor"
@@ -117,7 +118,8 @@ export function permissions(i: PermissionInput): Permissions {
 
   // Propose
   let propose: Availability;
-  if (i.stage === CHAIN_STAGE.Open) propose = no("Outcomes can be proposed only after trading closes.");
+  if (i.stage === CHAIN_STAGE.NotLive) propose = no("This market hasn't launched (or never did), so there is nothing to resolve.");
+  else if (i.stage === CHAIN_STAGE.Open) propose = no("Outcomes can be proposed only after trading closes.");
   else if (i.stage !== CHAIN_STAGE.Closed) propose = no("An outcome has already been proposed.");
   else if (now >= proposalEnd) propose = no("The proposal window has closed. This market settles as Invalid.");
   else if (!connected) propose = wallet("Only this market's resolver can propose. Connect the resolver wallet.");
@@ -170,6 +172,7 @@ export function permissions(i: PermissionInput): Permissions {
   else if (i.stage === CHAIN_STAGE.Disputed)
     finalize = fin(3, "The arbitrator missed the deadline, so the market settles as Invalid and both bonds are refunded.", arbitrationEnd, "Waiting for the arbitrator's ruling.");
   else if (i.stage === CHAIN_STAGE.Finalized) finalize = no("Already finalized.");
+  else if (i.stage === CHAIN_STAGE.NotLive) finalize = no("This market hasn't launched, so it can't be finalized.");
   else finalize = no("Trading is still open.");
   if (finalize.available) roles.push("finalizer");
 

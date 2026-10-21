@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { client, closedMarket, connect, evidenceFor, proposeDirect, read, sendNoWait, setAutomine, stage } from "./chain";
+import { client, closedMarket, connect, evidenceFor, proposeDirect, readRes, sendNoWait, setAutomine, stage } from "./chain";
 
 test.describe("transaction failures are reported honestly", () => {
   test("a rejected signature leaves state unchanged and offers a retry", async ({ page }) => {
@@ -39,7 +39,7 @@ test.describe("transaction failures are reported honestly", () => {
     }
     await expect(page.getByText("The transaction reverted on-chain. No funds moved.")).toBeVisible();
     await expect(page.getByText("Challenge filed. Confirmed on-chain.")).toHaveCount(0);
-    const m = await read<{ disputer: string }>("getMarket", [id]);
-    expect(m.disputer.toLowerCase()).toBe("0x15d34aaf54267db7d7c367839aaf71a00a2c6a65"); // alice won the race
+    const st = await readRes<readonly [number, bigint, bigint, string, boolean]>("states", [id]);
+    expect(st[3].toLowerCase()).toBe("0x15d34aaf54267db7d7c367839aaf71a00a2c6a65"); // alice won the race
   });
 });

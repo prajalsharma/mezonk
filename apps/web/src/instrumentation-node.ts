@@ -1,12 +1,15 @@
 import { runIndexerTick } from "./server/indexer/indexer";
+import { sweepStaleOrders } from "./server/orderbook";
 
 const interval = Number(process.env.INDEXER_INTERVAL_MS ?? 4000);
 const g = globalThis as unknown as { __mezonkIndexerLoop?: boolean };
 
 if (!g.__mezonkIndexerLoop) {
   g.__mezonkIndexerLoop = true;
+  let n = 0;
   const loop = async () => {
     const r = await runIndexerTick().catch((e) => ({ ok: false, error: String(e) }));
+    if (++n % 15 === 0) await sweepStaleOrders().catch(() => undefined);
     if (!r.ok && "error" in r && r.error !== "no-deployment") console.warn("[indexer]", r.error);
     setTimeout(loop, interval);
   };

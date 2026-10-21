@@ -103,7 +103,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           >
             {it.kind === "market" ? (
               <>
-                <span className="tnum w-11 shrink-0 font-semibold text-ink">{formatProb(it.price)}</span>
+                <span className="tnum w-11 shrink-0 font-semibold text-ink">{it.price == null ? "—" : formatProb(it.price)}</span>
                 <span className="min-w-0 flex-1 truncate">{it.label}</span>
                 <span className="shrink-0 text-xs text-muted">{it.stage}</span>
               </>

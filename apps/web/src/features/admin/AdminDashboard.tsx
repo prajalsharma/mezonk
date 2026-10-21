@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { useState } from "react";
 import { isAddress, type Hash } from "viem";
-import { useAccount, useWriteContract } from "wagmi";
+import { useAccount, useSendTransaction } from "wagmi";
 import { Address, TxLink } from "@/components/ui/Address";
 import { Button } from "@/components/ui/Button";
 import { cx } from "@/components/ui/cx";
@@ -13,13 +13,14 @@ import { EmptyState, Field, KeyValue, Notice, Segmented, Skeleton, inputClass } 
 import { WalletButton } from "@/components/wallet/WalletButton";
 import { useMe, useSession } from "@/hooks/useSession";
 import { apiAuth } from "@/lib/api/auth-client";
+import { apiGet } from "@/lib/api/types";
 import { deployment } from "@/lib/chain/config";
-import { mezonkMarketsAbi } from "@/lib/contracts/abi";
 import { formatDateTime } from "@/lib/format";
 
 interface Operation {
   id: string;
-  fn: "setCreator" | "setCurator";
+  fn: "setCreator" | "setCurator" | "addPolicy" | "setPolicyActive";
+  params?: Record<string, unknown> | null;
   target: string;
   grant: boolean;
   status: "awaiting_signature" | "submitted" | "confirmed" | "failed";
@@ -40,11 +41,12 @@ interface WalletInfo {
   admin: boolean;
   assignments: Array<{ id: number; role: string; grantedBy: string; grantedAt: string; reason: string; revokedAt: string | null; revokedBy: string | null; revokeReason: string | null }>;
   activeSessions: number;
+  liquidity: { openEscrowedOrders: number; seededMarkets: number };
   operations: Operation[];
   history: Array<{ actor: string; action: string; details: unknown; createdAt: string }>;
 }
 
-type Tab = "wallets" | "incident" | "admins" | "audit";
+type Tab = "wallets" | "policies" | "incident" | "admins" | "audit";
 
 export function AdminDashboard() {
   const { isConnected } = useAccount();
@@ -73,15 +75,17 @@ export function AdminDashboard() {
         value={tab}
         onChange={setTab}
         label="Administration section"
-        className="w-full sm:max-w-xl"
+        className="w-full sm:max-w-2xl"
         options={[
           { value: "wallets", label: "Wallets & roles" },
+          { value: "policies", label: "Policies" },
           { value: "incident", label: "Compromised wallet" },
           { value: "admins", label: "Administrators" },
           { value: "audit", label: "Audit log" },
         ]}
       />
       {tab === "wallets" && <WalletsTab />}
+      {tab === "policies" && <PoliciesTab />}
       {tab === "incident" && <IncidentTab />}
       {tab === "admins" && <AdminsTab />}
       {tab === "audit" && <AuditTab />}
@@ -228,6 +232,11 @@ function WalletsTab() {
                   </Button>
                 </span>
               </KeyValue>
+              <KeyValue label="Liquidity provider">
+                {w.liquidity.openEscrowedOrders || w.liquidity.seededMarkets
+                  ? `${w.liquidity.openEscrowedOrders} open escrowed orders · seeded ${w.liquidity.seededMarkets} markets`
+                  : "No"}
+              </KeyValue>
               <KeyValue label="Active sessions">
                 <span className="flex items-center justify-end gap-2">
                   {w.activeSessions}
@@ -282,7 +291,7 @@ function WalletsTab() {
  */
 function OperationCard({ op, onChange }: { op: Operation; onChange: () => void }) {
   const { address } = useAccount();
-  const { writeContractAsync } = useWriteContract();
+  const { sendTransactionAsync } = useSendTransaction();
   const [hash, setHash] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -295,7 +304,8 @@ function OperationCard({ op, onChange }: { op: Operation; onChange: () => void }
     setErr(null);
     setBusy(true);
     try {
-      const h: Hash = await writeContractAsync({ address: deployment.marketsAddress!, abi: mezonkMarketsAbi, functionName: op.fn, args: [op.target as `0x${string}`, op.grant], chainId: deployment.chainId });
+      // The exact calldata the server recorded, to the contract it names (factory for roles, exchange for policies).
+      const h: Hash = await sendTransactionAsync({ to: op.contract as `0x${string}`, data: op.calldata as `0x${string}`, chainId: deployment.chainId });
       await attach(h);
       // Re-check until the server sees the receipt.
       for (let i = 0; i < 20; i++) {
@@ -311,7 +321,12 @@ function OperationCard({ op, onChange }: { op: Operation; onChange: () => void }
       setBusy(false);
     }
   }
-  const label = `${op.grant ? "Grant" : "Revoke"} ${op.fn === "setCreator" ? "creator" : "curator"}`;
+  const label =
+    op.fn === "addPolicy"
+      ? `Add policy${op.params?.policyId ? ` #${String(op.params.policyId)}` : ""}`
+      : op.fn === "setPolicyActive"
+        ? `${op.grant ? "Re-enable" : "Retire"} policy #${String(op.params?.policyId ?? "?")}`
+        : `${op.grant ? "Grant" : "Revoke"} ${op.fn === "setCreator" ? "creator" : "curator"}`;
   const tone = op.status === "confirmed" ? "text-success" : op.status === "failed" ? "text-danger" : "text-warn";
   return (
     <div className="space-y-2 rounded-md border border-line p-3 text-sm">
@@ -337,7 +352,7 @@ function OperationCard({ op, onChange }: { op: Operation; onChange: () => void }
               <Button size="sm" variant="secondary" disabled={!/^0x[0-9a-fA-F]{64}$/.test(hash)} onClick={async () => { try { await attach(hash); } catch (e) { setErr((e as Error).message); } }}>Attach</Button>
             </div>
           </details>
-          <p className="text-xs text-muted">Only the contract owner can sign this. The request counts as done only after the server sees the confirmed transaction and the new on-chain state.</p>
+          <p className="text-xs text-muted">Only the contract owner can sign this. It counts as done only after the server sees the confirmed transaction and reads the new on-chain state.</p>
         </>
       )}
       {err && <p className="text-danger" role="alert">{err}</p>}
@@ -409,17 +424,235 @@ function IncidentTab() {
 }
 
 function AdminsTab() {
+  const qc = useQueryClient();
   const q = useQuery({ queryKey: ["admin", "admins"], queryFn: () => apiAuth<{ admins: Array<{ wallet: string; grantedBy: string; grantedAt: string; reason: string }> }>("/api/admin/admins") });
+  const b = useQuery({ queryKey: ["admin", "bootstrap"], queryFn: () => apiAuth<{ configured: number; closed: boolean }>("/api/admin/bootstrap") });
+  const [closing, setClosing] = useState(false);
   if (q.isLoading) return <Skeleton className="h-24" />;
   return (
-    <ul className="panel divide-y divide-line">
-      {(q.data?.admins ?? []).map((a) => (
-        <li key={a.wallet} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-sm">
-          <Address address={a.wallet} label="Administrator" />
-          <span className="text-ink-2">granted {formatDateTime(new Date(a.grantedAt))} by {a.grantedBy === "bootstrap" ? "bootstrap" : `${a.grantedBy.slice(0, 8)}…`}</span>
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-4">
+      <ul className="panel divide-y divide-line">
+        {(q.data?.admins ?? []).map((a) => (
+          <li key={a.wallet} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-sm">
+            <Address address={a.wallet} label="Administrator" />
+            <span className="text-ink-2">granted {formatDateTime(new Date(a.grantedAt))} by {a.grantedBy === "bootstrap" ? "bootstrap" : `${a.grantedBy.slice(0, 8)}…`}</span>
+          </li>
+        ))}
+      </ul>
+      {b.data && (
+        <section className="panel space-y-2 p-5 text-sm">
+          <h3 className="font-medium">First-administrator bootstrap</h3>
+          <p className="text-ink-2">
+            {b.data.closed
+              ? "Closed. INITIAL_ADMIN_WALLETS no longer grants anything; administrators are managed here."
+              : `Open: ${b.data.configured} wallet${b.data.configured === 1 ? "" : "s"} in INITIAL_ADMIN_WALLETS can still become administrator by signing in. It closes automatically on the first grant or revoke here.`}
+          </p>
+          {!b.data.closed && (
+            <>
+              <Button size="sm" variant="secondary" onClick={() => setClosing(true)}>Close bootstrap now</Button>
+              <ReasonDialog
+                open={closing}
+                title="Close the bootstrap"
+                body="After this, no wallet can become administrator from server configuration. Remove INITIAL_ADMIN_WALLETS from the host afterwards."
+                confirm="Close"
+                onClose={() => setClosing(false)}
+                onConfirm={async (reason) => {
+                  await apiAuth("/api/admin/bootstrap", { method: "POST", body: JSON.stringify({ reason }) });
+                  await qc.invalidateQueries({ queryKey: ["admin", "bootstrap"] });
+                }}
+              />
+            </>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+interface PolicyRow {
+  policyId: number;
+  active: boolean;
+  params: Record<string, string | number>;
+  addedAt: string;
+  txHash: string;
+}
+
+const ONE = 10n ** 18n;
+/** "12.5" → wei string (18 decimals), exact. */
+function toWei(v: string): string | null {
+  if (!/^\d{1,15}(\.\d{0,18})?$/.test(v.trim())) return null;
+  const [w, f = ""] = v.trim().split(".");
+  return (BigInt(w!) * ONE + BigInt((f + "0".repeat(18)).slice(0, 18))).toString();
+}
+const fromWei = (v: string | number) => {
+  const x = BigInt(String(v));
+  const frac = (x % ONE).toString().padStart(18, "0").replace(/0+$/, "");
+  return `${x / ONE}${frac ? `.${frac}` : ""}`;
+};
+/** "1.25" (%) → 125 bps, exact. */
+function pctToBps(v: string): number | null {
+  if (!/^\d{1,3}(\.\d{0,2})?$/.test(v.trim())) return null;
+  const [w, f = ""] = v.trim().split(".");
+  return Number(w) * 100 + Number((f + "00").slice(0, 2));
+}
+
+const FIELDS: Array<{ k: string; label: string; unit: "shares" | "musd" | "int" | "cents" | "hours" | "minutes" | "days" | "pct" }> = [
+  { k: "minBidDepth", label: "Min bid depth", unit: "shares" },
+  { k: "minAskDepth", label: "Min ask depth", unit: "shares" },
+  { k: "band", label: "Depth band", unit: "cents" },
+  { k: "maxSpread", label: "Max spread", unit: "cents" },
+  { k: "minSeeders", label: "Min seeders", unit: "int" },
+  { k: "minSeederNotional", label: "Min per seeder", unit: "musd" },
+  { k: "seedingPeriod", label: "Seeding period", unit: "hours" },
+  { k: "minRest", label: "Seed order lock", unit: "minutes" },
+  { k: "takerFeeBps", label: "Taker fee", unit: "pct" },
+  { k: "rebateShareBps", label: "Seeder share of fee", unit: "pct" },
+  { k: "referralShareBps", label: "Referrer share of fee", unit: "pct" },
+  { k: "rebatePeriod", label: "Rebate period", unit: "days" },
+  { k: "claimWindow", label: "Claim window", unit: "days" },
+  { k: "rebateCapPerMarket", label: "Rebate cap / market", unit: "musd" },
+  { k: "rebateCapPerWallet", label: "Rebate cap / wallet", unit: "musd" },
+  { k: "rebateBudget", label: "Rebate budget (policy)", unit: "musd" },
+  { k: "referralCapPerMarket", label: "Referral cap / referrer / market", unit: "musd" },
+];
+const SECS = { hours: 3600, minutes: 60, days: 86400 } as const;
+
+function toForm(p: Record<string, string | number>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of FIELDS) {
+    const v = p[f.k];
+    if (v === undefined) continue;
+    if (f.unit === "shares" || f.unit === "musd") out[f.k] = fromWei(v);
+    else if (f.unit === "pct") out[f.k] = String(Number(v) / 100);
+    else if (f.unit in SECS) out[f.k] = String(Number(v) / SECS[f.unit as keyof typeof SECS]);
+    else out[f.k] = String(v);
+  }
+  return out;
+}
+
+function fromForm(f: Record<string, string>): { policy?: Record<string, string | number>; error?: string } {
+  const p: Record<string, string | number> = {};
+  for (const x of FIELDS) {
+    const v = (f[x.k] ?? "").trim();
+    if (x.unit === "shares" || x.unit === "musd") {
+      const w = toWei(v);
+      if (!w) return { error: `${x.label}: enter a number` };
+      p[x.k] = w;
+    } else if (x.unit === "pct") {
+      const b = pctToBps(v);
+      if (b === null) return { error: `${x.label}: enter a percentage with up to 2 decimals` };
+      p[x.k] = b;
+    } else {
+      if (!/^\d{1,6}$/.test(v)) return { error: `${x.label}: enter a whole number` };
+      p[x.k] = x.unit in SECS ? Number(v) * SECS[x.unit as keyof typeof SECS] : Number(v);
+    }
+  }
+  return { policy: p };
+}
+
+/** Graduation and fee policy versions. New versions apply to markets approved after they exist; old markets never change. */
+function PoliciesTab() {
+  const qc = useQueryClient();
+  const list = useQuery({ queryKey: ["policies"], queryFn: () => apiGet<{ policies: PolicyRow[] }>("/api/policies") });
+  const ops = useQuery({ queryKey: ["admin", "policy-ops"], queryFn: () => apiAuth<{ operations: Operation[] }>("/api/admin/policy-ops"), refetchInterval: 10_000 });
+  const latest = list.data?.policies.at(-1);
+  const [form, setForm] = useState<Record<string, string> | null>(null);
+  const [pending, setPending] = useState<{ title: string; body: string; run: (reason: string) => Promise<void> } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const f = form ?? (latest ? toForm(latest.params) : null);
+  const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: ["admin", "policy-ops"] }), qc.invalidateQueries({ queryKey: ["policies"] })]);
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+      <section className="panel space-y-4 p-5">
+        <h3 className="font-medium">On-chain policies</h3>
+        {list.isLoading ? (
+          <Skeleton className="h-24" />
+        ) : !list.data?.policies.length ? (
+          <p className="text-sm text-muted">None indexed yet.</p>
+        ) : (
+          <ul className="divide-y divide-line text-sm">
+            {list.data.policies.map((p) => (
+              <li key={p.policyId} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                <span>
+                  <span className="font-medium">#{p.policyId}</span>{" "}
+                  <span className={p.active ? "text-success" : "text-muted"}>{p.active ? "active" : "retired"}</span>
+                  <span className="block text-xs text-ink-2">
+                    fee {Number(p.params.takerFeeBps) / 100}% · seed {Number(p.params.seedingPeriod) / 3600}h · depth {fromWei(p.params.minBidDepth!)}/{fromWei(p.params.minAskDepth!)} · spread ≤ {p.params.maxSpread}¢ · {p.params.minSeeders} seeders
+                  </span>
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setPending({
+                      title: `${p.active ? "Retire" : "Re-enable"} policy #${p.policyId}`,
+                      body: p.active ? "New markets can no longer be published on it. Markets already on it are unaffected." : "New approvals may bind it again.",
+                      run: async (reason) => {
+                        await apiAuth("/api/admin/policy-ops", { method: "POST", body: JSON.stringify({ fn: "setPolicyActive", policyId: p.policyId, active: !p.active, reason }) });
+                        await refresh();
+                      },
+                    })
+                  }
+                >
+                  {p.active ? "Retire" : "Re-enable"}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <h3 className="border-t border-line pt-4 font-medium">Propose a new policy version</h3>
+        <p className="text-sm text-ink-2">Prefilled from the newest policy. The exchange owner signs it; it becomes a new, immutable version.</p>
+        {f && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {FIELDS.map((x) => (
+              <Field key={x.k} label={`${x.label} (${x.unit === "pct" ? "%" : x.unit === "musd" ? "MUSD" : x.unit === "cents" ? "¢" : x.unit === "int" ? "#" : x.unit})`} htmlFor={`pol-${x.k}`}>
+                <input id={`pol-${x.k}`} value={f[x.k] ?? ""} onChange={(e) => setForm({ ...f, [x.k]: e.target.value })} className={`${inputClass} mono text-sm`} inputMode="decimal" />
+              </Field>
+            ))}
+          </div>
+        )}
+        {err && <Notice tone="error">{err}</Notice>}
+        <Button
+          disabled={!f}
+          onClick={() => {
+            setErr(null);
+            const r = fromForm(f!);
+            if (r.error) return setErr(r.error);
+            setPending({
+              title: "Request a new policy",
+              body: "This records the request. The exchange owner must sign addPolicy; it counts only after the chain confirms it.",
+              run: async (reason) => {
+                await apiAuth("/api/admin/policy-ops", { method: "POST", body: JSON.stringify({ fn: "addPolicy", policy: r.policy, reason }) });
+                await refresh();
+              },
+            });
+          }}
+        >
+          Create request
+        </Button>
+      </section>
+      <section className="panel space-y-3 p-5">
+        <h3 className="font-medium">Policy requests</h3>
+        {(ops.data?.operations ?? []).length === 0 ? <p className="text-sm text-muted">None.</p> : ops.data!.operations.map((op) => <OperationCard key={op.id} op={op} onChange={refresh} />)}
+      </section>
+      <ReasonDialog
+        open={!!pending}
+        title={pending?.title ?? ""}
+        body={pending?.body ?? ""}
+        confirm="Create request"
+        onClose={() => setPending(null)}
+        onConfirm={async (reason) => {
+          try {
+            await pending!.run(reason);
+          } catch (e) {
+            setErr((e as Error).message);
+            throw e;
+          }
+        }}
+      />
+    </div>
   );
 }
 

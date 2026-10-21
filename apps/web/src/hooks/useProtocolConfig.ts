@@ -2,53 +2,51 @@
 
 import { useReadContracts } from "wagmi";
 import { deployment } from "@/lib/chain/config";
-import { mezonkMarketsAbi } from "@/lib/contracts/abi";
+import { exchangeAbi, factoryAbi } from "@/lib/contracts/abi";
 
 export interface ProtocolConfig {
-  feeBps: number;
-  protocolFeeShareBps: number;
-  minDuration: number;
+  minLiveDuration: number;
   maxDuration: number;
   proposalWindow: number;
   challengeWindow: number;
   arbitrationWindow: number;
-  minLiquidity: bigint;
   proposerBond: bigint;
   disputeBond: bigint;
   arbitrator: `0x${string}`;
 }
 
-/** Live protocol parameters for new markets, read from the contract. */
+/** Live publication/resolution parameters for new markets (factory) and the pause flag (exchange). */
 export function useProtocolConfig() {
-  const base = { address: deployment.marketsAddress!, abi: mezonkMarketsAbi, chainId: deployment.chainId } as const;
   const q = useReadContracts({
     allowFailure: false,
     contracts: [
-      { ...base, functionName: "config" },
-      { ...base, functionName: "paused" },
-      { ...base, functionName: "MAX_METADATA_BYTES" },
+      { address: deployment.factoryAddress!, abi: factoryAbi, chainId: deployment.chainId, functionName: "config" },
+      { address: deployment.marketsAddress!, abi: exchangeAbi, chainId: deployment.chainId, functionName: "paused" },
+      { address: deployment.factoryAddress!, abi: factoryAbi, chainId: deployment.chainId, functionName: "MAX_METADATA_BYTES" },
     ],
     query: { enabled: deployment.ready, refetchInterval: 60_000 },
   });
-  const c = q.data?.[0] as readonly [number, number, number, number, number, number, number, bigint, bigint, bigint, `0x${string}`] | undefined;
-  const config: ProtocolConfig | undefined = c && {
-    feeBps: c[0],
-    protocolFeeShareBps: c[1],
-    minDuration: c[2],
-    maxDuration: c[3],
-    proposalWindow: c[4],
-    challengeWindow: c[5],
-    arbitrationWindow: c[6],
-    minLiquidity: c[7],
-    proposerBond: c[8],
-    disputeBond: c[9],
-    arbitrator: c[10],
-  };
   return {
-    config,
+    config: q.data?.[0] as ProtocolConfig | undefined,
     paused: q.data?.[1] as boolean | undefined,
     maxMetadataBytes: q.data?.[2] !== undefined ? Number(q.data[2]) : 8192,
     isLoading: q.isLoading,
     isError: q.isError,
   };
+}
+
+/** The newest policy on-chain (what a new approval would most likely bind) and whether it is active. */
+export function useLatestPolicy() {
+  const e = { address: deployment.marketsAddress!, abi: exchangeAbi, chainId: deployment.chainId } as const;
+  const count = useReadContracts({ allowFailure: false, contracts: [{ ...e, functionName: "policyCount" }], query: { enabled: deployment.ready } });
+  const id = (count.data?.[0] as number | undefined) ?? 0;
+  const q = useReadContracts({
+    allowFailure: false,
+    contracts: [
+      { ...e, functionName: "getPolicy", args: [id] },
+      { ...e, functionName: "policyActive", args: [id] },
+    ],
+    query: { enabled: deployment.ready && id > 0 },
+  });
+  return { id, policy: q.data?.[0], active: q.data?.[1] as boolean | undefined, isLoading: count.isLoading || q.isLoading };
 }

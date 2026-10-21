@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Hanken_Grotesk, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { RefCapture } from "@/features/portfolio/Incentives";
 import { Header, MobileNav } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { DeploymentBanner } from "@/components/layout/DeploymentBanner";
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning className={`${geist.variable} ${geistMono.variable} ${serif.variable} ${hanken.variable}`}>
       <body className="min-h-dvh">
         <Providers>
+          <RefCapture />
           <Header />
           <DeploymentBanner />
           <main id="main" className="mx-auto w-full max-w-[84rem] px-4 pt-6 md:px-6 md:pt-8">

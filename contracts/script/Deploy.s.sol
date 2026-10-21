@@ -28,7 +28,9 @@ contract Deploy is Script {
         address curator = vm.envAddress("CURATOR");
         address creator = vm.envOr("CREATOR", address(0));
         require(arbitrator != resolver, "arbitrator must differ from resolver");
-        require(curator != resolver && curator != arbitrator, "curator must be independent of resolution roles");
+        require(
+            curator != resolver && curator != arbitrator, "curator must be independent of resolution roles"
+        );
         require(creator != curator, "creator must differ from curator");
 
         IMezonkMarkets.Config memory c = IMezonkMarkets.Config({

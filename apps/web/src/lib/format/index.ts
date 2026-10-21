@@ -59,3 +59,19 @@ export const formatDuration = (secs: number) => {
   if (secs % 3600 === 0) return `${secs / 3600} hour${secs === 3600 ? "" : "s"}`;
   return `${Math.round(secs / 60)} minutes`;
 };
+
+/** Cents as a price label: 55 → "55¢". */
+export const formatCents = (c: number | null | undefined) => (c == null ? "—" : `${c}¢`);
+
+/**
+ * The single number a card shows for "what the market thinks", with its provenance. Only a real fill is a
+ * price; a book midpoint is labelled indicative; with neither there is no number.
+ */
+export function marketSignal(m: { priceYes: number | null; bestBid: number | null; bestAsk: number | null }):
+  | { kind: "trade"; p: number }
+  | { kind: "indicative"; p: number }
+  | { kind: "none" } {
+  if (m.priceYes != null) return { kind: "trade", p: m.priceYes };
+  if (m.bestBid != null && m.bestAsk != null) return { kind: "indicative", p: (m.bestBid + m.bestAsk) / 200 };
+  return { kind: "none" };
+}

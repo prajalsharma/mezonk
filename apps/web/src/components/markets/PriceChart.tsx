@@ -48,15 +48,23 @@ export function PriceChart({ marketId }: { marketId: number }) {
   if (error || !data) {
     return <p className="flex h-72 items-center justify-center text-sm text-muted">Price history is unavailable right now.</p>;
   }
-  const trades = data.points.length - 1;
+  const trades = data.points.length; // one point per confirmed fill; there is no opening point
   const last = series.at(-1);
+  if (trades === 0) {
+    return (
+      <div className="flex h-72 flex-col items-center justify-center gap-1 text-center">
+        <p className="font-medium">No trades yet</p>
+        <p className="max-w-sm text-sm text-ink-2">The chart starts at the first real fill. Until then there is no price to draw.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="label">Chance of Yes</p>
-          <p className="text-sm text-ink-2">{trades === 0 ? "No trades yet, showing the opening price" : `${trades} trade${trades === 1 ? "" : "s"} · step line, moves only on trades`}</p>
+          <p className="text-sm text-ink-2">{`${trades} fill${trades === 1 ? "" : "s"} · step line, moves only on trades`}</p>
         </div>
         <Segmented
           label="Chart range"

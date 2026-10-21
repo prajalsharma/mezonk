@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { keccak256, toBytes, verifyTypedData, type Address, type Hex } from "viem";
 import { deployment } from "@/lib/chain/config";
-import { mezonkMarketsAbi } from "@/lib/contracts/abi";
+import { exchangeAbi, factoryAbi } from "@/lib/contracts/abi";
 import { approvalDomain, approvalTypes, type StoredApproval } from "@/lib/governance/approval";
 import {
   canTransition,
@@ -210,23 +210,38 @@ const APPROVAL_TTL_S = 14 * 86400;
 export async function buildApproval(p: ProposalRow): Promise<Omit<StoredApproval, "curator" | "signature">> {
   if (!p.resolver) throw deny(422, "no_resolver", "Assign a resolver before approving");
   const publisher = (p.publisher ?? p.author) as Address;
-  const cfg = deployment.marketsAddress
-    ? await publicClient.readContract({ address: deployment.marketsAddress, abi: mezonkMarketsAbi, functionName: "config" })
-    : null;
-  const minDuration = cfg ? Number(cfg[2]) : 3600;
+  if (!deployment.marketsAddress || !deployment.factoryAddress) throw deny(503, "no_deployment", "No market contract is configured");
+  const policy = await currentPolicy();
+  if (!policy) throw deny(503, "no_policy", "No active market policy exists on-chain. An administrator must add one.");
+  const cfg = await publicClient.readContract({ address: deployment.factoryAddress, abi: factoryAbi, functionName: "config" });
   const closeTime = Math.floor(p.closeTime.getTime() / 1000);
   const now = Math.floor(Date.now() / 1000);
-  const latest = closeTime - minDuration - 300;
+  // Publishing starts seeding; the contract requires close >= publish + seeding period + minimum live time.
+  const latest = closeTime - policy.params.seedingPeriod - cfg.minLiveDuration - 300;
   const deadline = Math.min(now + APPROVAL_TTL_S, latest);
-  if (deadline <= now) throw deny(422, "too_late", "The proposed close time is too soon to publish. Ask for a later close time.");
+  if (deadline <= now) throw deny(422, "too_late", "The proposed close time is too soon: the market needs time to seed and then trade. Ask for a later close time.");
   return {
     metadataHash: p.metadataHash as Hex,
     creator: publisher,
     resolver: p.resolver as Address,
     closeTime: String(closeTime),
+    policyId: String(policy.id),
     deadline: String(deadline),
     nonce: keccak256(toBytes(`${p.id}:${p.version}`)),
   };
+}
+
+/** The newest active on-chain policy (what new approvals bind). Read from the contract, not the index. */
+export async function currentPolicy() {
+  if (!deployment.marketsAddress) return null;
+  const base = { address: deployment.marketsAddress, abi: exchangeAbi } as const;
+  const count = await publicClient.readContract({ ...base, functionName: "policyCount" });
+  for (let id = count; id >= 1; id--) {
+    if (await publicClient.readContract({ ...base, functionName: "policyActive", args: [id] })) {
+      return { id, params: await publicClient.readContract({ ...base, functionName: "getPolicy", args: [id] }) };
+    }
+  }
+  return null;
 }
 
 export async function curatorAction(
@@ -254,8 +269,8 @@ export async function curatorAction(
   if (action === "assign") {
     // Resolver and publisher are chosen by the curator, never the author, and both are checked on-chain.
     if (!["submitted", "under_review", "changes_requested"].includes(p.status)) throw deny(409, "locked", "Assignments can only change before approval");
-    if (!deployment.marketsAddress) throw deny(503, "no_deployment", "No market contract is configured");
-    const base = { address: deployment.marketsAddress, abi: mezonkMarketsAbi } as const;
+    if (!deployment.factoryAddress) throw deny(503, "no_deployment", "No market contract is configured");
+    const base = { address: deployment.factoryAddress, abi: factoryAbi } as const;
     const set: Partial<typeof marketProposals.$inferInsert> = { updatedAt: new Date() };
     if (body.resolver) {
       const ok = await publicClient.readContract({ ...base, functionName: "isResolver", args: [body.resolver as Address] });
@@ -306,11 +321,11 @@ export async function curatorAction(
         throw deny(422, "approval_mismatch", `Signed approval differs from the proposal (${k}). Reload and sign again.`);
       }
     }
-    if (!deployment.marketsAddress) throw deny(503, "no_deployment", "No market contract is configured");
+    if (!deployment.factoryAddress) throw deny(503, "no_deployment", "No market contract is configured");
     // verifyTypedData handles both EOAs and ERC-1271 contract curators (e.g. a Safe).
     const valid = await verifyTypedData({
       address: curator.wallet as Address,
-      domain: approvalDomain(deployment.chainId, deployment.marketsAddress),
+      domain: approvalDomain(deployment.chainId, deployment.factoryAddress),
       types: approvalTypes,
       primaryType: "MarketApproval",
       message: {
@@ -318,6 +333,7 @@ export async function curatorAction(
         creator: expected.creator,
         resolver: expected.resolver,
         closeTime: BigInt(expected.closeTime),
+        policyId: Number(expected.policyId),
         deadline: BigInt(expected.deadline),
         nonce: expected.nonce as Hex,
       },

@@ -171,7 +171,12 @@ interface IMezonkExchange {
         string metadata
     );
     event Graduated(
-        uint256 indexed marketId, uint8 bestBid, uint8 bestAsk, uint256 bidDepth, uint256 askDepth, uint16 seeders
+        uint256 indexed marketId,
+        uint8 bestBid,
+        uint8 bestAsk,
+        uint256 bidDepth,
+        uint256 askDepth,
+        uint16 seeders
     );
 
     event OrderPlaced(
@@ -184,7 +189,9 @@ interface IMezonkExchange {
         uint128 quantity,
         bool seed
     );
-    event OrderCancelled(uint256 indexed orderId, uint256 indexed marketId, address indexed maker, uint128 remaining);
+    event OrderCancelled(
+        uint256 indexed orderId, uint256 indexed marketId, address indexed maker, uint128 remaining
+    );
     event SignedOrderCancelled(bytes32 indexed orderHash, address indexed maker);
     event MinNonceRaised(address indexed maker, uint256 minNonce);
 
@@ -225,7 +232,6 @@ interface IMezonkExchange {
     event Redeemed(
         uint256 indexed marketId, address indexed account, uint256 yesBurned, uint256 noBurned, uint256 payout
     );
-
 
     event ProtocolFeesWithdrawn(address indexed to, uint256 amount);
     event PolicyAdded(uint32 indexed policyId, Policy policy);

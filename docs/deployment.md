@@ -23,7 +23,7 @@ Testnet first. Mainnet needs an audit, a legal review and explicit authorization
 | `NEXT_PUBLIC_RPC_URL` | a different public RPC for browsers |
 | `INDEXER_*` | tuning |
 | `BLOB_READ_WRITE_TOKEN` | image uploads in production (Vercel Blob). Without it uploads fail with a setup error; the rest of the app works |
-| `ADMIN_BOOTSTRAP_WALLET` | the first administrator (see "Roles" below). Remove after first sign-in |
+| `INITIAL_ADMIN_WALLETS` | the first administrator(s) (see "Roles" below). Remove once the bootstrap is closed |
 
 ### Only for deploying the contract (your machine, never the web host)
 
@@ -91,14 +91,15 @@ Two kinds of role, held in two places. See docs/USER_PROFILES_AND_RBAC_ARCHITECT
 | Creator, Curator | contract | the contract owner signing `setCreator` / `setCurator`; `/admin` prepares and tracks it |
 | Owner, Resolver, Arbitrator | contract | the owner, outside the app |
 
-**First administrator.** Set `ADMIN_BOOTSTRAP_WALLET`, redeploy, sign in at `/admin` with that wallet. It works once,
-only while no administrator has ever existed. Then remove the variable.
+**First administrator.** Set `INITIAL_ADMIN_WALLETS`, redeploy, sign in with that wallet. Each listed wallet is
+bootstrapped once; the bootstrap closes on the first grant or revoke in `/admin` (or "Close bootstrap now"). Then
+remove the variable. Full procedure: docs/ROLE_MANAGEMENT.md.
 
 **Grant or revoke an administrator.** `/admin` → Wallets & roles → enter the address → Grant/Revoke with a reason.
 You cannot revoke yourself or the last administrator.
 
 **Grant or revoke creator/curator.** `/admin` → enter the address → Grant/Revoke next to the on-chain role → this creates
-a request. If your connected wallet is the contract owner, press "Sign with connected owner wallet". If the owner is a
+a request against the market factory. If your connected wallet is the factory owner, press "Sign with connected owner wallet". If the owner is a
 Safe, copy the `to` and `data` into a Safe transaction, execute it, and paste the hash. The request shows "confirmed"
 only after the server finds the successful transaction and reads the new state from the contract.
 
@@ -111,3 +112,8 @@ only after the server finds the successful transaction and reads the new state f
    grant new). Until they confirm, the old wallet still holds its on-chain flags.
 4. If the old wallet was the contract owner, resolver or arbitrator, the owner (or a new owner via `transferOwnership`)
    must rotate it on-chain; the report lists this. Markets it already created keep it as creator.
+
+## Order-book deployment
+
+The current contracts are the order-book exchange set. Deployment steps, gas notes and the testnet checklist are in
+docs/TESTING_AND_DEPLOYMENT.md; the old `script/Deploy.s.sol` deploys the v1 AMM and is kept only for reference.

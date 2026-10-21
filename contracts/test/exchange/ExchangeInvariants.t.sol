@@ -86,7 +86,15 @@ contract ExchangeHandler is Test {
         address who = actors[a % actors.length];
         uint256 id = _id(m);
         vm.prank(who);
-        try ex.placeOrder(id, uint8(o % 2), buy ? IMezonkExchange.Side.Buy : IMezonkExchange.Side.Sell, uint8(bound(p, 1, 99)), _qty(q)) returns (uint256 oid) {
+        try ex.placeOrder(
+            id,
+            uint8(o % 2),
+            buy ? IMezonkExchange.Side.Buy : IMezonkExchange.Side.Sell,
+            uint8(bound(p, 1, 99)),
+            _qty(q)
+        ) returns (
+            uint256 oid
+        ) {
             restingIds.push(oid);
             hits["place"]++;
         } catch {}
@@ -132,7 +140,8 @@ contract ExchangeHandler is Test {
         IMezonkExchange.RestingOrder memory o = ex.getResting(oid);
         if (o.maker == who) who = actors[(a + 1) % actors.length];
         bool makerBuys = o.side == IMezonkExchange.Side.Buy;
-        IMezonkExchange.Side tSide = complement == makerBuys ? IMezonkExchange.Side.Buy : IMezonkExchange.Side.Sell;
+        IMezonkExchange.Side tSide =
+            complement == makerBuys ? IMezonkExchange.Side.Buy : IMezonkExchange.Side.Sell;
         IMezonkExchange.Source[] memory s = new IMezonkExchange.Source[](1);
         s[0].restingId = oid;
         vm.prank(who);
@@ -152,9 +161,24 @@ contract ExchangeHandler is Test {
         } catch {}
     }
 
-    function takeSigned(uint256 mk, uint256 tk, uint256 m, uint256 o, bool makerBuys, uint256 p, uint256 q, bool complement)
-        external
-    {
+    /// @dev Like takeResting but always as a buyer (funded with MUSD), so fills are reachable whatever the taker holds.
+    function takeRestingBuy(uint256 a, uint256 r, uint256 q) external {
+        if (restingIds.length == 0) return;
+        uint256 oid = restingIds[r % restingIds.length];
+        IMezonkExchange.RestingOrder memory o = ex.getResting(oid);
+        this.takeResting(a, r, o.side == IMezonkExchange.Side.Buy, q);
+    }
+
+    function takeSigned(
+        uint256 mk,
+        uint256 tk,
+        uint256 m,
+        uint256 o,
+        bool makerBuys,
+        uint256 p,
+        uint256 q,
+        bool complement
+    ) external {
         uint256 mi = mk % actors.length;
         uint256 ti = tk % actors.length;
         if (mi == ti) ti = (ti + 1) % actors.length;
@@ -179,7 +203,8 @@ contract ExchangeHandler is Test {
         s[0].signature = abi.encodePacked(r, s_, v);
         // Taker direction compatible with the maker: direct (same outcome, opposite side) or complement.
         uint8 tOut = complement ? 1 - outcome : outcome;
-        IMezonkExchange.Side tSide = complement == makerBuys ? IMezonkExchange.Side.Buy : IMezonkExchange.Side.Sell;
+        IMezonkExchange.Side tSide =
+            complement == makerBuys ? IMezonkExchange.Side.Buy : IMezonkExchange.Side.Sell;
         vm.prank(actors[ti]);
         try ex.take(
             IMezonkExchange.TakeParams({
@@ -340,13 +365,15 @@ abstract contract ExchangeInvariantSetup is Test {
         sel[10] = ExchangeHandler.redeem.selector;
         sel[11] = ExchangeHandler.claimRebate.selector;
         sel[12] = ExchangeHandler.setReferrer.selector;
-        sel[13] = ExchangeHandler.takeResting.selector; // weighted: fills are the core path
+        sel[13] = ExchangeHandler.takeRestingBuy.selector; // weighted: fills are the core path
         targetSelector(FuzzSelector({addr: address(h), selectors: sel}));
     }
 
     // 13. Liabilities never exceed assets: balance equals the buckets exactly.
     function check_bucketsEqualBalance() public view {
-        assertEq(musd.balanceOf(address(ex)), ex.totalCollateral() + ex.escrowedCollateral() + ex.protocolFees());
+        assertEq(
+            musd.balanceOf(address(ex)), ex.totalCollateral() + ex.escrowedCollateral() + ex.protocolFees()
+        );
         MezonkIncentives inc = ex.incentives();
         assertEq(musd.balanceOf(address(inc)), inc.rebateReserve() + inc.referralReserve());
         MezonkResolution res = ex.resolution();
@@ -418,7 +445,9 @@ abstract contract ExchangeInvariantSetup is Test {
 
 /// @dev Stateless fuzz: any single fill conserves collateral exactly and pays makers their signed price.
 contract ExchangeFillFuzzTest is Test {
-    function testFuzz_fillConservesValue(uint8 p, uint32 lots, bool complement, bool makerBuys, uint8 o) public {
+    function testFuzz_fillConservesValue(uint8 p, uint32 lots, bool complement, bool makerBuys, uint8 o)
+        public
+    {
         p = uint8(bound(p, 1, 99));
         uint256 q = uint256(bound(lots, 1, 1_000_000)) * 1e16;
         uint256 makerCash = (q * p) / 100;
@@ -465,18 +494,33 @@ contract ExchangeRandomWalkTest is ExchangeInvariantSetup {
             uint256 c = r >> 72;
             uint256 d = r >> 104;
             uint256 k = r % 14;
-            if (k == 0) h.place(a, b, c, d % 2 == 0, 30 + (c % 40), d);
-            else if (k == 1) h.graduate(b);
-            else if (k == 2) h.split(a, b, c);
-            else if (k == 3) h.merge(a, b, c);
-            else if (k == 4) h.cancel(a, b);
-            else if (k == 5 || k == 6) h.takeResting(a, b, c % 2 == 0, d);
-            else if (k == 7 || k == 8) h.takeSigned(a, b, c, d, r % 3 == 0, 20 + (c % 60), d >> 3, (d >> 5) % 2 == 0);
-            else if (k == 9) h.transfer(a, b, c, d, r);
-            else if (k == 10) h.warp(a % 2 hours);
-            else if (k == 11) h.resolve(b, c, i > 250 ? 0 : 1);
-            else if (k == 12) h.redeem(a, b);
-            else h.claimRebate(a, b);
+            if (k == 0) {
+                h.place(a, b, c, d % 2 == 0, 30 + (c % 40), d);
+            } else if (k == 1) {
+                h.graduate(b);
+            } else if (k == 2) {
+                h.split(a, b, c);
+            } else if (k == 3) {
+                h.merge(a, b, c);
+            } else if (k == 4) {
+                h.cancel(a, b);
+            } else if (k == 5) {
+                h.takeResting(a, b, c % 2 == 0, d);
+            } else if (k == 6) {
+                h.takeRestingBuy(a, b, d);
+            } else if (k == 7 || k == 8) {
+                h.takeSigned(a, b, c, d, r % 3 == 0, 20 + (c % 60), d >> 3, (d >> 5) % 2 == 0);
+            } else if (k == 9) {
+                h.transfer(a, b, c, d, r);
+            } else if (k == 10) {
+                h.warp(a % 2 hours);
+            } else if (k == 11) {
+                h.resolve(b, c, i > 250 ? 0 : 1);
+            } else if (k == 12) {
+                h.redeem(a, b);
+            } else {
+                h.claimRebate(a, b);
+            }
             if (i % 25 == 0) _checkAll();
         }
         _checkAll();

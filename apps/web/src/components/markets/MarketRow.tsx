@@ -1,14 +1,14 @@
 import Link from "next/link";
-import { Change, ProbabilityBar } from "./Probability";
+import { Change, ProbabilityBar, SignalValue } from "./Probability";
 import { StageStatus } from "./StageStatus";
 import { Skeleton } from "@/components/ui/primitives";
 import { type MarketSummaryDto, marketHref } from "@/lib/api/types";
-import { formatMusd, formatProb, relativeTime } from "@/lib/format";
+import { formatMusd, marketSignal, relativeTime } from "@/lib/format";
 import { categoryLabel, type Category } from "@/lib/market/metadata";
 
 /** One market in a list. A row, not a card: question first, numbers aligned for scanning. */
 export function MarketRow({ m, now }: { m: MarketSummaryDto; now: number }) {
-  const thin = BigInt(m.liquidity) < 100n * 10n ** 18n;
+  const sig = marketSignal(m);
   const open = m.stage.stage === "open";
   return (
     <li className="group relative grid grid-cols-[1fr_auto] items-center gap-x-6 gap-y-3 border-b border-line py-4 last:border-b-0 md:grid-cols-[minmax(0,1fr)_9rem_7rem_7rem]">
@@ -17,7 +17,8 @@ export function MarketRow({ m, now }: { m: MarketSummaryDto; now: number }) {
           <span>{categoryLabel[m.category as Category] ?? m.category}</span>
           <StageStatus stage={m.stage.stage} label={m.stage.label} finalOutcome={m.finalOutcome} />
           {open && <span>Closes {relativeTime(new Date(m.closeTime), now)}</span>}
-          {open && thin && <span className="text-warn">Thin liquidity</span>}
+          {open && m.lowLiquidity && <span className="text-warn">Low liquidity</span>}
+          {m.stage.stage === "seeding" && <span className="text-info">Seeding</span>}
           {!m.structured && <span className="text-warn">Unstructured rules</span>}
         </div>
         <Link href={marketHref(m)} className="block text-[0.9375rem] font-medium leading-snug text-ink after:absolute after:inset-0 group-hover:text-accent-text">
@@ -26,12 +27,14 @@ export function MarketRow({ m, now }: { m: MarketSummaryDto; now: number }) {
       </div>
       <div className="w-24 space-y-1.5 md:w-auto">
         <div className="tnum flex items-baseline justify-between gap-2">
-          <span className="mono text-lg font-semibold">{formatProb(m.priceYes)}</span>
-          <span className="text-xs">
-            <Change from={m.priceYes24hAgo} to={m.priceYes} />
-          </span>
+          <SignalValue m={m} className="mono text-lg font-semibold" />
+          {m.priceYes != null && m.priceYes24hAgo != null && (
+            <span className="text-xs">
+              <Change from={m.priceYes24hAgo} to={m.priceYes} />
+            </span>
+          )}
         </div>
-        <ProbabilityBar priceYes={m.priceYes} size="sm" />
+        {sig.kind !== "none" && <ProbabilityBar priceYes={sig.p} size="sm" />}
         <span className="sr-only">chance of Yes</span>
       </div>
       <div className="mono hidden text-right text-sm md:block">
@@ -40,7 +43,7 @@ export function MarketRow({ m, now }: { m: MarketSummaryDto; now: number }) {
       </div>
       <div className="mono hidden text-right text-sm md:block">
         <div className="font-semibold">{formatMusd(m.liquidity, { compact: true })}</div>
-        <div className="text-xs text-muted">collateral</div>
+        <div className="text-xs text-muted">on the book</div>
       </div>
     </li>
   );

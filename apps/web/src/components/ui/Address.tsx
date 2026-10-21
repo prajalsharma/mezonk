@@ -46,12 +46,14 @@ export function Address({ address, you, label }: { address: string; you?: string
   );
 }
 
-export function TxLink({ hash }: { hash: string }) {
+/** A transaction reference. `label` replaces the shortened hash as the visible text (the full hash stays in the title). */
+export function TxLink({ hash, label }: { hash: string; label?: string }) {
   const url = explorerTx(hash);
-  if (!url) return <span className="font-mono text-xs text-ink-2" title={`${hash} (local fork: no public explorer)`}>{hash.slice(0, 10)}…{hash.slice(-6)}</span>;
+  const text = label ?? `${hash.slice(0, 10)}…${hash.slice(-6)}`;
+  if (!url) return <span className={label ? "text-xs text-muted" : "font-mono text-xs text-ink-2"} title={`${hash} (local fork: no public explorer)`}>{text}</span>;
   return (
-    <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-mono text-xs text-ink-2 underline decoration-line underline-offset-2 hover:text-ink">
-      {hash.slice(0, 10)}…{hash.slice(-6)} <ExternalLink className="size-3" aria-hidden />
+    <a href={url} target="_blank" rel="noreferrer" title={hash} className={`inline-flex items-center gap-1 text-xs text-ink-2 underline decoration-line underline-offset-2 hover:text-ink ${label ? "" : "font-mono"}`}>
+      {text} <ExternalLink className="size-3" aria-hidden />
     </a>
   );
 }

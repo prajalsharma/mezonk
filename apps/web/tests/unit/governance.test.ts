@@ -99,12 +99,13 @@ describe("EIP-712 approval", () => {
       "address creator",
       "address resolver",
       "uint64 closeTime",
+      "uint32 policyId",
       "uint64 deadline",
       "bytes32 nonce",
     ]);
     expect(approvalDomain(31611, "0x0000000000000000000000000000000000000001")).toEqual({
       name: "MEZONK Markets",
-      version: "1",
+      version: "2",
       chainId: 31611,
       verifyingContract: "0x0000000000000000000000000000000000000001",
     });
@@ -115,6 +116,7 @@ describe("EIP-712 approval", () => {
       creator: "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
       resolver: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
       closeTime: "1806710400",
+      policyId: "1",
       deadline: "1806100000",
       nonce: "0x" + "ab".repeat(32) as `0x${string}`,
       curator: "0x14dC79964da2C08b23698B3D3cc7Ca32193d9955",
@@ -123,5 +125,14 @@ describe("EIP-712 approval", () => {
     expect(a.closeTime).toBe(1806710400n);
     expect(a.deadline).toBe(1806100000n);
     expect(a.metadataHash).toMatch(/^0x[0-9a-f]{64}$/);
+  });
+});
+
+describe("review payload", () => {
+  it("keeps every signed approval field, including policyId (a stripped field fails the server's comparison)", () => {
+    const approval = { metadataHash: "0x1", creator: "0x2", resolver: "0x3", closeTime: "1", policyId: "1", deadline: "2", nonce: "0x4" };
+    const parsed = reviewActionSchema.parse({ action: "approve", reason: "ok", signature: "0xab", approval });
+    expect(parsed.approval).toEqual(approval);
+    expect(Object.keys(parsed.approval!)).toEqual(approvalTypes.MarketApproval.map((f) => f.name));
   });
 });

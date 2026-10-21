@@ -36,6 +36,13 @@
       "when": 1792464663199,
       "tag": "0004_profiles_rbac_media_comments",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792558414335,
+      "tag": "0005_orderbook",
+      "breakpoints": true
     }
   ]
 }

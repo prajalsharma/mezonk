@@ -119,10 +119,7 @@ abstract contract ExchangeBase is Test {
 
     function _params() internal view returns (IMezonkExchange.CreateParams memory) {
         return IMezonkExchange.CreateParams({
-            metadata: _metadata(),
-            closeTime: closeTime,
-            resolver: resolver,
-            policyId: policyId
+            metadata: _metadata(), closeTime: closeTime, resolver: resolver, policyId: policyId
         });
     }
 
@@ -150,10 +147,14 @@ abstract contract ExchangeBase is Test {
         id = fac.createMarket(p, a, curator, sig);
     }
 
-    function _place(address who, uint256 id, uint8 outcome, IMezonkExchange.Side side, uint8 price, uint256 shares)
-        internal
-        returns (uint256 orderId)
-    {
+    function _place(
+        address who,
+        uint256 id,
+        uint8 outcome,
+        IMezonkExchange.Side side,
+        uint8 price,
+        uint256 shares
+    ) internal returns (uint256 orderId) {
         vm.prank(who);
         orderId = ex.placeOrder(id, outcome, side, price, uint128(shares));
     }
@@ -172,10 +173,14 @@ abstract contract ExchangeBase is Test {
         ex.graduate(id);
     }
 
-    function _order(address maker, uint256 id, uint8 outcome, IMezonkExchange.Side side, uint8 price, uint256 qty)
-        internal
-        returns (IMezonkExchange.Order memory o)
-    {
+    function _order(
+        address maker,
+        uint256 id,
+        uint8 outcome,
+        IMezonkExchange.Side side,
+        uint8 price,
+        uint256 qty
+    ) internal returns (IMezonkExchange.Order memory o) {
         o = IMezonkExchange.Order({
             maker: maker,
             taker: address(0),
@@ -254,7 +259,9 @@ abstract contract ExchangeBase is Test {
             ex.totalCollateral() + ex.escrowedCollateral() + ex.protocolFees(),
             "exchange buckets"
         );
-        assertEq(musd.balanceOf(address(inc)), inc.rebateReserve() + inc.referralReserve(), "incentive buckets");
+        assertEq(
+            musd.balanceOf(address(inc)), inc.rebateReserve() + inc.referralReserve(), "incentive buckets"
+        );
         assertEq(musd.balanceOf(address(res)), res.lockedBonds() + res.bondCreditsTotal(), "bond buckets");
     }
 

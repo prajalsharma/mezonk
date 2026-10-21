@@ -20,7 +20,7 @@ type Mode = "idle" | "approve" | "reject" | "changes" | "note";
 
 interface ApprovalPayload {
   domain: { name: string; version: string; chainId: number; verifyingContract: `0x${string}` };
-  approval: { metadataHash: `0x${string}`; creator: `0x${string}`; resolver: `0x${string}`; closeTime: string; deadline: string; nonce: `0x${string}` };
+  approval: { metadataHash: `0x${string}`; creator: `0x${string}`; resolver: `0x${string}`; closeTime: string; policyId: string; deadline: string; nonce: `0x${string}` };
 }
 
 /**
@@ -80,7 +80,15 @@ export function ReviewPanel({ detail, onDone }: { detail: ProposalDetailDto; onD
         domain: payload.domain,
         types: approvalTypes,
         primaryType: "MarketApproval",
-        message: { metadataHash: a.metadataHash, creator: a.creator, resolver: a.resolver, closeTime: BigInt(a.closeTime), deadline: BigInt(a.deadline), nonce: a.nonce },
+        message: {
+          metadataHash: a.metadataHash,
+          creator: a.creator,
+          resolver: a.resolver,
+          closeTime: BigInt(a.closeTime),
+          policyId: Number(a.policyId),
+          deadline: BigInt(a.deadline),
+          nonce: a.nonce,
+        },
       });
       await apiAuth(`/api/proposals/${p.id}/review`, { method: "POST", body: JSON.stringify({ action: "approve", reason, checklist, signature, approval: a, internal: false }) });
       setMode("idle");

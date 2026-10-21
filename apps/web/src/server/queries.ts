@@ -7,8 +7,9 @@ import { evidenceHash, parseEvidence } from "@/lib/market/evidence";
 import { getDb, schema } from "@/server/db/client";
 import { chainNowMs } from "@/server/chain";
 import { slugsFor } from "@/server/slugs";
+import { bookTops } from "@/server/orderbook";
 
-const { markets, trades, chainEvents, positions, resolutionProposals, disputes, indexerState, evidence, evidenceDocuments } =
+const { markets, trades, fills, chainEvents, positions, resolutionProposals, disputes, indexerState, evidence, evidenceDocuments } =
   schema;
 
 export type MarketRow = typeof markets.$inferSelect;
@@ -18,9 +19,18 @@ export interface MarketSummary {
   question: string;
   category: string;
   structured: boolean;
-  priceYes: number;
-  priceYes24hAgo: number;
+  /** YES price of the last real fill (0..1), or null when the market has never traded. */
+  priceYes: number | null;
+  priceYes24hAgo: number | null;
+  /** Best YES bid/ask in cents across escrowed and signed orders (null = empty side). Executable quotes. */
+  bestBid: number | null;
+  bestAsk: number | null;
+  /** Collateral notional of all open orders on the book. */
   liquidity: string;
+  /** Collateral locked behind outstanding shares (open interest). */
+  openInterest: string;
+  /** Live but thin: one side empty or spread wider than 10 cents. */
+  lowLiquidity: boolean;
   volume: string;
   volume24h: string;
   traders24h: number;
@@ -42,10 +52,6 @@ export interface MarketSummary {
 export function trendingScore(volume24hWei: bigint, traders24h: number, open: boolean): number {
   if (!open || volume24hWei === 0n) return 0;
   return (Number(volume24hWei / 10n ** 12n) / 1e6) * Math.sqrt(1 + traders24h);
-}
-
-function initialPrice(m: MarketRow) {
-  return m.initialYesProbBps / 10_000;
 }
 
 async function stats24h(ids: number[], now: number) {
@@ -74,19 +80,27 @@ async function stats24h(ids: number[], now: number) {
   return out;
 }
 
-function summarize(m: MarketRow, s: { vol: bigint; traders: number; price24h: number | null }, now: number): MarketSummary {
+function summarize(
+  m: MarketRow,
+  s: { vol: bigint; traders: number; price24h: number | null },
+  now: number,
+  top: { bestBid: number | null; bestAsk: number | null; depth: bigint } = { bestBid: null, bestAsk: null, depth: 0n },
+): MarketSummary {
   const stage = deriveStage(m, now);
-  // Before any trade older than 24h exists, compare against the opening price if the market is younger than 24h.
-  const youngerThan24h = now - m.createdAt.getTime() < 86_400_000;
-  const price24h = s.price24h ?? (youngerThan24h ? initialPrice(m) : m.priceYes);
+  const live = stage.stage === "open";
   return {
     id: m.marketId,
     question: m.question,
     category: m.category,
     structured: m.structured,
     priceYes: m.priceYes,
-    priceYes24hAgo: price24h,
-    liquidity: m.collateral,
+    // No trade before the window means no reference price: never compare against a made-up opening price.
+    priceYes24hAgo: s.price24h ?? m.priceYes,
+    bestBid: top.bestBid,
+    bestAsk: top.bestAsk,
+    liquidity: top.depth.toString(),
+    openInterest: m.collateral,
+    lowLiquidity: live && (top.bestBid == null || top.bestAsk == null || top.bestAsk - top.bestBid > 10),
     volume: m.volume,
     volume24h: s.vol.toString(),
     traders24h: s.traders,
@@ -95,7 +109,7 @@ function summarize(m: MarketRow, s: { vol: bigint; traders: number; price24h: nu
     closeTime: m.closeTime.toISOString(),
     stage,
     finalOutcome: m.finalOutcome,
-    trendingScore: trendingScore(s.vol, s.traders, stage.stage === "open"),
+    trendingScore: trendingScore(s.vol, s.traders, live),
     slug: null,
   };
 }
@@ -103,7 +117,7 @@ function summarize(m: MarketRow, s: { vol: bigint; traders: number; price24h: nu
 export interface ListParams {
   q?: string;
   category?: string;
-  status?: "open" | "closing" | "resolving" | "resolved" | "all";
+  status?: "seeding" | "open" | "closing" | "resolving" | "resolved" | "all";
   sort?: "trending" | "volume" | "liquidity" | "thin" | "newest" | "closing" | "movement";
   minLiquidity?: bigint;
   closesWithinHours?: number;
@@ -121,10 +135,12 @@ export async function listMarkets(p: ListParams) {
   }
   if (p.category) conds.push(eq(markets.category, p.category));
   if (p.creator) conds.push(eq(markets.creator, p.creator.toLowerCase()));
+  if (deployment.marketsAddress) conds.push(eq(markets.contract, deployment.marketsAddress.toLowerCase()));
   const rows = await db.select().from(markets).where(and(...conds));
   const now = await chainNowMs();
-  const s = await stats24h(rows.map((r) => r.marketId), now);
-  let list = rows.map((r) => summarize(r, s.get(r.marketId)!, now));
+  const ids = rows.map((r) => r.marketId);
+  const [s, tops] = await Promise.all([stats24h(ids, now), bookTops(ids)]);
+  let list = rows.map((r) => summarize(r, s.get(r.marketId)!, now, tops.get(r.marketId)));
 
   list = list.filter((m) => {
     const st = m.stage.stage;
@@ -132,6 +148,8 @@ export async function listMarkets(p: ListParams) {
     if (p.closesWithinHours && (st !== "open" || new Date(m.closeTime).getTime() - now > p.closesWithinHours * 3.6e6))
       return false;
     switch (p.status ?? "all") {
+      case "seeding":
+        return st === "seeding";
       case "open":
         return st === "open";
       case "closing":
@@ -147,6 +165,7 @@ export async function listMarkets(p: ListParams) {
 
   const big = (x: string) => BigInt(x);
   const cmpBig = (a: bigint, b: bigint) => (a > b ? -1 : a < b ? 1 : 0);
+  const move = (m: MarketSummary) => (m.priceYes == null || m.priceYes24hAgo == null ? 0 : Math.abs(m.priceYes - m.priceYes24hAgo));
   const sorters: Record<NonNullable<ListParams["sort"]>, (a: MarketSummary, b: MarketSummary) => number> = {
     trending: (a, b) => b.trendingScore - a.trendingScore || cmpBig(big(a.volume), big(b.volume)),
     volume: (a, b) => cmpBig(big(a.volume), big(b.volume)),
@@ -154,7 +173,7 @@ export async function listMarkets(p: ListParams) {
     thin: (a, b) => cmpBig(big(b.liquidity), big(a.liquidity)),
     newest: (a, b) => b.createdAt.localeCompare(a.createdAt),
     closing: (a, b) => a.closeTime.localeCompare(b.closeTime),
-    movement: (a, b) => Math.abs(b.priceYes - b.priceYes24hAgo) - Math.abs(a.priceYes - a.priceYes24hAgo),
+    movement: (a, b) => move(b) - move(a),
   };
   list.sort(sorters[p.sort ?? "newest"]);
   const items = list.slice(p.offset, p.offset + p.limit);
@@ -170,24 +189,22 @@ export async function getMarket(id: number) {
     .where(and(eq(markets.chainId, deployment.chainId), eq(markets.marketId, id)));
   if (!m) return null;
   const now = await chainNowMs();
-  const s = await stats24h([id], now);
+  const [s, tops] = await Promise.all([stats24h([id], now), bookTops([id])]);
   const slug = (await slugsFor([id])).get(id) ?? null;
-  return { row: m, summary: { ...summarize(m, s.get(id)!, now), slug } };
+  return { row: m, summary: { ...summarize(m, s.get(id)!, now, tops.get(id)), slug } };
 }
 
 export async function getHistory(id: number) {
   const db = await getDb();
   const m = await getMarket(id);
   if (!m) return null;
+  // One point per confirmed fill at its YES price. No opening point, no interpolation: no trade, no price.
   const rows = await db
-    .select({ t: trades.blockTime, p: trades.priceYesAfter, tx: trades.txHash })
-    .from(trades)
-    .where(eq(trades.marketId, id))
-    .orderBy(trades.blockTime, trades.eventId);
-  return [
-    { t: m.row.createdAt.toISOString(), p: m.row.initialYesProbBps / 10_000, tx: m.row.createdTx },
-    ...rows.map((r) => ({ t: r.t.toISOString(), p: r.p, tx: r.tx })),
-  ];
+    .select({ t: fills.blockTime, p: fills.yesPrice, tx: fills.txHash })
+    .from(fills)
+    .where(eq(fills.marketId, id))
+    .orderBy(fills.blockNumber, fills.eventId);
+  return rows.map((r) => ({ t: r.t.toISOString(), p: r.p / 100, tx: r.tx }));
 }
 
 export async function getEvents(opts: { marketId?: number; actor?: string; limit: number; before?: number }) {
@@ -240,8 +257,6 @@ export async function getPortfolio(account: string) {
       question: m.question,
       category: m.category,
       priceYes: m.priceYes,
-      poolYes: m.poolYes,
-      poolNo: m.poolNo,
       feeBps: m.feeBps,
       closeTime: m.closeTime.toISOString(),
       stage: deriveStage(m, now),
@@ -260,7 +275,6 @@ export async function getPortfolio(account: string) {
       marketId: m.marketId,
       question: m.question,
       stage: deriveStage(m, now),
-      initialLiquidity: m.initialLiquidity,
       volume: m.volume,
       finalOutcome: m.finalOutcome,
     })),

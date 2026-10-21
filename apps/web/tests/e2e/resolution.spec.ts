@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { closedMarket, connect, disputeDirect, finalizeDirect, proposeDirect, read, stage, warp } from "./chain";
+import { addr, claimable, closedMarket, connect, disputeDirect, finalizeDirect, proposeDirect, read, readRes, stage, warp } from "./chain";
 
 const STAGE = { Closed: 1, Proposed: 2, Disputed: 3, Finalized: 4 };
 
@@ -40,8 +40,8 @@ test.describe("resolution lifecycle, role by role", () => {
     await dialog.getByRole("button", { name: "Publish evidence and sign" }).click();
     await expect(page.getByText("Outcome proposed. Confirmed on-chain.")).toBeVisible();
     expect(await stage(id)).toBe(STAGE.Proposed);
-    const m = await read<{ proposedOutcome: number }>("getMarket", [id]);
-    expect(m.proposedOutcome).toBe(1);
+    const st = await readRes<readonly [number, bigint, bigint, string, boolean]>("states", [id]);
+    expect(st[0]).toBe(1); // proposed Yes
   });
 
   test("finalization unavailable during the window, then anyone can finalize", async ({ page }) => {
@@ -121,14 +121,14 @@ test.describe("resolution lifecycle, role by role", () => {
     const page = await browser.newPage();
     await page.goto(`/markets/${id}`);
     await connect(page, "alice");
-    const expected = await read<bigint>("claimable", [id, "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65"]);
+    const expected = await claimable(id, addr("alice"));
     expect(expected).toBeGreaterThan(0n);
     await page.getByRole("button", { name: /^Claim payout/ }).click();
     const dialog = page.getByRole("dialog", { name: "Claim payout" });
     await expect(dialog.getByText("None. Claims are fee-free.")).toBeVisible();
     await dialog.getByRole("button", { name: "Sign" }).click();
     await expect(page.getByText(/Claim payout: .* MUSD sent\. Confirmed on-chain\./)).toBeVisible();
-    expect(await read<bigint>("claimable", [id, "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65"])).toBe(0n);
+    expect(await claimable(id, addr("alice"))).toBe(0n);
     await page.reload();
     await connect(page, "alice");
     await expect(page.getByText("This wallet holds no shares in this market.")).toBeVisible();

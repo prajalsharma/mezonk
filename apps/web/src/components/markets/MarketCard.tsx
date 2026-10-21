@@ -4,7 +4,7 @@ import type { CSSProperties } from "react";
 import { cx } from "@/components/ui/cx";
 import { Skeleton } from "@/components/ui/primitives";
 import { type MarketSummaryDto, marketHref } from "@/lib/api/types";
-import { formatMusd, formatPrice, formatProb, relativeTime } from "@/lib/format";
+import { formatCents, formatMusd, formatProb, marketSignal, relativeTime } from "@/lib/format";
 import { categoryLabel, type Category } from "@/lib/market/metadata";
 import { Change, ProbabilityBar } from "./Probability";
 
@@ -33,6 +33,15 @@ const DAY = 86_400_000;
 export function MarketStatusChip({ m, now }: { m: MarketSummaryDto; now: number }) {
   const s = m.stage.stage;
   const closeMs = new Date(m.closeTime).getTime();
+  if (s === "seeding") {
+    return <span className="rounded-full bg-info/12 px-2 py-0.5 text-xs font-medium text-info">Seeding</span>;
+  }
+  if (s === "failed") {
+    return <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink-2 ring-1 ring-line">Didn&apos;t launch</span>;
+  }
+  if (s === "open" && m.lowLiquidity) {
+    return <span className="rounded-full bg-warn-soft px-2 py-0.5 text-xs font-medium text-warn">Low liquidity</span>;
+  }
   if (s === "open") {
     const soon = closeMs - now < 2 * DAY;
     return soon ? (
@@ -76,9 +85,12 @@ function Settled({ m }: { m: MarketSummaryDto }) {
  */
 export function MarketCard({ m, now, index = 0, featured = false }: { m: MarketSummaryDto; now: number; index?: number; featured?: boolean }) {
   const open = m.stage.stage === "open";
+  const seeding = m.stage.stage === "seeding";
   const settled = m.stage.stage === "resolved" || m.stage.stage === "invalid";
-  const thin = BigInt(m.liquidity) < 100n * 10n ** 18n;
-  const yes = m.priceYes;
+  const sig = marketSignal(m);
+  // Executable prices: buying YES costs the best YES ask; buying NO costs 100 − best YES bid.
+  const buyYes = m.bestAsk;
+  const buyNo = m.bestBid == null ? null : 100 - m.bestBid;
   return (
     <article
       className={cx("panel card-hover rise group relative flex flex-col gap-4 p-4", featured && "md:p-5")}
@@ -100,17 +112,28 @@ export function MarketCard({ m, now, index = 0, featured = false }: { m: MarketS
 
       <div className="mt-auto space-y-2.5">
         <div className="flex items-end justify-between gap-3">
-          <p className="flex items-baseline gap-2">
-            <span className={cx("mono font-semibold text-ink", featured ? "text-4xl" : "text-3xl")}>{formatProb(yes)}</span>
-            <span className="text-xs text-muted">{settled ? "final price" : "chance"}</span>
-          </p>
-          {!settled && Math.abs(yes - m.priceYes24hAgo) >= 0.005 && (
+          {sig.kind === "none" ? (
+            <p className="flex items-baseline gap-2">
+              <span className={cx("mono font-semibold text-muted", featured ? "text-4xl" : "text-3xl")}>—</span>
+              <span className="text-xs text-muted">{seeding ? "no trading yet" : "no trades yet"}</span>
+            </p>
+          ) : (
+            <p className="flex items-baseline gap-2">
+              <span className={cx("mono font-semibold", sig.kind === "trade" ? "text-ink" : "text-ink-2", featured ? "text-4xl" : "text-3xl")}>
+                {sig.kind === "indicative" && <span className="sr-only">about </span>}
+                {sig.kind === "indicative" ? "~" : ""}
+                {formatProb(sig.p)}
+              </span>
+              <span className="text-xs text-muted">{settled ? "final trade" : sig.kind === "trade" ? "last trade" : "book midpoint"}</span>
+            </p>
+          )}
+          {!settled && m.priceYes != null && m.priceYes24hAgo != null && Math.abs(m.priceYes - m.priceYes24hAgo) >= 0.005 && (
             <span className="mono text-xs">
-              <Change from={m.priceYes24hAgo} to={yes} />
+              <Change from={m.priceYes24hAgo} to={m.priceYes} />
             </span>
           )}
         </div>
-        <ProbabilityBar priceYes={yes} size="sm" />
+        {sig.kind !== "none" && <ProbabilityBar priceYes={sig.p} size="sm" />}
       </div>
 
       {settled ? (
@@ -119,30 +142,39 @@ export function MarketCard({ m, now, index = 0, featured = false }: { m: MarketS
         <div className="relative z-10 grid grid-cols-2 gap-2">
           <Link
             href={marketHref(m, "yes")}
-            aria-label={`Buy Yes at ${formatPrice(yes)} MUSD: ${m.question}`}
+            aria-label={buyYes != null ? `Buy Yes from ${buyYes} cents: ${m.question}` : `Yes: no sellers right now: ${m.question}`}
             className="press flex h-11 items-center justify-between rounded-md bg-yes-soft px-3 text-sm font-semibold text-yes-text ring-1 ring-yes/25 transition-colors hover:bg-yes hover:text-on-yes"
           >
             <span>Yes</span>
-            <span className="mono">{formatPrice(yes)}</span>
+            <span className="mono">{buyYes != null ? formatCents(buyYes) : "no offers"}</span>
           </Link>
           <Link
             href={marketHref(m, "no")}
-            aria-label={`Buy No at ${formatPrice(1 - yes)} MUSD: ${m.question}`}
+            aria-label={buyNo != null ? `Buy No from ${buyNo} cents: ${m.question}` : `No: no sellers right now: ${m.question}`}
             className="press flex h-11 items-center justify-between rounded-md bg-no-soft px-3 text-sm font-semibold text-no-text ring-1 ring-line transition-colors hover:bg-no hover:text-on-no"
           >
             <span>No</span>
-            <span className="mono">{formatPrice(1 - yes)}</span>
+            <span className="mono">{buyNo != null ? formatCents(buyNo) : "no offers"}</span>
           </Link>
         </div>
+      ) : seeding ? (
+        <Link
+          href={marketHref(m)}
+          className="press relative z-10 flex h-11 items-center justify-center rounded-md bg-surface-2 text-sm font-medium text-ink ring-1 ring-line hover:bg-raised"
+        >
+          Back this market · seeding
+        </Link>
       ) : (
-        <div className="flex h-11 items-center justify-center rounded-md bg-surface-2 text-sm text-ink-2 ring-1 ring-line">Trading closed · {m.stage.label}</div>
+        <div className="flex h-11 items-center justify-center rounded-md bg-surface-2 text-sm text-ink-2 ring-1 ring-line">
+          {m.stage.stage === "failed" ? "Didn't reach launch liquidity · refunds open" : `Trading closed · ${m.stage.label}`}
+        </div>
       )}
 
       <footer className="mono flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-3 text-[11px] text-muted">
         <span>{m.tradeCount ? `${formatMusd(m.volume, { compact: true })} MUSD vol` : "No trades yet"}</span>
         {m.traders24h > 0 && <span>{m.traders24h} traders 24h</span>}
         {open && <span>Closes {new Date(m.closeTime).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}</span>}
-        {open && thin && <span className="text-warn">Thin liquidity</span>}
+        {seeding && m.stage.deadline && <span>Seeding ends {relativeTime(new Date(m.stage.deadline).getTime(), now)}</span>}
         {!m.structured && <span className="text-warn">Unstructured rules</span>}
         <span className="ml-auto">#{m.id}</span>
       </footer>

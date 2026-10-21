@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, isNull } from "drizzle-orm";
 import { capabilitiesOf, rolesOf, type Capability, type PlatformRole } from "@/lib/auth/capabilities";
 import { deployment } from "@/lib/chain/config";
-import { mezonkMarketsAbi } from "@/lib/contracts/abi";
+import { exchangeAbi, factoryAbi } from "@/lib/contracts/abi";
 import { publicClient } from "@/server/chain";
 import { getDb, schema } from "@/server/db/client";
 
@@ -31,21 +31,22 @@ async function chainRoles(w: string): Promise<ChainRoles> {
   const hit = chainCache.get(w);
   if (hit && Date.now() - hit.at < TTL) return hit.roles;
   let owner = false, curator = false, creator = false, resolver = false, arbitrator = false;
-  const addr = deployment.marketsAddress;
-  if (addr) {
-    const base = { address: addr, abi: mezonkMarketsAbi } as const;
+  const ex = deployment.marketsAddress;
+  const fac = deployment.factoryAddress;
+  if (ex && fac) {
+    const f = { address: fac, abi: factoryAbi } as const;
     const [o, cu, cr, re, cfg] = await Promise.all([
-      publicClient.readContract({ ...base, functionName: "owner" }),
-      publicClient.readContract({ ...base, functionName: "isCurator", args: [w as `0x${string}`] }),
-      publicClient.readContract({ ...base, functionName: "isCreator", args: [w as `0x${string}`] }),
-      publicClient.readContract({ ...base, functionName: "isResolver", args: [w as `0x${string}`] }),
-      publicClient.readContract({ ...base, functionName: "config" }),
+      publicClient.readContract({ address: ex, abi: exchangeAbi, functionName: "owner" }),
+      publicClient.readContract({ ...f, functionName: "isCurator", args: [w as `0x${string}`] }),
+      publicClient.readContract({ ...f, functionName: "isCreator", args: [w as `0x${string}`] }),
+      publicClient.readContract({ ...f, functionName: "isResolver", args: [w as `0x${string}`] }),
+      publicClient.readContract({ ...f, functionName: "config" }),
     ]).catch(() => [undefined, false, false, false, undefined] as const);
     owner = typeof o === "string" && o.toLowerCase() === w;
     curator = Boolean(cu);
     creator = Boolean(cr);
     resolver = Boolean(re);
-    arbitrator = Array.isArray(cfg) && String(cfg[10]).toLowerCase() === w;
+    arbitrator = !!cfg && typeof cfg === "object" && "arbitrator" in cfg && String(cfg.arbitrator).toLowerCase() === w;
   }
   const roles = { owner, curator, creator, resolver, arbitrator };
   chainCache.set(w, { at: Date.now(), roles });

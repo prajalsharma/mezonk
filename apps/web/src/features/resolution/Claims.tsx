@@ -11,12 +11,18 @@ import { TxStatus } from "@/components/trading/TxStatus";
 import { useTx } from "@/hooks/useTx";
 import { usePendingTxs } from "@/hooks/usePendingTxs";
 import { deployment } from "@/lib/chain/config";
-import { mezonkMarketsAbi } from "@/lib/contracts/abi";
+import { exchangeAbi, resolutionAbi } from "@/lib/contracts/abi";
 import { formatMusd, formatShares, shortAddress } from "@/lib/format";
 import { outcomeLabel } from "@/lib/market/stage";
 import type { Availability } from "@/lib/market/permissions";
 
-type Fn = "redeem" | "claimLiquidity" | "claimCreatorFees" | "withdrawBond";
+type Fn = "redeem" | "withdrawBond";
+
+/** Redemption pays from the exchange's collateral; bonds are held by the resolution contract. */
+const target = (fn: Fn) =>
+  fn === "withdrawBond"
+    ? ({ address: deployment.resolutionAddress!, abi: resolutionAbi } as const)
+    : ({ address: deployment.marketsAddress!, abi: exchangeAbi } as const);
 
 /** Estimated network fee in BTC for a call; undefined while loading or if estimation fails. */
 function useGasEstimate(fn: Fn, marketId: number, account?: `0x${string}`, enabled = true) {
@@ -28,8 +34,7 @@ function useGasEstimate(fn: Fn, marketId: number, account?: `0x${string}`, enabl
     (async () => {
       try {
         const gas = await client.estimateContractGas({
-          address: deployment.marketsAddress!,
-          abi: mezonkMarketsAbi,
+          ...target(fn),
           functionName: fn,
           args: fn === "withdrawBond" ? [] : [BigInt(marketId)],
           account,
@@ -80,12 +85,11 @@ export function ClaimButton({
       label: title,
       send: () =>
         writeContractAsync({
-          address: deployment.marketsAddress!,
-          abi: mezonkMarketsAbi,
+          ...target(fn),
           functionName: fn,
           args: (fn === "withdrawBond" ? [] : [BigInt(marketId)]) as never,
           chainId: deployment.chainId,
-        }),
+        } as never),
       onSubmitted: (hash) => pending.add({ hash, marketId, kind: fn }),
       onConfirmed: (hash) => {
         toast({ tone: "success", title: `${title}: confirmed`, body: `${formatMusd(amount)} MUSD sent to your wallet.` });

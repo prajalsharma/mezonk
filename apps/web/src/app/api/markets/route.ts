@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 const schema = z.object({
   q: z.string().trim().max(120).optional(),
   category: z.enum(CATEGORIES).optional(),
-  status: z.enum(["open", "closing", "resolving", "resolved", "all"]).default("all"),
+  status: z.enum(["seeding", "open", "closing", "resolving", "resolved", "all"]).default("all"),
   sort: z.enum(["trending", "volume", "liquidity", "thin", "newest", "closing", "movement"]).default("newest"),
   minLiquidity: z.coerce.number().min(0).max(1e12).optional(),
   closesWithinHours: z.coerce.number().int().min(1).max(24 * 365).optional(),

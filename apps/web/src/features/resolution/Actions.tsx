@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { KeyValue, Notice, Segmented } from "@/components/ui/primitives";
 import { TxStatus } from "@/components/trading/TxStatus";
-import { mezonkMarketsAbi } from "@/lib/contracts/abi";
+import { resolutionAbi } from "@/lib/contracts/abi";
 import { deployment } from "@/lib/chain/config";
 import { formatDateTime, formatDuration, formatMusd } from "@/lib/format";
 import { outcomeToCode } from "@/lib/market/evidence";
@@ -77,13 +77,13 @@ export function ProposeAction({
     await a.tx.run({
       label: "Propose outcome",
       validate: async () => {
-        const stage = await a.client!.readContract({ address: deployment.marketsAddress!, abi: mezonkMarketsAbi, functionName: "stageOf", args: [BigInt(marketId)] });
+        const stage = await a.client!.readContract({ address: deployment.resolutionAddress!, abi: resolutionAbi, functionName: "stageOf", args: [BigInt(marketId)] });
         if (stage !== 1) throw new Error("The market is no longer waiting for a proposal. Refresh to see its state.");
       },
       send: () =>
         a.writeContractAsync({
-          address: deployment.marketsAddress!,
-          abi: mezonkMarketsAbi,
+          address: deployment.resolutionAddress!,
+          abi: resolutionAbi,
           functionName: "proposeOutcome",
           args: [BigInt(marketId), outcomeToCode[outcome], doc.hash, doc.uri],
           chainId: deployment.chainId,
@@ -194,13 +194,13 @@ export function DisputeAction({
     await a.tx.run({
       label: "Challenge",
       validate: async () => {
-        const stage = await a.client!.readContract({ address: deployment.marketsAddress!, abi: mezonkMarketsAbi, functionName: "stageOf", args: [BigInt(marketId)] });
+        const stage = await a.client!.readContract({ address: deployment.resolutionAddress!, abi: resolutionAbi, functionName: "stageOf", args: [BigInt(marketId)] });
         if (stage !== 2) throw new Error("This proposal is no longer open to challenge. It may already have been challenged.");
       },
       send: () =>
         a.writeContractAsync({
-          address: deployment.marketsAddress!,
-          abi: mezonkMarketsAbi,
+          address: deployment.resolutionAddress!,
+          abi: resolutionAbi,
           functionName: "dispute",
           args: [BigInt(marketId), doc.hash, doc.uri],
           chainId: deployment.chainId,
@@ -278,13 +278,13 @@ export function ArbitrateAction({
     await a.tx.run({
       label: "Ruling",
       validate: async () => {
-        const stage = await a.client!.readContract({ address: deployment.marketsAddress!, abi: mezonkMarketsAbi, functionName: "stageOf", args: [BigInt(marketId)] });
+        const stage = await a.client!.readContract({ address: deployment.resolutionAddress!, abi: resolutionAbi, functionName: "stageOf", args: [BigInt(marketId)] });
         if (stage !== 3) throw new Error("There is no open challenge to rule on anymore.");
       },
       send: () =>
         a.writeContractAsync({
-          address: deployment.marketsAddress!,
-          abi: mezonkMarketsAbi,
+          address: deployment.resolutionAddress!,
+          abi: resolutionAbi,
           functionName: "arbitrate",
           args: [BigInt(marketId), outcomeToCode[outcome], doc.hash, doc.uri],
           chainId: deployment.chainId,
@@ -341,8 +341,8 @@ export function FinalizeAction({
       label: "Finalize",
       send: () =>
         a.writeContractAsync({
-          address: deployment.marketsAddress!,
-          abi: mezonkMarketsAbi,
+          address: deployment.resolutionAddress!,
+          abi: resolutionAbi,
           functionName: "finalize",
           args: [BigInt(marketId)],
           chainId: deployment.chainId,

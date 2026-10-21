@@ -69,19 +69,34 @@ export const markets = pgTable(
     createdBlock: bigint("created_block", { mode: "bigint" }).notNull(),
     createdTx: text("created_tx").notNull(),
     closeTime: timestamp("close_time", { withTimezone: true }).notNull(),
+    /** Taker fee of the market's policy (makers pay none). */
     feeBps: integer("fee_bps").notNull(),
-    protocolFeeShareBps: integer("protocol_fee_share_bps").notNull(),
+    /** v1 AMM only. */
+    protocolFeeShareBps: integer("protocol_fee_share_bps"),
+    /** Graduation/fee policy the market was published under (immutable on-chain). */
+    policyId: integer("policy_id"),
+    seedingDeadline: timestamp("seeding_deadline", { withTimezone: true }),
+    graduatedAt: timestamp("graduated_at", { withTimezone: true }),
+    /** Best escrowed (on-chain) YES bid / ask in cents; null when that side is empty. */
+    bestBid: integer("best_bid"),
+    bestAsk: integer("best_ask"),
+    /** Collateral locked in open escrowed buy orders. */
+    escrowed: amount("escrowed").notNull().default("0"),
+    seedOrderCount: integer("seed_order_count").notNull().default(0),
+    seederCount: integer("seeder_count").notNull().default(0),
     proposalWindow: integer("proposal_window").notNull(),
     challengeWindow: integer("challenge_window").notNull(),
     arbitrationWindow: integer("arbitration_window").notNull(),
     proposerBond: amount("proposer_bond").notNull(),
     disputeBond: amount("dispute_bond").notNull(),
-    initialLiquidity: amount("initial_liquidity").notNull(),
-    initialYesProbBps: integer("initial_yes_prob_bps").notNull(),
-    poolYes: amount("pool_yes").notNull(),
-    poolNo: amount("pool_no").notNull(),
+    /** v1 AMM only. */
+    initialLiquidity: amount("initial_liquidity"),
+    initialYesProbBps: integer("initial_yes_prob_bps"),
+    poolYes: amount("pool_yes"),
+    poolNo: amount("pool_no"),
     collateral: amount("collateral").notNull(),
-    priceYes: doublePrecision("price_yes").notNull(),
+    /** YES price of the last real fill (0..1). Null until the first trade: never a made-up price. */
+    priceYes: doublePrecision("price_yes"),
     volume: amount("volume").notNull(),
     tradeCount: integer("trade_count").notNull(),
     traderCount: integer("trader_count").notNull(),
@@ -118,8 +133,9 @@ export const trades = pgTable(
     collateral: amount("collateral").notNull(),
     fee: amount("fee").notNull(),
     shares: amount("shares").notNull(),
-    poolYes: amount("pool_yes").notNull(),
-    poolNo: amount("pool_no").notNull(),
+    poolYes: amount("pool_yes"),
+    poolNo: amount("pool_no"),
+    /** Average YES-equivalent price of this trade (0..1). */
     priceYesAfter: doublePrecision("price_yes_after").notNull(),
     blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
     blockTime: timestamp("block_time", { withTimezone: true }).notNull(),
@@ -178,6 +194,139 @@ export const disputes = pgTable("disputes", {
   rulingRationaleUri: text("ruling_rationale_uri"),
   rulingTxHash: text("ruling_tx_hash"),
   txHash: text("tx_hash").notNull(),
+});
+
+// ───────────────────────────── Order book ─────────────────────────────
+
+/**
+ * Off-chain signed orders (EIP-712). The signature authorizes a fill up to `quantity` at `price`; it never
+ * moves funds by itself. Status is advisory for the book: the contract re-checks everything at settlement.
+ * open | filled | cancelled (on-chain) | expired | stale (maker lacks funds/approval) | removed (hidden by maker)
+ */
+export const orders = pgTable(
+  "orders",
+  {
+    hash: text("hash").primaryKey(),
+    chainId: integer("chain_id").notNull(),
+    exchange: text("exchange").notNull(),
+    marketId: integer("market_id").notNull(),
+    maker: text("maker").notNull(),
+    taker: text("taker").notNull(),
+    outcome: integer("outcome").notNull(), // 0 YES, 1 NO
+    side: integer("side").notNull(), // 0 buy, 1 sell
+    price: integer("price").notNull(), // cents 1..99
+    quantity: amount("quantity").notNull(),
+    filled: amount("filled").notNull().default("0"),
+    expiry: timestamp("expiry", { withTimezone: true }).notNull(),
+    nonce: amount("nonce").notNull(),
+    salt: amount("salt").notNull(),
+    signature: text("signature").notNull(),
+    status: text("status").notNull().default("open"),
+    statusReason: text("status_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("orders_book").on(t.marketId, t.status, t.outcome, t.side, t.price),
+    index("orders_maker").on(t.maker, t.status),
+  ],
+);
+
+/** Escrowed on-chain orders (seed commitments before graduation), rebuilt from events. */
+export const restingOrders = pgTable(
+  "resting_orders",
+  {
+    orderId: integer("order_id").primaryKey(),
+    marketId: integer("market_id").notNull(),
+    maker: text("maker").notNull(),
+    outcome: integer("outcome").notNull(),
+    side: integer("side").notNull(),
+    price: integer("price").notNull(),
+    quantity: amount("quantity").notNull(),
+    remaining: amount("remaining").notNull(),
+    seed: boolean("seed").notNull(),
+    /** open | filled | cancelled (cancelled after a failed seeding = refunded) */
+    status: text("status").notNull(),
+    placedAt: timestamp("placed_at", { withTimezone: true }).notNull(),
+    placedTx: text("placed_tx").notNull(),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    closedTx: text("closed_tx"),
+  },
+  (t) => [index("resting_market").on(t.marketId, t.status), index("resting_maker").on(t.maker)],
+);
+
+/** One row per on-chain Fill event (maker-level). The only source for prices and trade history. */
+export const fills = pgTable(
+  "fills",
+  {
+    eventId: integer("event_id")
+      .primaryKey()
+      .references(() => chainEvents.id, { onDelete: "cascade" }),
+    marketId: integer("market_id").notNull(),
+    orderRef: text("order_ref").notNull(),
+    resting: boolean("resting").notNull(),
+    maker: text("maker").notNull(),
+    taker: text("taker").notNull(),
+    makerOutcome: integer("maker_outcome").notNull(),
+    makerSide: integer("maker_side").notNull(),
+    makerPrice: integer("maker_price").notNull(),
+    quantity: amount("quantity").notNull(),
+    complement: boolean("complement").notNull(),
+    takerFee: amount("taker_fee").notNull(),
+    /** YES price in cents implied by this fill. */
+    yesPrice: integer("yes_price").notNull(),
+    blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
+    blockTime: timestamp("block_time", { withTimezone: true }).notNull(),
+    txHash: text("tx_hash").notNull(),
+  },
+  (t) => [index("fills_market_time").on(t.marketId, t.blockTime), index("fills_maker").on(t.maker), index("fills_taker").on(t.taker)],
+);
+
+/** The verified graduation snapshot, from the on-chain Graduated event. */
+export const marketGraduations = pgTable("market_graduations", {
+  marketId: integer("market_id").primaryKey(),
+  policyId: integer("policy_id").notNull(),
+  bestBid: integer("best_bid").notNull(),
+  bestAsk: integer("best_ask").notNull(),
+  bidDepth: amount("bid_depth").notNull(),
+  askDepth: amount("ask_depth").notNull(),
+  seeders: integer("seeders").notNull(),
+  blockTime: timestamp("block_time", { withTimezone: true }).notNull(),
+  txHash: text("tx_hash").notNull(),
+});
+
+/** On-chain policy versions (PolicyAdded / PolicyActiveSet). Immutable once added. */
+export const policies = pgTable("policies", {
+  policyId: integer("policy_id").primaryKey(),
+  params: jsonb("params").notNull(),
+  active: boolean("active").notNull(),
+  addedAt: timestamp("added_at", { withTimezone: true }).notNull(),
+  txHash: text("tx_hash").notNull(),
+});
+
+/** Incentive accruals and claims (rebates, referrals), from MezonkIncentives events. Amounts actually moved. */
+export const incentiveLedger = pgTable(
+  "incentive_ledger",
+  {
+    eventId: integer("event_id")
+      .primaryKey()
+      .references(() => chainEvents.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // rebate_accrued | rebate_claimed | rebates_swept | referral_accrued | referral_claimed | referrer_set
+    marketId: integer("market_id"),
+    account: text("account"),
+    counterparty: text("counterparty"),
+    amount: amount("amount").notNull().default("0"),
+    blockTime: timestamp("block_time", { withTimezone: true }).notNull(),
+    txHash: text("tx_hash").notNull(),
+  },
+  (t) => [index("incentive_account").on(t.account, t.kind), index("incentive_market").on(t.marketId)],
+);
+
+/** Durable one-shot flags (e.g. the admin bootstrap). A row's existence is the flag; inserts are atomic. */
+export const platformFlags = pgTable("platform_flags", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 /** Indexer cursor and health. One row per (chain, contract). */
@@ -466,9 +615,11 @@ export const roleOperations = pgTable(
   "role_operations",
   {
     id: text("id").primaryKey(),
-    fn: text("fn").notNull(), // setCreator | setCurator
+    fn: text("fn").notNull(), // setCreator | setCurator (factory) | addPolicy | setPolicyActive (exchange)
     target: text("target").notNull(),
     grant: boolean("grant").notNull(),
+    /** addPolicy: the policy struct (decimal strings); setPolicyActive: { policyId }. */
+    params: jsonb("params"),
     requestedBy: text("requested_by").notNull(),
     reason: text("reason").notNull().default(""),
     status: text("status").notNull().default("awaiting_signature"), // awaiting_signature | submitted | confirmed | failed

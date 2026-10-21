@@ -6,9 +6,16 @@ export interface MarketSummaryDto {
   question: string;
   category: string;
   structured: boolean;
-  priceYes: number;
-  priceYes24hAgo: number;
+  /** Last real fill's YES price (0..1); null if the market has never traded. Never a made-up number. */
+  priceYes: number | null;
+  priceYes24hAgo: number | null;
+  /** Executable top of book in YES cents (escrowed + signed); null when that side is empty. */
+  bestBid: number | null;
+  bestAsk: number | null;
+  /** Collateral notional resting on the book. */
   liquidity: string;
+  openInterest: string;
+  lowLiquidity: boolean;
   volume: string;
   volume24h: string;
   traders24h: number;

@@ -129,7 +129,7 @@ export function ProposalView({ id }: { id: string }) {
           </Notice>
         )}
         {p.status === "published" && p.marketId && (
-          <Notice tone="success" title={`Live as market #${p.marketId}`} action={<ButtonLink href={`/markets/${p.marketId}`} size="sm">Open the market</ButtonLink>}>
+          <Notice tone="success" title={`Published as market #${p.marketId}`} action={<ButtonLink href={`/markets/${p.marketId}`} size="sm">Open the market</ButtonLink>}>
             The rules below are hashed on-chain and can no longer change.
           </Notice>
         )}

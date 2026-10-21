@@ -465,7 +465,7 @@ export function SuggestWizard() {
             <Field label="Expected launch window (optional)" htmlFor="lw" hint="When it should go live, if that matters (e.g. 'before the announcement on 12 Nov').">
               <input id="lw" maxLength={200} value={f.launchWindow} onChange={(e) => set("launchWindow", e.target.value)} className={inputClass} />
             </Field>
-            <Field label="Liquidity (optional)" htmlFor="lp" hint="Who seeds the pool and roughly how much. Publishing requires an approved creator to seed MUSD.">
+            <Field label="Liquidity (optional)" htmlFor="lp" hint="Who you expect to commit seed orders, and roughly how much. The market only goes live once funded orders meet its launch policy.">
               <textarea id="lp" rows={2} maxLength={600} value={f.liquidityPlan} onChange={(e) => set("liquidityPlan", e.target.value)} className={inputClass} />
             </Field>
           </section>
@@ -529,7 +529,7 @@ export function SuggestWizard() {
                     <span className="tnum text-sm font-semibold">50%</span>
                     <ProbabilityBar priceYes={0.5} size="sm" className="flex-1" />
                   </div>
-                  <p className="mt-2 text-xs text-muted">Opening odds are set by the creator at publication.</p>
+                  <p className="mt-2 text-xs text-muted">There are no opening odds: the first prices come from real seed orders.</p>
                 </div>
                 <dl className="divide-y divide-line rounded-lg border border-line bg-surface px-4">
                   <KeyValue label="Trading closes">{close && formatDateTime(close)}</KeyValue>

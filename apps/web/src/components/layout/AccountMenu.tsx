@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/Button";
 import { ProfileEditor } from "@/features/profile/ProfileEditor";
 import { useMe, useSession } from "@/hooks/useSession";
 
-const ONBOARD_KEY = "mezonk:onboard-dismissed";
 
 /**
  * Sign-in and account actions. Connecting a wallet alone does not sign in: the user signs one message.
@@ -37,19 +36,6 @@ export function AccountMenu() {
     };
   }, [open]);
 
-  // Invite a new wallet to set up its profile, once.
-  useEffect(() => {
-    if (!session.signedIn || !me.data || me.data.profile?.username) return;
-    try {
-      if (sessionStorage.getItem(ONBOARD_KEY)) return;
-      sessionStorage.setItem(ONBOARD_KEY, "1");
-    } catch {
-      /* storage unavailable */
-    }
-    setFirstRun(true);
-    setEditing(true);
-  }, [session.signedIn, me.data]);
-
   if (!isConnected || !address) return null;
   if (!session.signedIn) {
     return (
@@ -67,10 +53,12 @@ export function AccountMenu() {
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="Account menu"
-        className="press rounded-full ring-offset-2 ring-offset-bg focus-visible:ring-2 focus-visible:ring-focus"
+        aria-label={p?.username ? "Your profile and settings" : "Your profile and settings (profile not set up)"}
+        className="press relative rounded-full ring-offset-2 ring-offset-bg focus-visible:ring-2 focus-visible:ring-focus"
       >
         <Avatar address={address} url={p?.avatarUrl} size={32} />
+        {/* A quiet nudge instead of a modal that interrupts whatever the user is doing. */}
+        {me.data && !p?.username && <span aria-hidden className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-accent ring-2 ring-bg" />}
       </button>
       {open && (
         <div role="menu" className="glass fade absolute right-0 top-11 z-[var(--z-dropdown)] w-64 overflow-hidden rounded-lg border shadow-3">

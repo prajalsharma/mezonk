@@ -7,11 +7,11 @@ import { ButtonLink } from "@/components/ui/Button";
 import { cx } from "@/components/ui/cx";
 import { Skeleton } from "@/components/ui/primitives";
 import { CategoryGlyph, MarketGrid, MarketStatusChip } from "@/components/markets/MarketCard";
-import { Change, ProbabilityBar } from "@/components/markets/Probability";
+import { Change, ProbabilityBar, SignalValue } from "@/components/markets/Probability";
 import { Sparkline } from "@/components/markets/Sparkline";
 import { useMarkets } from "@/hooks/useMarkets";
 import { type MarketSummaryDto, marketHref } from "@/lib/api/types";
-import { formatMusd, formatPrice, formatProb } from "@/lib/format";
+import { formatCents, formatMusd, marketSignal } from "@/lib/format";
 import { CATEGORIES, categoryLabel, type Category } from "@/lib/market/metadata";
 
 /** Picks the market to feature: most-traded open market, else newest open. Never invents one. */
@@ -66,18 +66,23 @@ export function HeroTicket() {
 
             <div className="flex items-end justify-between">
               <p className="flex items-baseline gap-2">
-                <span className="mono text-5xl font-semibold tracking-tight">{formatProb(m.priceYes)}</span>
-                <span className="text-sm text-muted">chance of Yes</span>
+                <SignalValue m={m} className="mono text-5xl font-semibold tracking-tight" />
+                <span className="text-sm text-muted">{m.priceYes != null ? "last trade" : marketSignal(m).kind === "indicative" ? "book midpoint" : "no trades yet"}</span>
               </p>
-              <span className="mono text-sm">
-                <Change from={m.priceYes24hAgo} to={m.priceYes} /> <span className="text-muted">24h</span>
-              </span>
+              {m.priceYes != null && m.priceYes24hAgo != null && (
+                <span className="mono text-sm">
+                  <Change from={m.priceYes24hAgo} to={m.priceYes} /> <span className="text-muted">24h</span>
+                </span>
+              )}
             </div>
 
             <div className="rounded-md border border-line bg-sunk/60 px-2 pt-2">
               <Sparkline marketId={m.id} height={88} />
             </div>
-            <ProbabilityBar priceYes={m.priceYes} />
+            {(() => {
+              const sig = marketSignal(m);
+              return sig.kind === "none" ? null : <ProbabilityBar priceYes={sig.p} />;
+            })()}
 
             <div className="grid grid-cols-2 gap-2">
               <Link
@@ -85,19 +90,19 @@ export function HeroTicket() {
                 className="press flex h-12 items-center justify-between rounded-md bg-yes px-4 font-semibold text-on-yes shadow-[0_10px_30px_-12px_var(--accent)] transition-[filter] hover:brightness-110"
               >
                 <span>Buy Yes</span>
-                <span className="mono">{formatPrice(m.priceYes)}</span>
+                <span className="mono">{m.bestAsk != null ? formatCents(m.bestAsk) : "no offers"}</span>
               </Link>
               <Link
                 href={marketHref(m, "no")}
                 className="press flex h-12 items-center justify-between rounded-md bg-no px-4 font-semibold text-on-no transition-[filter] hover:brightness-110"
               >
                 <span>Buy No</span>
-                <span className="mono">{formatPrice(1 - m.priceYes)}</span>
+                <span className="mono">{m.bestBid != null ? formatCents(100 - m.bestBid) : "no offers"}</span>
               </Link>
             </div>
             <p className="mono flex flex-wrap justify-between gap-2 text-[11px] text-muted">
-              <span>{m.tradeCount ? `${formatMusd(m.volume, { compact: true })} MUSD traded · ${m.tradeCount} trades` : "No trades yet · opening odds"}</span>
-              <span>Prices in MUSD per share · pays 1 MUSD if right</span>
+              <span>{m.tradeCount ? `${formatMusd(m.volume, { compact: true })} MUSD traded · ${m.tradeCount} trades` : "No trades yet"}</span>
+              <span>Prices in cents per share · a winning share pays 1 MUSD</span>
             </p>
           </div>
         )}

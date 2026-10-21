@@ -4,7 +4,7 @@ import Link from "next/link";
 import { marketHref } from "@/lib/api/types";
 import type { CSSProperties } from "react";
 import { useMarkets } from "@/hooks/useMarkets";
-import { formatProb } from "@/lib/format";
+import { SignalValue } from "./Probability";
 import { Change } from "./Probability";
 
 /**
@@ -32,10 +32,12 @@ export function Ticker() {
             className="flex items-center gap-3 border-r border-line px-5 py-3 text-sm transition-colors hover:bg-surface-2"
           >
             <span className="max-w-[26ch] truncate text-ink-2">{m.question}</span>
-            <span className="mono font-semibold text-ink">{formatProb(m.priceYes)}</span>
-            <span className="mono text-xs">
-              <Change from={m.priceYes24hAgo} to={m.priceYes} />
-            </span>
+            <SignalValue m={m} className="mono font-semibold text-ink" />
+            {m.priceYes != null && m.priceYes24hAgo != null && (
+              <span className="mono text-xs">
+                <Change from={m.priceYes24hAgo} to={m.priceYes} />
+              </span>
+            )}
           </Link>
         ))}
       </div>

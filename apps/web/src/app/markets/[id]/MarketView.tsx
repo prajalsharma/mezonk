@@ -11,21 +11,24 @@ import { ButtonLink } from "@/components/ui/Button";
 import { EmptyState, KeyValue, Notice, Skeleton } from "@/components/ui/primitives";
 import { ActivityList } from "@/components/markets/ActivityList";
 import { PriceChart } from "@/components/markets/PriceChart";
-import { Change, LiveProbability, ProbabilityBar } from "@/components/markets/Probability";
+import { Change, ProbabilityBar } from "@/components/markets/Probability";
 import { CategoryGlyph } from "@/components/markets/MarketCard";
 import { UserChip, type PublicPerson } from "@/components/profile/UserChip";
 import { Discussion } from "@/features/comments/Discussion";
 import { cx } from "@/components/ui/cx";
 import { RulesPanel } from "@/components/markets/RulesPanel";
 import { StageStatus } from "@/components/markets/StageStatus";
-import { TradePanel } from "@/components/trading/TradePanel";
+import { TradeTicket } from "@/features/trading/TradeTicket";
+import { OrderBook } from "@/features/trading/OrderBook";
+import { SeedingPanel } from "@/features/trading/SeedingPanel";
+import { MyOrders, PositionCard, RecentFills } from "@/features/trading/Positions";
+import { useBook, useSeeding } from "@/features/trading/api";
 import { ResolutionPanel } from "@/features/resolution/ResolutionPanel";
 import { useMarketChain } from "@/hooks/useMarketChain";
 import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
 import { apiGet, type EventDto } from "@/lib/api/types";
 import { deployment } from "@/lib/chain/config";
-import { formatDateTime, formatMusd, formatPrice, formatShares, relativeTime } from "@/lib/format";
-import { quoteSell } from "@/lib/market/math";
+import { formatDateTime, formatMusd, formatProb, relativeTime } from "@/lib/format";
 import { categoryLabel, parseMetadata, type Category } from "@/lib/market/metadata";
 import { deriveStage } from "@/lib/market/stage";
 
@@ -41,7 +44,7 @@ export interface IndexedMarket {
   volume: string;
   tradeCount: number;
   traderCount: number;
-  priceYes24hAgo: number;
+  priceYes24hAgo: number | null;
   presentation: {
     creator: PublicPerson;
     suggestedBy: PublicPerson | null;
@@ -82,6 +85,10 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
   useEffect(() => add(id), [id, add]);
   const meta = useMemo(() => (indexed ? parseMetadata(indexed.metadataRaw) : null), [indexed]);
   const m = chain.market;
+  const raw = chain.raw;
+  const [preset, setPreset] = useState<{ action: "buy" | "sell"; price: number; nonce: number } | null>(null);
+  const book = useBook(id, !!raw && chain.exStage !== 0 && chain.exStage !== 2);
+  const seeding = useSeeding(id, chain.exStage === 0 || chain.exStage === 2);
   // Stage labels use chain time (latest block), matching how the contract decides stages.
   const block = useBlock({ chainId: deployment.chainId, watch: true, query: { enabled: deployment.ready } });
   const chainNowMs = block.data ? Number(block.data.timestamp) * 1000 : Date.now();
@@ -104,10 +111,11 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
     );
   }
 
-  const priceYes = m ? Number((m.poolNo * 1_000_000n) / (m.poolYes + m.poolNo || 1n)) / 1e6 : null;
-  const stage = m
+  const stage = m && raw
     ? deriveStage({
         closeTime: new Date(Number(m.closeTime) * 1000),
+        seedingDeadline: new Date(Number(raw.seedingDeadline) * 1000),
+        graduatedAt: raw.graduatedAt > 0n ? new Date(Number(raw.graduatedAt) * 1000) : null,
         proposalWindow: m.proposalWindow,
         proposedAt: m.proposedAt ? new Date(Number(m.proposedAt) * 1000) : null,
         challengeDeadline: m.proposedAt ? new Date(Number(m.proposedAt + BigInt(m.challengeWindow)) * 1000) : null,
@@ -116,12 +124,19 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
         finalOutcome: m.finalized ? m.finalOutcome : null,
       }, chainNowMs)
     : null;
+  const preLaunch = stage?.stage === "seeding" || stage?.stage === "failed";
+  const bk = book.data;
+  // One number with provenance: last real trade, else indicative midpoint, else nothing.
+  const priceYes = bk?.lastPrice != null ? bk.lastPrice / 100 : null;
+  const indicative = priceYes == null && bk?.mid != null ? bk.mid / 100 : null;
+  const shown = priceYes ?? indicative;
   const question = indexed?.question ?? `Market #${id}`;
   const rules = indexed ? (
-    <RulesPanel meta={meta} raw={indexed.metadataRaw} onchainHash={m?.metadataHash ?? indexed.metadataHash} closeTime={new Date(Number(m?.closeTime ?? 0n) * 1000)} />
+    <RulesPanel meta={meta} raw={indexed.metadataRaw} onchainHash={raw?.metadataHash ?? indexed.metadataHash} closeTime={new Date(Number(m?.closeTime ?? 0n) * 1000)} />
   ) : null;
 
   const sections: Array<[string, string]> = [
+    ...(!preLaunch ? ([["book", "Book"]] as Array<[string, string]>) : []),
     ["chart", "Chart"],
     ...(indexed ? ([["rules", "Rules"]] as Array<[string, string]>) : []),
     ["resolution", "Resolution"],
@@ -131,6 +146,23 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
   ];
   const open = stage?.stage === "open";
   const pres = indexed?.presentation ?? null;
+  const minRest = seeding.data?.policy.minRest ?? 3600;
+  const sidebar = preLaunch ? (
+    <SeedingPanel marketId={id} chain={chain} chainNowMs={chainNowMs} />
+  ) : (
+    <>
+      {open ? (
+        <TradeTicket marketId={id} chain={chain} side={side} onSideChange={setSide} preset={preset} />
+      ) : stage ? (
+        <div className="panel space-y-1 p-5 text-sm">
+          <p className="font-medium text-ink">Trading has closed</p>
+          <p className="text-ink-2">Positions settle by the resolution process on this page. Open orders can be cancelled below.</p>
+        </div>
+      ) : null}
+      <MyOrders marketId={id} chainNowMs={chainNowMs} minRest={minRest} graduatedAtMs={Number(raw?.graduatedAt ?? 0n) * 1000} />
+      <PositionCard marketId={id} chain={chain} />
+    </>
+  );
   const cover = pres?.media.find((x) => x.role === "cover") ?? null;
   const gallery = pres?.media.filter((x) => x.role === "context") ?? [];
 
@@ -194,13 +226,23 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
                   </span>
                 </div>
               )}
-              {priceYes === null ? (
+              {!raw ? (
                 <Skeleton className="h-28 w-full" />
+              ) : preLaunch ? (
+                <div className="rounded-md border border-line bg-surface p-4 md:p-5">
+                  <p className="text-lg font-semibold">{stage?.stage === "failed" ? "Didn't launch" : "Seeding · not trading yet"}</p>
+                  <p className="mt-1 text-sm text-ink-2">
+                    {stage?.stage === "failed"
+                      ? "Not enough funded orders arrived in time. No trades happened; every seeder can take their deposit back."
+                      : `This market goes live once enough funded orders sit on both sides. ${seeding.data ? `Now: Yes bid ${seeding.data.check.bestBid || "—"}¢ · ask ${seeding.data.check.bestAsk || "—"}¢ · ${seeding.data.check.seeders} seeders.` : ""}`}
+                  </p>
+                </div>
               ) : (
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-2 md:gap-3">
                     {(["yes", "no"] as const).map((s) => {
-                      const p = s === "yes" ? priceYes : 1 - priceYes;
+                      const buyAt = !bk ? null : s === "yes" ? bk.bestAsk : bk.bestBid == null ? null : 100 - bk.bestBid;
+                      const sellAt = !bk ? null : s === "yes" ? bk.bestBid : bk.bestAsk == null ? null : 100 - bk.bestAsk;
                       const active = open && side === s;
                       return (
                         <button
@@ -219,21 +261,25 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
                               : "border-line bg-surface hover:border-ink-2/40",
                           )}
                         >
-                          <span className={cx("text-sm font-semibold", s === "yes" ? "text-yes-text" : "text-no-text")}>
-                            {s === "yes" ? "Yes" : "No"}
+                          <span className={cx("text-sm font-semibold", s === "yes" ? "text-yes-text" : "text-no-text")}>{s === "yes" ? "Yes" : "No"}</span>
+                          <span className="mono mt-1 block text-3xl font-semibold tracking-tight text-ink md:text-4xl">{buyAt != null ? `${buyAt}¢` : "—"}</span>
+                          <span className="mono mt-1 block text-xs text-muted">
+                            {buyAt != null ? "best offer to buy" : "no one selling"} · {sellAt != null ? `sell at ${sellAt}¢` : "no buyers"}
                           </span>
-                          <span className="mono mt-1 block text-4xl font-semibold tracking-tight text-ink md:text-5xl">
-                            <LiveProbability value={p} />
-                          </span>
-                          <span className="mono mt-1 block text-xs text-muted">{formatPrice(p)} MUSD per share</span>
                         </button>
                       );
                     })}
                   </div>
-                  <ProbabilityBar priceYes={priceYes} size="lg" />
+                  {shown != null && <ProbabilityBar priceYes={shown} size="lg" />}
                   <p className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-                    <span>The price of a Yes share in MUSD is the market&apos;s implied probability. It is not a guarantee.</span>
-                    {indexed && (
+                    <span>
+                      {priceYes != null
+                        ? `Last trade: Yes at ${formatProb(priceYes)}. A price, not a guarantee.`
+                        : indicative != null
+                          ? `No trades yet. Book midpoint ~${formatProb(indicative)} (indicative, not a trade).`
+                          : "No trades yet and no two-sided book: there is no price."}
+                    </span>
+                    {indexed && priceYes != null && indexed.priceYes24hAgo != null && (
                       <span className="mono">
                         <Change from={indexed.priceYes24hAgo} to={priceYes} /> 24h
                       </span>
@@ -245,10 +291,21 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
               <dl className="mono grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-5">
                 {[
                   ["Volume", indexed ? `${formatMusd(indexed.volume, { compact: true })}` : "—"],
-                  ["Collateral", m ? formatMusd(m.collateral, { compact: true }) : "—"],
+                  ["Open interest", raw ? formatMusd(raw.collateral, { compact: true }) : "—"],
+                  [
+                    "Spread",
+                    preLaunch
+                      ? seeding.data && seeding.data.check.bestBid > 0 && seeding.data.check.bestAsk > 0 && stage?.stage === "seeding"
+                        ? `${seeding.data.check.bestAsk - seeding.data.check.bestBid}¢`
+                        : "—"
+                      : bk?.spread != null
+                        ? `${bk.spread}¢`
+                        : "—",
+                  ],
                   ["Traders", String(indexed?.traderCount ?? "—")],
-                  ["Fee", m ? `${m.feeBps / 100}%` : "—"],
-                  [open || !m ? "Closes" : "Closed", m ? relativeTime(Number(m.closeTime) * 1000, chainNowMs) : "—"],
+                  preLaunch
+                    ? ["Seeding ends", raw ? relativeTime(Number(raw.seedingDeadline) * 1000, chainNowMs) : "—"]
+                    : [open || !m ? "Closes" : "Closed", m ? relativeTime(Number(m.closeTime) * 1000, chainNowMs) : "—"],
                 ].map(([k, v], i) => (
                   <div key={k} className={cx("bg-surface px-3 py-2.5", i === 4 && "col-span-2 sm:col-span-1")}>
                     <dt className="label">{k}</dt>
@@ -259,11 +316,8 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
             </div>
           </header>
 
-          {/* On small screens the trade ticket follows the odds directly. */}
-          <div className="space-y-4 lg:hidden">
-            <TradePanel marketId={id} chain={chain} side={side} onSideChange={setSide} />
-            <PositionCard chain={chain} />
-          </div>
+          {/* On small screens the ticket follows the odds directly. */}
+          <div className="space-y-4 lg:hidden">{sidebar}</div>
 
           <nav aria-label="On this page" className="glass sticky top-[4.75rem] z-[var(--z-dropdown)] -mx-1 flex gap-1 overflow-x-auto rounded-md border p-1">
             {sections.map(([h, l]) => (
@@ -272,6 +326,19 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
               </a>
             ))}
           </nav>
+
+          {!preLaunch && (
+            <section id="book" aria-label="Order book" className="panel scroll-mt-32 grid gap-6 p-5 md:grid-cols-[1.4fr_1fr]">
+              <OrderBook
+                marketId={id}
+                onPick={(p) => {
+                  setSide(p.outcome === 0 ? "yes" : "no");
+                  setPreset({ action: p.side === 0 ? "buy" : "sell", price: p.price, nonce: Date.now() });
+                }}
+              />
+              <RecentFills marketId={id} />
+            </section>
+          )}
 
           <section id="chart" aria-label="Price history" className="panel scroll-mt-32 p-5">
             {indexed ? <PriceChart marketId={id} /> : <p className="text-sm text-muted">Price history needs the market index, which is unavailable.</p>}
@@ -321,72 +388,23 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
             <h2 id="contract" className="text-xl font-semibold">On-chain details</h2>
             <dl className="divide-y divide-line">
               <KeyValue label="Market id">#{id}</KeyValue>
-              <KeyValue label="Contract"><Address address={deployment.marketsAddress!} label="Contract" /></KeyValue>
+              <KeyValue label="Exchange"><Address address={deployment.marketsAddress!} label="Exchange" /></KeyValue>
+              <KeyValue label="Resolution"><Address address={deployment.resolutionAddress!} label="Resolution" /></KeyValue>
+              {raw && <KeyValue label="Policy">#{raw.policyId} (graduation and fee terms fixed at publication)</KeyValue>}
               <KeyValue label="Collateral token"><Address address={deployment.musd} label="MUSD" /></KeyValue>
               {m && <KeyValue label="Creator"><Address address={m.creator} you={chain.account} label="Creator" /></KeyValue>}
               {indexed && <KeyValue label="Created">{formatDateTime(new Date(indexed.createdAt))}</KeyValue>}
               {indexed && <KeyValue label="Creation tx"><TxLink hash={indexed.createdTx} /></KeyValue>}
-              {m && <KeyValue label="Pool (Yes / No shares)">{formatShares(m.poolYes)} / {formatShares(m.poolNo)}</KeyValue>}
+              {raw && <KeyValue label="Collateral backing shares">{formatMusd(raw.collateral)} MUSD</KeyValue>}
               {m && stage?.stage === "open" && <KeyValue label="Trading closes">{formatDateTime(Number(m.closeTime) * 1000)}</KeyValue>}
             </dl>
           </section>
         </div>
 
         <aside className="hidden lg:block">
-          <div className="sticky top-[4.75rem] space-y-3">
-            <TradePanel marketId={id} chain={chain} side={side} onSideChange={setSide} />
-            <PositionCard chain={chain} />
-          </div>
+          <div className="sticky top-[4.75rem] space-y-3">{sidebar}</div>
         </aside>
       </div>
     </div>
-  );
-}
-
-/** The connected wallet's shares, read from the contract, with what they'd fetch if sold now. */
-function PositionCard({ chain }: { chain: ReturnType<typeof useMarketChain> }) {
-  const m = chain.market;
-  if (!chain.account || !m || chain.yes + chain.no === 0n) return null;
-  const pool = { yes: m.poolYes, no: m.poolNo };
-  const exit = (side: "yes" | "no", s: bigint) => {
-    if (s === 0n || m.finalized) return null;
-    try {
-      return quoteSell(pool, side, s, m.feeBps).out;
-    } catch {
-      return null;
-    }
-  };
-  const rows = [
-    { side: "yes" as const, shares: chain.yes },
-    { side: "no" as const, shares: chain.no },
-  ].filter((r) => r.shares > 0n);
-  return (
-    <section aria-label="Your position" className="panel p-5">
-      <h2 className="text-base font-semibold">Your position</h2>
-      <dl className="mt-2 divide-y divide-line">
-        {rows.map((r) => {
-          const v = exit(r.side, r.shares);
-          return (
-            <div key={r.side} className="py-2 text-sm">
-              <div className="flex justify-between">
-                <dt className={r.side === "yes" ? "font-semibold text-yes-text" : "font-semibold text-no-text"}>{r.side === "yes" ? "Yes" : "No"}</dt>
-                <dd className="mono">{formatShares(r.shares)} shares</dd>
-              </div>
-              <div className="flex justify-between text-ink-2">
-                <span>Pays if it wins</span>
-                <span className="tnum">{formatMusd(r.shares)} MUSD</span>
-              </div>
-              {v !== null && (
-                <div className="flex justify-between text-ink-2">
-                  <span>Sell now for</span>
-                  <span className="tnum">{formatMusd(v)} MUSD</span>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </dl>
-      <p className="mt-2 text-xs text-muted">Read live from the contract.</p>
-    </section>
   );
 }

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addr, call, chainNow, connect, read } from "./chain";
+import { addr, callFactory, chainNow, connect, read, readFactory } from "./chain";
 import { toContractApproval, type StoredApproval } from "../../src/lib/governance/approval";
 import { serializeMetadata, type MarketMetadata } from "../../src/lib/market/metadata";
 
@@ -97,36 +97,36 @@ test.describe("governed market creation", () => {
     await alice.goto(`/proposals/${id}`);
     await connect(alice, "alice");
     await expect(alice.getByText("Waiting for the publisher")).toBeVisible();
-    await expect(alice.getByRole("button", { name: /Publish ·/ })).toHaveCount(0);
+    await expect(alice.getByRole("button", { name: "Publish and start seeding" })).toHaveCount(0);
     const params = {
       metadata: serializeMetadata(detail.proposal.metadata as MarketMetadata),
       closeTime: BigInt(approval.closeTime),
       resolver: approval.resolver,
-      initialLiquidity: 100n * 10n ** 18n,
-      initialYesProbBps: 5000,
+      policyId: Number(approval.policyId),
     };
-    await expect(call("alice", "createMarket", [params, toContractApproval(approval), approval.curator, approval.signature])).rejects.toThrow();
+    await expect(callFactory("alice", "createMarket", [params, toContractApproval(approval), approval.curator, approval.signature])).rejects.toThrow();
 
-    // 4. The publisher seeds and publishes; the contract verifies the signature.
+    // 4. The publisher publishes (gas only); the factory verifies the signature and the market starts seeding.
     const before = await read<bigint>("marketCount", []);
     await creator.goto(`/proposals/${id}`);
     await connect(creator, "creator");
     await expect(creator.getByRole("heading", { name: "Publish this market" })).toBeVisible();
-    await creator.getByRole("button", { name: /Publish · 100.00 MUSD/ }).click();
-    await expect(creator.getByText(/Market #\d+ is live/)).toBeVisible({ timeout: 90_000 });
+    await creator.getByRole("button", { name: "Publish and start seeding" }).click();
+    await expect(creator.getByText(/Market #\d+ is published and seeding/)).toBeVisible({ timeout: 90_000 });
     const marketId = await read<bigint>("marketCount", []);
     expect(marketId).toBe(before + 1n);
     const m = await read<{ metadataHash: string; creator: string; resolver: string }>("getMarket", [marketId]);
     expect(m.metadataHash.toLowerCase()).toBe(approval.metadataHash.toLowerCase());
     expect(m.creator.toLowerCase()).toBe(addr("creator").toLowerCase());
     expect(m.resolver.toLowerCase()).toBe(addr("resolver").toLowerCase());
-    expect(await read<boolean>("approvalUsed", [approval.nonce])).toBe(true);
+    expect(await readFactory<boolean>("approvalUsed", [approval.nonce])).toBe(true);
+    expect(await read<number>("stageOf", [marketId])).toBe(0); // seeding, not live
 
     // 5. The indexer links MarketApprovalUsed back to the suggestion; replaying the approval reverts.
     await waitStatus(id, "published");
     await visitor.reload();
-    await expect(visitor.getByText(`Live as market #${marketId}`)).toBeVisible();
-    await expect(call("creator", "createMarket", [params, toContractApproval(approval), approval.curator, approval.signature])).rejects.toThrow();
+    await expect(visitor.getByText(`Published as market #${marketId}`)).toBeVisible();
+    await expect(callFactory("creator", "createMarket", [params, toContractApproval(approval), approval.curator, approval.signature])).rejects.toThrow();
   });
 
   test("curators can request changes with a public reason and the author resubmits a new version", async ({ browser }) => {

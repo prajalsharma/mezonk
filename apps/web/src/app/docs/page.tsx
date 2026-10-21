@@ -48,9 +48,9 @@ export default function DocsPage() {
 
         <H id="how">How a market works</H>
         <ol className="list-decimal space-y-2 pl-5">
-          <li><strong>Someone creates a market</strong> with a yes/no question, exact rules, a source, and a close time. They seed the pool with MUSD.</li>
-          <li><strong>You buy Yes or No shares.</strong> A share&apos;s price is between 0 and 1 MUSD and reflects the market&apos;s current estimate of the chance.</li>
-          <li><strong>You can sell back</strong> to the pool any time before trading closes.</li>
+          <li><strong>A reviewed market is published into seeding</strong> with a yes/no question, exact rules, a source, a close time and a launch policy.</li>
+          <li><strong>Seeders commit funded orders.</strong> Their MUSD is locked in the contract. The market goes live only when the contract sees enough depth on both sides, a narrow spread and enough separate seeders. If that doesn&apos;t happen by the deadline, every seeder takes their deposit back.</li>
+          <li><strong>You buy or sell Yes and No shares</strong> against other people&apos;s orders, at 1¢ to 99¢ per share. MEZONK never takes the other side of a trade.</li>
           <li><strong>After close, the outcome is proposed</strong> by the market&apos;s resolver, with evidence. Anyone can challenge it during the challenge window.</li>
           <li><strong>Once final, winning shares redeem for 1 MUSD each.</strong> No deadline to claim.</li>
         </ol>
@@ -69,12 +69,19 @@ export default function DocsPage() {
           </p>
         )}
 
-        <H id="pricing">Prices and payouts</H>
+        <H id="pricing">Prices, orders and payouts</H>
         <p>
-          Each market runs an automated pool holding Yes and No shares. Every Yes/No pair is backed by exactly 1 MUSD in the contract.
-          When you buy Yes, your MUSD mints new pairs; the pool keeps the No half and gives you Yes shares. Buying pushes the Yes price up,
-          so large trades get a worse average price. The trade panel shows the average price, the price impact and the minimum you&apos;ll accept.
+          Every Yes/No pair is backed by exactly 1 MUSD held by the exchange contract. Shares only come into existence when someone locks that
+          MUSD: by splitting 1 MUSD into 1 Yes + 1 No, or when a Yes buyer at 60¢ and a No buyer at 40¢ are matched, together paying exactly 1 MUSD
+          for a new pair. Because of that, every winning share is paid from money already in the contract. Nobody, including MEZONK, pays winners
+          out of pocket.
         </p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li><strong>Market order:</strong> fills now against the best offers, never past your price limit. Whatever can&apos;t fill at that price is cancelled.</li>
+          <li><strong>Limit order:</strong> fills what it can now, and the rest waits on the book at your price. You choose to sign it (free, funds stay in your wallet) or escrow it on-chain (funds locked, always executable).</li>
+          <li><strong>If everyone wants Yes</strong> and nobody offers it, nothing fills. The ticket says so; you can raise your limit or wait. No shares are invented.</li>
+          <li><strong>Prices:</strong> the only price shown as a price is the last real trade. The middle of the book is labelled indicative. A market with no trades shows no number.</li>
+        </ul>
         <h3>What a share pays</h3>
         <ul className="list-disc space-y-1 pl-5">
           <li>Your side wins: <strong>1 MUSD per share</strong>.</li>
@@ -82,8 +89,8 @@ export default function DocsPage() {
           <li>The market is ruled <strong>Invalid</strong>: <strong>0.5 MUSD per share</strong> of either side.</li>
         </ul>
         <p>
-          Example: Yes costs 0.40. You spend 40 MUSD and get about 99 shares after the fee and price movement. If Yes wins, they pay 99 MUSD.
-          If No wins, they pay nothing. If Invalid, 49.5 MUSD.
+          Example: you buy 100 Yes at 40¢. You pay 40 MUSD plus the taker fee. If Yes wins, they pay 100 MUSD. If No wins, they pay nothing.
+          If Invalid, 50 MUSD.
         </p>
 
         <H id="resolution">Resolution and disputes</H>
@@ -111,7 +118,9 @@ export default function DocsPage() {
           <li>Anyone with a wallet can suggest a market: a question with a number or date, and rules a stranger would apply the same way.</li>
           <li>A curator reviews it against the market policy and a public checklist. Every decision and reason is visible on the suggestion&apos;s page.</li>
           <li>Approval is a signature from the curator&apos;s wallet. The contract refuses to create a market without a valid, unused, unexpired one, and the curator can never be the publisher.</li>
-          <li>An approved creator publishes it and seeds the pool. Their liquidity trades against everyone: at settlement they withdraw what the pool holds at the final rate, which can be less than they deposited. They earn the creator share of every trading fee.</li>
+          <li>An approved creator publishes it. That starts seeding; it does not make the market tradable, and the creator doesn&apos;t have to put up money.</li>
+          <li>Anyone can seed. A seed order is a real offer: once the market is live it can fill, and the seeder then holds that side and can lose it. Seeders share part of the taker fees for a while after launch, paid only from fees actually collected and capped per wallet. It is not interest and not guaranteed.</li>
+          <li>Referrers earn part of the fees paid by people they bring, from those people&apos;s real trades only, capped per market.</li>
           <li>Once published, rules are hashed on-chain and can never be edited, so ambiguity hurts everyone.</li>
         </ul>
         <p>
@@ -136,7 +145,7 @@ export default function DocsPage() {
           <li>Outcomes depend on the resolver, challengers and the arbitrator acting honestly and on time.</li>
           <li>The contracts are <strong>not audited</strong>. Bugs could lose funds.</li>
           <li>MUSD is a stablecoin with its own risks. Mezo is a young network.</li>
-          <li>Thin markets move a lot on small trades; check the price impact before you confirm.</li>
+          <li>Thin books fill only partly: the ticket shows how much fills at your price before you confirm. Seeding and liquidity provision can lose money.</li>
           <li>Nothing on MEZONK is financial advice.</li>
         </ul>
 

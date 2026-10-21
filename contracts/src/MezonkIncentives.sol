@@ -72,7 +72,10 @@ contract MezonkIncentives is ReentrancyGuard {
         if (msg.sender != address(exchange)) revert NotExchange();
         IMezonkExchange.Market memory m = exchange.getMarket(marketId);
         IMezonkExchange.Policy memory p = exchange.getPolicy(m.policyId);
-        if (block.timestamp < uint256(m.graduatedAt) + p.rebatePeriod && exchange.totalSeedWeight(marketId) > 0) {
+        if (
+            block.timestamp < uint256(m.graduatedAt) + p.rebatePeriod
+                && exchange.totalSeedWeight(marketId) > 0
+        ) {
             rebatePart = (fee * p.rebateShareBps) / 10_000;
             rebatePart = _min(rebatePart, p.rebateCapPerMarket - rebateAccrued[marketId]);
             rebatePart = _min(rebatePart, p.rebateBudget - policyRebateAccrued[m.policyId]);

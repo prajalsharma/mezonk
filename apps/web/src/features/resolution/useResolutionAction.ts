@@ -55,12 +55,13 @@ export function useResolutionAction(marketId: number, onDone: (c?: Confirmed) =>
   }
 
   async function ensureAllowance(amount: bigint) {
-    if (amount === 0n || !address || !deployment.marketsAddress || !client) return true;
+    // Bonds are held by MezonkResolution, so that is the spender (not the exchange).
+    if (amount === 0n || !address || !deployment.resolutionAddress || !client) return true;
     const allowance = await client.readContract({
       address: deployment.musd,
       abi: erc20Abi,
       functionName: "allowance",
-      args: [address, deployment.marketsAddress],
+      args: [address, deployment.resolutionAddress],
     });
     if (allowance >= amount) return true;
     return tx.run({
@@ -70,7 +71,7 @@ export function useResolutionAction(marketId: number, onDone: (c?: Confirmed) =>
           address: deployment.musd,
           abi: erc20Abi,
           functionName: "approve",
-          args: [deployment.marketsAddress!, amount],
+          args: [deployment.resolutionAddress!, amount],
           chainId: deployment.chainId,
         }),
     });

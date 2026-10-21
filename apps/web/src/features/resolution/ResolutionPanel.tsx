@@ -28,7 +28,9 @@ const d = (s: bigint) => new Date(Number(s) * 1000);
 function lifecycle(stage: number, p: Permissions, finalOutcome: number) {
   switch (stage) {
     case CHAIN_STAGE.Open:
-      return { tone: "yes" as const, label: "Open", sub: "Trading is live." };
+      return { tone: "yes" as const, label: "Live", sub: "Trading is open." };
+    case CHAIN_STAGE.NotLive:
+      return { tone: "muted" as const, label: "Not launched", sub: "Nothing to resolve: the market is seeding or didn't launch." };
     case CHAIN_STAGE.Closed:
       return p.finalize.available || p.finalize.needsWallet
         ? { tone: "warn" as const, label: "Closed · no proposal in time", sub: "Can be finalized as Invalid." }
@@ -137,10 +139,6 @@ export function ResolutionPanel({
     claims.push(
       <ClaimButton key="r" fn="redeem" marketId={marketId} account={address} avail={p.redeem} amount={p.redeem.payout} title={p.redeem.kind === "refund" ? "Claim refund" : "Claim payout"} details={<RedeemDetails outcome={m.finalOutcome} yes={chain.yes} no={chain.no} />} onDone={refreshAll} />,
     );
-  if (p.claimLiquidity.available || (p.roles.includes("creator") && m.finalized && !m.liquidityClaimed))
-    claims.push(<ClaimButton key="l" fn="claimLiquidity" variant="secondary" marketId={marketId} account={address} avail={p.claimLiquidity} amount={p.claimLiquidity.payout} title="Withdraw pool liquidity" details={<KeyValue label="Pool shares redeemed">At the final outcome rate</KeyValue>} onDone={refreshAll} />);
-  if (p.claimFees.available)
-    claims.push(<ClaimButton key="f" fn="claimCreatorFees" variant="secondary" marketId={marketId} account={address} avail={p.claimFees} amount={p.claimFees.amount} title="Claim creator fees" details={<KeyValue label="Source">Creator share of trading fees</KeyValue>} onDone={refreshAll} />);
   if (p.withdrawBond.available)
     claims.push(<ClaimButton key="b" fn="withdrawBond" variant="secondary" marketId={marketId} account={address} avail={p.withdrawBond} amount={p.withdrawBond.amount} title="Withdraw bonds" details={<KeyValue label="Covers">All bonds returned or won, across markets</KeyValue>} onDone={refreshAll} />);
 
@@ -224,7 +222,7 @@ export function ResolutionPanel({
           <KeyValue label="Arbitration window">{formatDuration(m.arbitrationWindow)}</KeyValue>
           <KeyValue label="Proposal bond">{formatMusd(m.proposerBond)} MUSD</KeyValue>
           <KeyValue label="Challenge bond">{formatMusd(m.disputeBond)} MUSD</KeyValue>
-          <KeyValue label="Trading fee">{m.feeBps / 100}% · claims are free</KeyValue>
+          <KeyValue label="Claims">Free: no fee on redemptions, refunds or bond withdrawals</KeyValue>
         </dl>
         <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-ink-2">
           <li>No proposal in time, or no ruling in time: the market settles as Invalid and every share redeems for 0.5 MUSD.</li>

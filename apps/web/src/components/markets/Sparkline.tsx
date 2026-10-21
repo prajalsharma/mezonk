@@ -6,8 +6,8 @@ import { apiGet } from "@/lib/api/types";
 import { formatProb } from "@/lib/format";
 
 /**
- * Real YES-probability history for one market as a step line. Draws nothing it doesn't have:
- * with no trades it shows the flat opening price and says so.
+ * Real YES-probability history for one market as a step line, one point per confirmed fill.
+ * Draws nothing it doesn't have: with no trades it draws nothing.
  */
 export function Sparkline({ marketId, height = 96, className }: { marketId: number; height?: number; className?: string }) {
   const gid = useId().replace(/:/g, "");
@@ -32,7 +32,7 @@ export function Sparkline({ marketId, height = 96, className }: { marketId: numb
   });
   d += ` H${W}`;
   const last = pts.at(-1)!;
-  const trades = pts.length - 1;
+  const trades = pts.length;
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}

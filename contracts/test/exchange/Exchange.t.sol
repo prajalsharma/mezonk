@@ -327,7 +327,9 @@ contract AllYesScenarioTest is ExchangeBase {
         uint256 ownerBal0 = musd.balanceOf(owner);
 
         // Fill-or-kill for 1000 YES at up to 60: only 200 exist, so it reverts and nothing moves.
-        vm.expectRevert(abi.encodeWithSelector(IMezonkExchange.InsufficientLiquidity.selector, uint128(200 * ONE)));
+        vm.expectRevert(
+            abi.encodeWithSelector(IMezonkExchange.InsufficientLiquidity.selector, uint128(200 * ONE))
+        );
         _take(dave, id, YES, BUY, 60, 1000 * ONE, 1000 * ONE, _two(_rest(orderNoAlice), _rest(orderNoBob)));
         assertEq(musd.balanceOf(dave), d0);
 
@@ -336,7 +338,8 @@ contract AllYesScenarioTest is ExchangeBase {
         _take(dave, id, YES, BUY, 50, 1000 * ONE, 0, _two(_rest(orderNoAlice), _rest(orderNoBob)));
 
         // Fill what exists, cancel the rest (minFill 0): exactly 200 YES at 55.
-        uint128 got = _take(dave, id, YES, BUY, 60, 1000 * ONE, 0, _two(_rest(orderNoAlice), _rest(orderNoBob)));
+        uint128 got =
+            _take(dave, id, YES, BUY, 60, 1000 * ONE, 0, _two(_rest(orderNoAlice), _rest(orderNoBob)));
         assertEq(got, 200 * ONE, "unfilled 800 is not executed");
         assertEq(ex.sharesOf(id, YES, dave), 200 * ONE);
         assertEq(ex.sharesOf(id, NO, alice), 100 * ONE, "seeders hold the other side");
@@ -420,7 +423,9 @@ contract SeedingTest is ExchangeBase {
         assertEq(g.seeders, 2);
         ex.graduate(id);
         assertEq(ex.getMarket(id).graduatedAt, block.timestamp);
-        vm.expectRevert(abi.encodeWithSelector(IMezonkExchange.WrongStage.selector, IMezonkExchange.Stage.Live));
+        vm.expectRevert(
+            abi.encodeWithSelector(IMezonkExchange.WrongStage.selector, IMezonkExchange.Stage.Live)
+        );
         ex.graduate(id); // one-time
     }
 
@@ -459,7 +464,9 @@ contract SeedingTest is ExchangeBase {
         vm.warp(ex.getMarket(id).seedingDeadline + 1);
         assertEq(uint8(ex.stageOf(id)), uint8(IMezonkExchange.Stage.Failed));
 
-        vm.expectRevert(abi.encodeWithSelector(IMezonkExchange.WrongStage.selector, IMezonkExchange.Stage.Failed));
+        vm.expectRevert(
+            abi.encodeWithSelector(IMezonkExchange.WrongStage.selector, IMezonkExchange.Stage.Failed)
+        );
         ex.graduate(id);
         vm.prank(carol);
         vm.expectRevert(IMezonkExchange.NotTradable.selector);
@@ -478,7 +485,9 @@ contract SeedingTest is ExchangeBase {
         // A failed market can never be resolved or pay a winner.
         vm.warp(ex.getMarket(id).closeTime + 1);
         vm.prank(resolver);
-        vm.expectRevert(abi.encodeWithSelector(MezonkResolution.WrongStage.selector, MezonkResolution.RStage.NotClosed));
+        vm.expectRevert(
+            abi.encodeWithSelector(MezonkResolution.WrongStage.selector, MezonkResolution.RStage.NotClosed)
+        );
         res.proposeOutcome(id, IMezonkExchange.Outcome.Yes, keccak256("e"), "");
         _assertBuckets();
     }
@@ -488,7 +497,9 @@ contract SeedingTest is ExchangeBase {
         uint256 id = _publish();
         _seedBook(id);
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(IMezonkExchange.StillLocked.selector, uint64(block.timestamp + 1 hours)));
+        vm.expectRevert(
+            abi.encodeWithSelector(IMezonkExchange.StillLocked.selector, uint64(block.timestamp + 1 hours))
+        );
         ex.cancelOrder(1);
 
         vm.warp(block.timestamp + 2 hours);
@@ -800,7 +811,18 @@ contract RolesAndResolutionTest is ExchangeBase {
     function test_resolverCannotProposeBeforeClose() public {
         uint256 id = _liveMarket();
         vm.prank(resolver);
-        vm.expectRevert(abi.encodeWithSelector(MezonkResolution.WrongStage.selector, MezonkResolution.RStage.NotClosed));
+        vm.expectRevert(
+            abi.encodeWithSelector(MezonkResolution.WrongStage.selector, MezonkResolution.RStage.NotClosed)
+        );
         res.proposeOutcome(id, IMezonkExchange.Outcome.Yes, keccak256("e"), "");
+    }
+}
+
+contract DerivedAddressesTest is ExchangeBase {
+    /// The web app derives these from the exchange address (CREATE nonces 1, 2, 3); keep the order stable.
+    function test_childAddressesAreCreateNonces123() public view {
+        assertEq(address(res), vm.computeCreateAddress(address(ex), 1));
+        assertEq(address(fac), vm.computeCreateAddress(address(ex), 2));
+        assertEq(address(inc), vm.computeCreateAddress(address(ex), 3));
     }
 }

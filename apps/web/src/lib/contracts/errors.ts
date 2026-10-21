@@ -1,10 +1,29 @@
 import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError } from "viem";
 
-/** Plain-language messages for MezonkMarkets custom errors. */
+/** Plain-language messages for exchange, factory, resolution and incentives custom errors. */
 const CONTRACT_ERRORS: Record<string, string> = {
   Slippage: "The price moved past your slippage limit. Review the new quote and try again.",
   Expired: "The quote expired before the transaction was mined. Try again.",
-  NotTradable: "Trading has closed for this market.",
+  NotTradable: "This market isn't trading right now. It may still be seeding, or trading has closed.",
+  InsufficientLiquidity: "Not enough liquidity at this price. Adjust your limit price or quantity, or leave the rest unfilled.",
+  InsufficientShares: "You don't hold enough shares for this.",
+  BadLot: "Quantities must be in steps of 0.01 shares.",
+  CrossesBook: "That price would cross an existing order. Trade against it instead, or pick a price that doesn't cross.",
+  NotMaker: "Only the wallet that placed this order can cancel it.",
+  StillLocked: "Seed orders are locked for a short time after placement and after launch. Try again later.",
+  SelfTrade: "You can't trade against your own order.",
+  BadOrderSignature: "One of the orders had an invalid signature. Refresh the book and retry.",
+  GraduationUnmet: "The market doesn't meet its launch conditions yet.",
+  PolicyInactive: "This market policy no longer accepts new markets.",
+  ReferrerLocked: "A referrer can only be set once, before your first trade.",
+  BadReferrer: "That referrer isn't allowed (yourself, or someone you referred).",
+  NotApprovedCreator: "This wallet isn't an approved creator.",
+  NotCurator: "That approval isn't from an approved curator.",
+  SelfApproval: "A creator can't approve their own market.",
+  ApprovalExpired: "This approval has expired. Ask a curator to sign a new one.",
+  ApprovalUsed: "This approval was already used or withdrawn.",
+  ApprovalMismatch: "The market details don't match what the curator approved.",
+  BadApprovalSignature: "The curator's signature doesn't match the approval.",
   WrongStage: "The market is not at the right stage for this action. Refresh to see its current state.",
   NotResolver: "Only the market's designated resolver can do this.",
   NotArbitrator: "Only the market's arbitrator can do this.",

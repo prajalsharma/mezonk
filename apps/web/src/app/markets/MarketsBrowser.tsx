@@ -14,7 +14,8 @@ import { CATEGORIES, categoryLabel } from "@/lib/market/metadata";
 
 const STATUS = [
   { v: "all", l: "All" },
-  { v: "open", l: "Open" },
+  { v: "seeding", l: "Seeding" },
+  { v: "open", l: "Live" },
   { v: "closing", l: "Closing in 48h" },
   { v: "resolving", l: "Resolving" },
   { v: "resolved", l: "Settled" },
@@ -23,16 +24,16 @@ const SORTS = [
   { v: "newest", l: "Newest" },
   { v: "trending", l: "Trending" },
   { v: "volume", l: "Volume" },
-  { v: "liquidity", l: "Most collateral" },
-  { v: "thin", l: "Least collateral" },
+  { v: "liquidity", l: "Deepest book" },
+  { v: "thin", l: "Thinnest book" },
   { v: "closing", l: "Closing soonest" },
   { v: "movement", l: "24h movement" },
 ];
 const LIQ = [
-  { v: "", l: "Any collateral" },
-  { v: "100", l: "100+ MUSD" },
-  { v: "1000", l: "1,000+ MUSD" },
-  { v: "10000", l: "10,000+ MUSD" },
+  { v: "", l: "Any book depth" },
+  { v: "100", l: "100+ MUSD on book" },
+  { v: "1000", l: "1,000+ MUSD on book" },
+  { v: "10000", l: "10,000+ MUSD on book" },
 ];
 const PAGE = 24;
 
@@ -100,7 +101,7 @@ export function MarketsBrowser() {
               <option key={s.v} value={s.v}>Sort: {s.l}</option>
             ))}
           </Select>
-          <Select aria-label="Minimum collateral" value={get("minLiquidity")} onChange={(e) => set({ minLiquidity: e.target.value })} className="sm:w-44">
+          <Select aria-label="Minimum book depth" value={get("minLiquidity")} onChange={(e) => set({ minLiquidity: e.target.value })} className="sm:w-44">
             {LIQ.map((s) => (
               <option key={s.v} value={s.v}>{s.l}</option>
             ))}

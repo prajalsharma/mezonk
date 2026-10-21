@@ -5,6 +5,15 @@ import { metadataSchema, reviewMetadata } from "@/lib/market/metadata";
 const base = { closeTime: new Date(10_000_000), proposalWindow: 3600 };
 
 describe("deriveStage", () => {
+  it("never calls a seeding market live, and fails it after the deadline", () => {
+    const ob = { ...base, seedingDeadline: new Date(5_000_000) };
+    expect(deriveStage(ob, 1_000_000)).toMatchObject({ stage: "seeding", deadlineLabel: "Seeding ends" });
+    expect(deriveStage(ob, 5_000_001).stage).toBe("failed");
+    expect(deriveStage(ob, 11_000_000).stage).toBe("failed"); // past close too: still failed, never "closed"
+    const live = { ...ob, graduatedAt: new Date(4_000_000) };
+    expect(deriveStage(live, 6_000_000)).toMatchObject({ stage: "open", label: "Live" });
+    expect(deriveStage(live, 10_000_000).stage).toBe("closed");
+  });
   it("walks the lifecycle", () => {
     expect(deriveStage(base, 0).stage).toBe("open");
     expect(deriveStage(base, 10_000_000).stage).toBe("closed");

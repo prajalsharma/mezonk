@@ -11,7 +11,7 @@ import { EmptyState, Segmented } from "@/components/ui/primitives";
 import { ProfileEditor } from "@/features/profile/ProfileEditor";
 import { ProposalStatusDot } from "@/features/governance/ProposalBits";
 import { deployment } from "@/lib/chain/config";
-import { mezonkMarketsAbi } from "@/lib/contracts/abi";
+import { factoryAbi } from "@/lib/contracts/abi";
 import { relativeTime } from "@/lib/format";
 import type { ProposalStatus } from "@/lib/governance/proposal";
 import { outcomeLabel } from "@/lib/market/stage";
@@ -36,7 +36,7 @@ export function Profile({ data }: { data: ProfileData }) {
   const [tab, setTab] = useState<Tab>("markets");
   const [editing, setEditing] = useState(false);
   const router = useRouter();
-  const base = { address: deployment.marketsAddress!, abi: mezonkMarketsAbi, chainId: deployment.chainId } as const;
+  const base = { address: deployment.factoryAddress!, abi: factoryAbi, chainId: deployment.chainId } as const;
   const roles = useReadContracts({
     allowFailure: true,
     contracts: [

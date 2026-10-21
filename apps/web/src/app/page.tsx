@@ -7,8 +7,9 @@ import { deployment } from "@/lib/chain/config";
 import { Board, HeroStats, HeroTicket } from "./HomeLive";
 
 const LIFECYCLE: Array<[string, string]> = [
-  ["Pick a side", "Buy Yes or No with MUSD. A share costs between 0 and 1; the price is the market's estimate of the chance."],
-  ["Change your mind", "Sell back to the pool at the live price any time before trading closes. 1% fee each way."],
+  ["Launch", "A reviewed market opens for seeding. It goes live only once real, funded orders sit on both sides."],
+  ["Pick a side", "Buy Yes or No from people offering it, at a price between 1¢ and 99¢. MEZONK never takes the other side."],
+  ["Change your mind", "Sell to the best bid any time before trading closes, or post your own price and wait."],
   ["Trading closes", "The close time is fixed when the market is published, at or before the event is evaluated."],
   ["Outcome, then a challenge window", "The resolver proposes Yes, No or Invalid with evidence and a bond. Anyone else can challenge it."],
   ["Get paid", "Each winning share redeems for exactly 1 MUSD. An Invalid market pays 0.5 MUSD per share."],
@@ -97,12 +98,12 @@ export default function Home() {
             <p className="text-lg font-medium leading-snug">Will BTC close above $150,000 on 31 December?</p>
             <dl className="mono divide-y divide-line text-sm">
               {[
-                ["Yes price", "0.40 MUSD"],
-                ["You spend", "40.00 MUSD"],
-                ["You receive (after 1% fee and price impact)", "≈ 99 Yes"],
-                ["If Yes wins", "99.00 MUSD"],
+                ["Best offer for Yes", "40¢"],
+                ["You buy", "100 Yes"],
+                ["You pay (40.00 + 1% taker fee)", "40.40 MUSD"],
+                ["If Yes wins", "100.00 MUSD"],
                 ["If No wins", "0.00 MUSD"],
-                ["If ruled Invalid", "49.50 MUSD"],
+                ["If ruled Invalid", "50.00 MUSD"],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between gap-4 py-2">
                   <dt className="font-sans text-ink-2">{k}</dt>

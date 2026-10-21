@@ -85,15 +85,12 @@ an administrator cannot revoke or suspend themselves, and the last active admini
 ## 6. Role assignment and compromised-wallet recovery
 
 - **Platform roles** (ADMINISTRATOR): granted/revoked in `/admin`, audited, effective immediately (role cache cleared).
-- **Protocol roles** (CREATOR, CURATOR): the admin records an operation in `/admin`; the contract owner signs
+- **Protocol roles** (CREATOR, CURATOR): held by `MezonkMarketFactory`. The admin records an operation in `/admin`; the factory owner signs
   `setCreator`/`setCurator` in their wallet (or proposes it in their Safe); the app submits the hash; the server checks the
   receipt (to = market contract, from = owner, calldata matches, status success) **and** re-reads `isCreator/isCurator`
   before marking it `confirmed`. Nothing is reported as done before that.
-- **Bootstrap:** `ADMIN_BOOTSTRAP_WALLET` (server env). When that wallet signs in **and no ADMINISTRATOR row has
-  ever existed**, it is granted ADMINISTRATOR once (audited as `bootstrap`). After the first grant the variable has no
-  effect, even if that admin is later revoked. Missing or invalid config means no administrator (fail closed).
-  Break-glass if every admin is lost: the database owner inserts one `role_assignments` row by hand
-  (`granted_by = 'break-glass'`, with a reason) and records it in the incident log. The app offers no other route.
+- **Bootstrap:** see docs/ROLE_MANAGEMENT.md. `INITIAL_ADMIN_WALLETS` (or legacy `ADMIN_BOOTSTRAP_WALLET`), durable
+  per-wallet flags in `platform_flags`, closes on the first routine grant/revoke, fails closed on malformed config.
 - **Compromised wallet** (`POST /api/admin/wallets/replace`): suspend old account → revoke all its sessions → revoke its
   platform roles → withdraw its unapproved proposals and release its review claims → grant the same platform roles to
   the replacement (which must have signed in itself) → create pending on-chain operations to revoke the old wallet's
@@ -151,7 +148,7 @@ immutability, role-operation honesty), plus E2E for the profile + comment journe
 
 - `AUTH_SECRET` is no longer used (sessions are DB-backed random tokens) and was removed from `.env.example`.
 - `BLOB_READ_WRITE_TOKEN` (Vercel Blob) or another provider for production uploads.
-- `ADMIN_BOOTSTRAP_WALLET` for the first administrator.
+- `INITIAL_ADMIN_WALLETS` for the first administrator(s).
 - `NEXT_PUBLIC_APP_ORIGIN` is not required: origin checks use the request host.
 - The contract owner should be a Safe. The app can display calldata for a Safe proposal but cannot execute it.
 - Rate limits are in-memory per instance; use an edge limiter for multi-instance production.

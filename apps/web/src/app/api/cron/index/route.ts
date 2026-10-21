@@ -4,6 +4,7 @@ import { lt } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { runIndexerTick } from "@/server/indexer/indexer";
 import { cleanupPendingMedia } from "@/server/media";
+import { sweepStaleOrders } from "@/server/orderbook";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -18,9 +19,11 @@ export function GET(req: NextRequest) {
     const tick = await runIndexerTick();
     // Housekeeping: abandoned uploads, spent nonces, expired sessions (retention: 30 days after expiry).
     const mediaRemoved = await cleanupPendingMedia().catch(() => -1);
+    // Signed orders whose makers lost funding or approval leave the book (and return if it comes back).
+    const orders = await sweepStaleOrders().catch(() => null);
     const db = await getDb();
     await db.delete(schema.authNonces).where(lt(schema.authNonces.expiresAt, new Date(Date.now() - 86_400_000))).catch(() => undefined);
     await db.delete(schema.sessions).where(lt(schema.sessions.expiresAt, new Date(Date.now() - 30 * 86_400_000))).catch(() => undefined);
-    return ok({ ...tick, mediaRemoved }, { maxAge: 0 });
+    return ok({ ...tick, mediaRemoved, orders }, { maxAge: 0 });
   });
 }

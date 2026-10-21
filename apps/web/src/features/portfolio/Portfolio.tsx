@@ -14,17 +14,16 @@ import { ClaimButton, RedeemDetails } from "@/features/resolution/Claims";
 import { usePendingTxs } from "@/hooks/usePendingTxs";
 import { apiGet, type EventDto } from "@/lib/api/types";
 import { deployment, TESTNET_FUNDING } from "@/lib/chain/config";
-import { mezonkMarketsAbi } from "@/lib/contracts/abi";
+import { exchangeAbi, resolutionAbi } from "@/lib/contracts/abi";
+import { payoutFor } from "@/lib/market/permissions";
+import { LiquidityAndIncentives } from "./Incentives";
 import { formatMusd, formatShares, relativeTime } from "@/lib/format";
-import { quoteSell } from "@/lib/market/math";
 import { outcomeLabel, type StageInfo } from "@/lib/market/stage";
 import type { Availability } from "@/lib/market/permissions";
 
 interface PositionDto {
   marketId: number;
   question: string;
-  poolYes: string;
-  poolNo: string;
   feeBps: number;
   closeTime: string;
   stage: StageInfo;
@@ -41,7 +40,7 @@ interface PositionDto {
 }
 interface PortfolioDto {
   positions: PositionDto[];
-  created: Array<{ marketId: number; question: string; stage: StageInfo; initialLiquidity: string; volume: string; finalOutcome: number | null }>;
+  created: Array<{ marketId: number; question: string; stage: StageInfo; volume: string; finalOutcome: number | null }>;
 }
 
 type ClaimStatus = "claimable" | "refund" | "pending" | "claimed" | "awaiting" | "lost" | "invalid-claimed" | "open";
@@ -102,17 +101,16 @@ export function Portfolio() {
 
   // Authoritative per-market reads: balances, claimable amount, finality.
   const ids = pf.data?.positions.map((p) => p.marketId) ?? [];
-  const base = { address: deployment.marketsAddress!, abi: mezonkMarketsAbi, chainId: deployment.chainId } as const;
+  const base = { address: deployment.marketsAddress!, abi: exchangeAbi, chainId: deployment.chainId } as const;
   const live = useReadContracts({
     allowFailure: true,
     contracts: [
       ...ids.flatMap((id) => [
         { ...base, functionName: "getMarket" as const, args: [BigInt(id)] as const },
-        { ...base, functionName: "yesBalance" as const, args: [BigInt(id), address!] as const },
-        { ...base, functionName: "noBalance" as const, args: [BigInt(id), address!] as const },
-        { ...base, functionName: "claimable" as const, args: [BigInt(id), address!] as const },
+        { ...base, functionName: "sharesOf" as const, args: [BigInt(id), 0, address!] as const },
+        { ...base, functionName: "sharesOf" as const, args: [BigInt(id), 1, address!] as const },
       ]),
-      { ...base, functionName: "bondCredits" as const, args: [address!] as const },
+      { address: deployment.resolutionAddress!, abi: resolutionAbi, chainId: deployment.chainId, functionName: "bondCredits" as const, args: [address!] as const },
     ],
     query: { enabled: !!address && !!deployment.marketsAddress && ids.length >= 0, refetchInterval: 15_000 },
   });
@@ -127,10 +125,10 @@ export function Portfolio() {
     if (!pf.data) return [];
     return pf.data.positions.map((p, i) => {
       const r = live.data;
-      const m = r?.[i * 4]?.status === "success" ? (r[i * 4]!.result as { finalized: boolean; finalOutcome: number; poolYes: bigint; poolNo: bigint; feeBps: number }) : undefined;
-      const yes = r?.[i * 4 + 1]?.status === "success" ? (r[i * 4 + 1]!.result as bigint) : big(p.yesShares);
-      const no = r?.[i * 4 + 2]?.status === "success" ? (r[i * 4 + 2]!.result as bigint) : big(p.noShares);
-      const claimable = r?.[i * 4 + 3]?.status === "success" ? (r[i * 4 + 3]!.result as bigint) : 0n;
+      const m = r?.[i * 3]?.status === "success" ? (r[i * 3]!.result as { finalized: boolean; finalOutcome: number }) : undefined;
+      const yes = r?.[i * 3 + 1]?.status === "success" ? (r[i * 3 + 1]!.result as bigint) : big(p.yesShares);
+      const no = r?.[i * 3 + 2]?.status === "success" ? (r[i * 3 + 2]!.result as bigint) : big(p.noShares);
+      const claimable = m?.finalized ? payoutFor(m.finalOutcome, yes, no) : 0n;
       const chainOk = !!m;
       const finalized = m?.finalized ?? p.finalOutcome != null;
       const outcome = m?.finalized ? m.finalOutcome : p.finalOutcome;
@@ -143,16 +141,7 @@ export function Portfolio() {
       else if (p.stage.stage === "open") status = "open";
       else status = "awaiting";
       const cost = big(p.yesCost) + big(p.noCost);
-      let exit: bigint | null = null;
-      if (!finalized && m) {
-        try {
-          const pool = { yes: m.poolYes, no: m.poolNo };
-          exit = (yes > 0n ? quoteSell(pool, "yes", yes, m.feeBps).out : 0n) + (no > 0n ? quoteSell(pool, "no", no, m.feeBps).out : 0n);
-        } catch {
-          exit = null;
-        }
-      }
-      return { p, yes, no, claimable, finalized, outcome, status, cost, exit, chainOk, pend };
+      return { p, yes, no, claimable, finalized, outcome, status, cost, chainOk, pend };
     });
   }, [pf.data, live.data, pending.items]);
 
@@ -170,12 +159,11 @@ export function Portfolio() {
       realized: a.realized + big(r.p.realizedPnl),
       fees: a.fees + big(r.p.feesPaid),
       open: a.open + (r.finalized ? 0n : r.cost),
-      exit: a.exit + (r.exit ?? 0n),
       claimable: a.claimable + r.claimable,
       won: a.won + (r.finalized && r.outcome !== 3 && (r.claimable > 0n || (r.status === "claimed" && big(r.p.redeemedPayout) > 0n)) ? 1 : 0),
       lost: a.lost + (r.status === "lost" || (r.status === "claimed" && big(r.p.redeemedPayout) === 0n) ? 1 : 0),
     }),
-    { realized: 0n, fees: 0n, open: 0n, exit: 0n, claimable: 0n, won: 0, lost: 0 },
+    { realized: 0n, fees: 0n, open: 0n, claimable: 0n, won: 0, lost: 0 },
   );
 
   const refresh = () => {
@@ -208,7 +196,7 @@ export function Portfolio() {
 
       {pf.error && <Notice tone="warn" title="Indexed history unavailable">Live balances and claims still work. Cost basis and history need the index.</Notice>}
 
-      <dl className="grid grid-cols-2 gap-x-8 gap-y-4 border-y border-line py-5 md:grid-cols-5">
+      <dl className="grid grid-cols-2 gap-x-8 gap-y-4 border-y border-line py-5 md:grid-cols-4">
         <div>
           <dt className="flex items-center gap-1 text-xs text-muted">Claimable now <Hint label="claimable">Sum of the contract&apos;s claimable() for every market you hold. Authoritative.</Hint></dt>
           <dd className="tnum text-xl font-semibold">{formatMusd(totals.claimable)}</dd>
@@ -216,10 +204,6 @@ export function Portfolio() {
         <div>
           <dt className="flex items-center gap-1 text-xs text-muted">Open cost basis <Hint label="cost basis">MUSD paid (fees included) for shares still held in unresolved markets, average-cost method.</Hint></dt>
           <dd className="tnum text-xl font-semibold">{formatMusd(totals.open)}</dd>
-        </div>
-        <div>
-          <dt className="flex items-center gap-1 text-xs text-muted">Sell value now <Hint label="sell value">What selling every open position to the pools right now would return after fees. Not a guaranteed value; prices move.</Hint></dt>
-          <dd className="tnum text-xl font-semibold">{formatMusd(totals.exit)}</dd>
         </div>
         <div>
           <dt className="flex items-center gap-1 text-xs text-muted">Realized P&amp;L <Hint label="realized">Sales and redemptions minus average cost of the shares closed. From indexed events.</Hint></dt>
@@ -269,7 +253,7 @@ export function Portfolio() {
           <p className="py-6 text-sm text-muted">Nothing matches these filters.</p>
         ) : (
           <ul className="divide-y divide-line border-y border-line">
-            {filtered.map(({ p, yes, no, claimable, outcome, status, cost, exit, chainOk, pend }) => (
+            {filtered.map(({ p, yes, no, claimable, outcome, status, cost, chainOk, pend }) => (
               <li key={p.marketId} className="grid gap-4 py-4 md:grid-cols-[minmax(0,1fr)_14rem_16rem]">
                 <div className="min-w-0 space-y-1">
                   <Status tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Status>
@@ -285,7 +269,6 @@ export function Portfolio() {
                   {yes > 0n && <div className="flex justify-between"><dt className="text-yes-text">Yes</dt><dd>{formatShares(yes)}</dd></div>}
                   {no > 0n && <div className="flex justify-between"><dt className="text-no-text">No</dt><dd>{formatShares(no)}</dd></div>}
                   {cost > 0n && <div className="flex justify-between text-ink-2"><dt>Cost basis</dt><dd>{formatMusd(cost)}</dd></div>}
-                  {exit !== null && exit > 0n && <div className="flex justify-between text-ink-2"><dt>Sell value</dt><dd>{formatMusd(exit)}</dd></div>}
                   {big(p.redeemedPayout) > 0n && <div className="flex justify-between text-ink-2"><dt>Paid out</dt><dd>{formatMusd(p.redeemedPayout)}</dd></div>}
                   <div className="flex justify-between text-ink-2"><dt>Fees paid</dt><dd>{formatMusd(p.feesPaid)}</dd></div>
                   {!chainOk && <p className="text-xs text-warn">Live read failed; showing indexed shares.</p>}
@@ -321,13 +304,14 @@ export function Portfolio() {
             {pf.data.created.map((c) => (
               <li key={c.marketId} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <Link href={`/markets/${c.marketId}#resolution`} className="font-semibold hover:underline">{c.question}</Link>
-                <span className="tnum text-sm text-ink-2">{c.stage.label} · seeded {formatMusd(c.initialLiquidity)} · volume {formatMusd(c.volume, { compact: true })}</span>
+                <span className="tnum text-sm text-ink-2">{c.stage.label} · volume {formatMusd(c.volume, { compact: true })}</span>
               </li>
             ))}
           </ul>
-          <p className="text-sm text-muted">Withdraw pool liquidity and creator fees from each market&apos;s resolution section.</p>
         </section>
       )}
+
+      <LiquidityAndIncentives address={address!} />
 
       <section aria-labelledby="history" className="space-y-3">
         <h2 id="history" className="text-xl font-semibold">History</h2>
@@ -336,8 +320,8 @@ export function Portfolio() {
 
       <p className="text-xs text-muted">
         Methodology: claimable amounts and share balances are live contract reads. Cost basis, realized P&amp;L and fees come from indexed
-        Trade and Redeemed events using the average-cost method. Seeded creator shares are costed at the opening price. Sell value is a
-        quote against the current pool and changes with every trade.
+        on-chain fills, splits, merges and redemptions using the average-cost method (a split costs 0.5 per side). There is no single
+        &quot;sell value&quot;: what you could get depends on the bids on each market&apos;s book right now.
       </p>
     </div>
   );
