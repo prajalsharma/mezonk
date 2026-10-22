@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { deployment, readinessMessage } from "@/lib/chain/config";
 
 /**
@@ -8,7 +9,18 @@ export function DeploymentBanner() {
   let text: string | null = null;
   let tone: "warn" | "muted" = "muted";
   if (deployment.ready && !deployment.isLocalFork) {
-    if (deployment.chain.testnet) text = "Testnet. MUSD here has no cash value and results are not real profit.";
+    if (deployment.chain.testnet) {
+      // Testnet is the live product for now: say so plainly, and that nothing here is real money.
+      return (
+        <div className="mx-auto mt-2 flex max-w-[84rem] justify-center px-4 md:px-6">
+          <p className="rounded-full border border-line bg-surface px-3 py-1 text-center text-xs text-ink-2">
+            <span aria-hidden className="pulse-dot mr-2 inline-block size-1.5 rounded-full bg-success align-middle" />
+            <span className="font-medium text-ink">Live on Mezo Testnet.</span> Test BTC and MUSD only, nothing here is real money.{" "}
+            <Link href="/borrow" className="font-medium text-yes-text underline-offset-2 hover:underline">Get MUSD</Link>
+          </p>
+        </div>
+      );
+    }
   } else {
     tone = "warn";
     text =

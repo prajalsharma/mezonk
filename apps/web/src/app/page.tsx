@@ -2,7 +2,7 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { LogoMark } from "@/components/brand/Logo";
 import { ButtonLink } from "@/components/ui/Button";
-import { deployment } from "@/lib/chain/config";
+import { deployment, TESTNET_FUNDING } from "@/lib/chain/config";
 import { LiveMarkets } from "./HomeLive";
 import { FundingCard } from "./landing/FundingCard";
 import { HeroStack } from "./landing/HeroStack";
@@ -34,6 +34,16 @@ export default function Home() {
             </ButtonLink>
             <ButtonLink href="/borrow" size="lg" variant="secondary">Borrow MUSD</ButtonLink>
           </div>
+          {deployment.ready && deployment.chain.testnet && !deployment.isLocalFork && (
+            <p className="rise-in text-[0.9375rem] text-ink-2" style={{ "--i": 3 } as React.CSSProperties}>
+              <span aria-hidden className="pulse-dot mr-2 inline-block size-2 rounded-full bg-success align-middle" />
+              Try it free: grab test BTC from the{" "}
+              <a href={TESTNET_FUNDING.btcFaucet} target="_blank" rel="noreferrer" className="font-medium text-yes-text underline-offset-4 hover:underline">
+                Mezo faucet
+              </a>
+              , borrow test MUSD, and make your first call.
+            </p>
+          )}
         </div>
         <HeroStack />
       </section>
@@ -87,9 +97,13 @@ export default function Home() {
           </button>
         </form>
         <p className="text-sm text-muted">
-          {deployment.ready
-            ? `Built on Mezo, settled in MUSD. Running on ${deployment.isLocalFork ? "a local fork of Mezo Testnet" : deployment.chain.name}.`
-            : "Built on Mezo, settled in MUSD. Trading isn't switched on for this network yet."}
+          {!deployment.ready
+            ? "Built on Mezo, settled in MUSD. Trading isn't switched on for this network yet."
+            : deployment.isLocalFork
+              ? "Built on Mezo, settled in MUSD. Running on a local fork of Mezo Testnet."
+              : deployment.chain.testnet
+                ? "Live on Mezo Testnet, settled in MUSD. Mainnet comes later."
+                : `Built on Mezo, settled in MUSD. Live on ${deployment.chain.name}.`}
         </p>
       </section>
     </div>

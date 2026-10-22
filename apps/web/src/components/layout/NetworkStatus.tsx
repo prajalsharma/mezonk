@@ -7,7 +7,8 @@ import { deployment } from "@/lib/chain/config";
 /** Dot + network name. The dot colour and tooltip carry the state; the banner below the header explains problems. */
 export function NetworkStatus({ compact = false }: { compact?: boolean }) {
   const { data, isLoading, isError } = useHealth();
-  const name = deployment.isLocalFork ? "Local fork" : deployment.chain.name;
+  // Compact (narrow headers): "Testnet" alone fits next to the wallet button on a phone.
+  const name = deployment.isLocalFork ? "Local fork" : compact && deployment.chain.testnet ? "Testnet" : deployment.chain.name;
   let tone: "yes" | "warn" | "no" | "muted" = "muted";
   let text = name;
   let title = "Checking network status";

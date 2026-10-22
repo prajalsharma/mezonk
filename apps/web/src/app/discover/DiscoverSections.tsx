@@ -167,7 +167,7 @@ export function DiscoverSections() {
           {deployment.chain.testnet && (
             <p className="text-ink-2">
               On testnet: get BTC from the <a className="underline" href={TESTNET_FUNDING.btcFaucet} target="_blank" rel="noreferrer">faucet</a>, then{" "}
-              <a className="underline" href={TESTNET_FUNDING.borrowMusd} target="_blank" rel="noreferrer">borrow MUSD</a>.
+              <Link className="underline" href="/borrow">borrow MUSD</Link> right here.
             </p>
           )}
         </div>
