@@ -9,8 +9,9 @@ import { mezoBorrowUrl } from "@/lib/chain/config";
 
 /**
  * Two ways in. Holding BTC: borrow MUSD on Mezo, trade, collect, repay, BTC unlocks. Holding MUSD: trade now.
- * The BTC path is one worked example that plays out step by step when it scrolls into view, so each number
- * follows from the one before (2,000 MUSD loan, 1,000 MUSD on Yes at 40¢, 2,475 MUSD payout). Labelled as an example.
+ * The BTC path plays out step by step when it scrolls into view. Only numbers MEZONK's own contracts fix are shown
+ * (1,000 MUSD on Yes at 40¢ buys 2,475 shares; each pays 1 MUSD). How much MUSD a given amount of BTC can back depends
+ * on the BTC price and Mezo's collateral rules at the time, so no BTC-to-MUSD figure is printed here.
  */
 function useInView<T extends Element>() {
   const ref = useRef<T>(null);
@@ -57,39 +58,41 @@ export function FundingFlow() {
       <div ref={ref} className="panel overflow-hidden">
         <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-line px-6 py-4 md:px-8">
           <p className="font-semibold">You hold BTC</p>
-          <p className="text-sm text-muted">Example numbers</p>
+          <p className="text-sm text-muted">Example trade</p>
         </div>
         <ol className="grid divide-line max-md:divide-y md:grid-cols-3 md:divide-x">
-          <Step n={1} on={on} title="Borrow MUSD on Mezo" body="Lock BTC as collateral and borrow MUSD, Mezo's bitcoin-backed dollar. Your BTC isn't sold.">
+          <Step
+            n={1}
+            on={on}
+            title="Borrow MUSD on Mezo"
+            body="Lock BTC as collateral and borrow MUSD, Mezo's bitcoin-backed dollar. How much you can borrow depends on the BTC price and Mezo's limits."
+          >
             <div className="flex items-center justify-between gap-3">
               <span className="flex items-center gap-2 text-sm text-ink-2">
-                <Lock className="size-4 text-ink" aria-hidden /> Locked
+                <Lock className="size-4 text-ink" aria-hidden /> Your BTC
               </span>
-              <span className="mono font-medium">0.10 BTC</span>
+              <span className="font-medium">Locked, not sold</span>
             </div>
             <div className="my-3 h-px bg-line" />
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-sm text-ink-2">You borrow</span>
-              <span className="mono text-2xl font-medium">
-                <AnimatedNumber value={on ? 2000 : 0} format={(v) => Math.round(v).toLocaleString("en-US")} duration={900} />
-                <span className="ml-1 text-sm text-muted">MUSD</span>
-              </span>
+              <span className="text-sm text-ink-2">You receive</span>
+              <span className="font-medium">MUSD to trade with</span>
             </div>
           </Step>
-          <Step n={2} on={on} title="Buy Yes or No here" body="Use the MUSD on any market. A share costs 1¢ to 99¢ and pays 1 MUSD if you're right.">
+          <Step n={2} on={on} title="Buy Yes or No here" body="Say you put 1,000 MUSD on Yes at 40¢. A share costs 1¢ to 99¢ and pays 1 MUSD if you're right.">
             <div className="flex h-11 items-center justify-between rounded-sm bg-yes px-3.5 font-semibold text-on-yes">
               <span>Buy Yes</span>
               <span className="mono">40¢</span>
             </div>
             <div className="mt-3 flex items-baseline justify-between gap-3">
-              <span className="text-sm text-ink-2">1,000 MUSD buys</span>
+              <span className="text-sm text-ink-2">1,000 MUSD buys, at a 1% fee</span>
               <span className="mono text-2xl font-medium">
                 <AnimatedNumber value={on ? 2475 : 0} format={(v) => Math.round(v).toLocaleString("en-US")} duration={1100} />
                 <span className="ml-1 text-sm text-muted">Yes</span>
               </span>
             </div>
           </Step>
-          <Step n={3} on={on} title="Collect, then repay" body="If Yes wins you're paid in MUSD. Repay the loan on Mezo whenever you like and your BTC unlocks.">
+          <Step n={3} on={on} title="Collect, then repay" body="If Yes wins you're paid in MUSD. Repay the loan on Mezo when you choose, and your BTC unlocks.">
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-sm text-ink-2">Yes wins, you get</span>
               <span className="mono text-2xl font-medium text-yes-text">
@@ -98,7 +101,7 @@ export function FundingFlow() {
             </div>
             <div className="my-3 h-px bg-line" />
             <p className="flex items-center gap-2 text-sm text-ink-2">
-              <Check className="size-4 text-yes-text" aria-hidden /> Repay 2,000 MUSD, your 0.10 BTC unlocks
+              <Check className="size-4 shrink-0 text-yes-text" aria-hidden /> Repay what you borrowed plus interest, your BTC unlocks
             </p>
           </Step>
         </ol>

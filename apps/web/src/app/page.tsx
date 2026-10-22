@@ -6,6 +6,7 @@ import { ButtonLink } from "@/components/ui/Button";
 import { deployment } from "@/lib/chain/config";
 import { LiveMarkets } from "./HomeLive";
 import { FundingFlow } from "./landing/FundingFlow";
+import { MusdIdeas } from "@/components/markets/MusdIdeas";
 import { PayoutCalculator } from "./landing/PayoutCalculator";
 import { SeamSplit } from "./landing/SeamSplit";
 import { Story } from "./landing/Story";
@@ -62,6 +63,9 @@ export default function Home() {
         </div>
         <div className="reveal">
           <FundingFlow />
+        </div>
+        <div className="reveal">
+          <MusdIdeas />
         </div>
       </section>
 

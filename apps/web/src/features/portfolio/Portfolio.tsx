@@ -9,6 +9,8 @@ import { TxLink } from "@/components/ui/Address";
 import { cx } from "@/components/ui/cx";
 import { EmptyState, Hint, Notice, Skeleton, Status, inputClass } from "@/components/ui/primitives";
 import { ActivityList } from "@/components/markets/ActivityList";
+import { MusdIdeas } from "@/components/markets/MusdIdeas";
+import { useMusd } from "@/hooks/useMusd";
 import { WalletButton } from "@/components/wallet/WalletButton";
 import { ClaimButton, RedeemDetails } from "@/features/resolution/Claims";
 import { usePendingTxs } from "@/hooks/usePendingTxs";
@@ -86,6 +88,7 @@ export function Portfolio() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["v"]>("all");
   const [text, setText] = useState("");
   const [since, setSince] = useState<"all" | "7" | "30">("all");
+  const musd = useMusd();
 
   const pf = useQuery({
     queryKey: ["portfolio", address],
@@ -312,6 +315,8 @@ export function Portfolio() {
       )}
 
       <LiquidityAndIncentives address={address!} />
+      {/* Optional, only for idle MUSD (at least 1). Dismissible per browser. */}
+      {musd.balance !== undefined && musd.balance >= 10n ** 18n && <MusdIdeas dismissKey="mezonk:musd-ideas:portfolio" />}
 
       <section aria-labelledby="history" className="space-y-3">
         <h2 id="history" className="text-xl font-semibold">History</h2>
