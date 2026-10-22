@@ -53,8 +53,11 @@ export class ApiRequestError extends Error {
   }
 }
 
-export async function apiGet<T>(url: string): Promise<T> {
-  const r = await fetch(url);
+/** GET with a hard timeout, so a slow backend becomes an error state instead of an endless skeleton. */
+export async function apiGet<T>(url: string, timeoutMs = 8_000): Promise<T> {
+  const r = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }).catch((e: unknown) => {
+    throw new ApiRequestError(0, "timeout", e instanceof Error && e.name === "TimeoutError" ? "The data service didn't answer in time." : "Network error");
+  });
   const body = await r.json().catch(() => null);
   if (!r.ok) {
     throw new ApiRequestError(r.status, body?.error?.code ?? "error", body?.error?.message ?? "Request failed");
@@ -65,3 +68,7 @@ export async function apiGet<T>(url: string): Promise<T> {
 /** Canonical public URL of a market: its slug when assigned, else the numeric id (which redirects). */
 export const marketHref = (m: { id: number; slug?: string | null }, side?: "yes" | "no") =>
   `/markets/${m.slug ?? m.id}${side ? `?side=${side}` : ""}`;
+
+/** Retry only transient failures; a 4xx or an explicit "unavailable" answer won't change on retry. */
+export const shouldRetry = (count: number, e: unknown) =>
+  count < 2 && !(e instanceof ApiRequestError && (e.code === "unavailable" || (e.status >= 400 && e.status < 500)));

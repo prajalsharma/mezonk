@@ -8,6 +8,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { WagmiProvider } from "wagmi";
 import { wagmiConfig } from "@/lib/wagmi";
 import { ToastProvider } from "@/components/ui/Toast";
+import { shouldRetry } from "@/lib/api/types";
 
 function brandTheme(mode: "light" | "dark"): Theme {
   const t = mode === "dark" ? darkTheme() : lightTheme();
@@ -46,7 +47,7 @@ export function Providers({ children }: { children: ReactNode }) {
   const [client] = useState(
     () =>
       new QueryClient({
-        defaultOptions: { queries: { staleTime: 4_000, refetchOnWindowFocus: true, retry: 2 } },
+        defaultOptions: { queries: { staleTime: 4_000, refetchOnWindowFocus: true, retry: shouldRetry } },
       }),
   );
   return (

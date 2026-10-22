@@ -96,7 +96,7 @@ function NavLink({ href, active, children }: { href: string; active: boolean; ch
       href={href}
       aria-current={active ? "page" : undefined}
       className={cx(
-        "relative rounded-sm px-3 py-1.5 text-sm font-medium transition-colors duration-150",
+        "relative rounded-md px-3 py-2 text-[0.9375rem] font-medium transition-colors duration-150",
         active ? "bg-surface-2 text-ink ring-1 ring-line" : "text-muted hover:text-ink",
       )}
     >

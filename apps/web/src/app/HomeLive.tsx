@@ -3,7 +3,6 @@
 import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { ButtonLink } from "@/components/ui/Button";
 import { cx } from "@/components/ui/cx";
 import { Skeleton } from "@/components/ui/primitives";
@@ -13,6 +12,7 @@ import { Sparkline } from "@/components/markets/Sparkline";
 import { useMarkets } from "@/hooks/useMarkets";
 import { type MarketSummaryDto, marketHref } from "@/lib/api/types";
 import { formatCents, formatMusd, marketSignal } from "@/lib/format";
+import { deployment } from "@/lib/chain/config";
 import { CATEGORIES, categoryLabel, type Category } from "@/lib/market/metadata";
 
 /**
@@ -20,7 +20,7 @@ import { CATEGORIES, categoryLabel, type Category } from "@/lib/market/metadata"
  * (an offer on at least one side), else the most-traded open market. Never invents one.
  */
 function useFeatured() {
-  const q = useMarkets({ status: "open", sort: "trending", limit: 8, offset: 0 });
+  const q = useMarkets({ status: "open", sort: "trending", limit: 8, offset: 0 }, { enabled: deployment.ready });
   const items = q.data?.items ?? [];
   const m: MarketSummaryDto | undefined = items.find((x) => x.bestAsk != null || x.bestBid != null) ?? items[0];
   return { m, loading: q.isLoading, error: q.error };
@@ -120,8 +120,8 @@ export function HeroTicket() {
 
 /** One quiet line of real counts under the hero. Renders nothing until the index answers. */
 export function HeroCounts() {
-  const open = useMarkets({ status: "open", limit: 1, offset: 0 });
-  const seeding = useMarkets({ status: "seeding", limit: 1, offset: 0 });
+  const open = useMarkets({ status: "open", limit: 1, offset: 0 }, { enabled: deployment.ready });
+  const seeding = useMarkets({ status: "seeding", limit: 1, offset: 0 }, { enabled: deployment.ready });
   if (!open.data) return <p className="h-5" aria-hidden />;
   const n = open.data.total;
   const s = seeding.data?.total ?? 0;
@@ -183,70 +183,44 @@ export function Board() {
   );
 }
 
-const OUTCOMES = [
-  { key: "yes", label: "Yes wins", payout: 100, note: "Each of your 100 Yes shares redeems for 1 MUSD." },
-  { key: "no", label: "No wins", payout: 0, note: "Yes shares expire worthless. The No holders are paid from the same collateral." },
-  { key: "invalid", label: "Ruled Invalid", payout: 50, note: "Every share, Yes or No, redeems for 0.50 MUSD." },
-] as const;
-
-/** Worked example with an outcome switch. Illustrative numbers, labelled as such. */
-export function PayoutExample() {
-  const [k, setK] = useState<(typeof OUTCOMES)[number]["key"]>("yes");
-  const o = OUTCOMES.find((x) => x.key === k)!;
-  const cost = 40.4;
-  const net = o.payout - cost;
-  return (
-    <div className="panel space-y-6 p-6 md:p-8">
-      <div className="space-y-1">
-        <p className="text-sm text-muted">Example, not a live market</p>
-        <p className="text-lg font-medium leading-snug">Will BTC close above $150,000 on 31 December?</p>
-      </div>
-      <dl className="grid grid-cols-3 gap-4 border-y border-line py-4 text-sm">
-        <div>
-          <dt className="text-muted">You buy</dt>
-          <dd className="mono mt-1 text-base text-ink">100 Yes</dd>
-        </div>
-        <div>
-          <dt className="text-muted">At</dt>
-          <dd className="mono mt-1 text-base text-ink">40¢</dd>
-        </div>
-        <div>
-          <dt className="text-muted">You pay</dt>
-          <dd className="mono mt-1 text-base text-ink">40.40</dd>
-          <dd className="text-xs text-muted">incl. 1% fee</dd>
-        </div>
-      </dl>
-      <div role="radiogroup" aria-label="Outcome" className="grid grid-cols-3 gap-1 rounded-md border border-line bg-sunk p-1">
-        {OUTCOMES.map((x) => (
-          <button
-            key={x.key}
-            type="button"
-            role="radio"
-            aria-checked={k === x.key}
-            onClick={() => setK(x.key)}
-            className={cx(
-              "press h-10 rounded-sm text-sm font-medium transition-[background-color,color,box-shadow] duration-200",
-              k === x.key ? "bg-surface text-ink shadow-1" : "text-ink-2 hover:text-ink",
-            )}
-          >
-            {x.label}
-          </button>
-        ))}
-      </div>
-      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1" aria-live="polite">
-        <div>
-          <p className="text-sm text-muted">You get</p>
-          <p className="mono text-4xl font-medium tracking-tight sm:text-5xl">
-            <AnimatedNumber value={o.payout} format={(n) => n.toFixed(2)} />
-            <span className="ml-2 text-lg text-muted">MUSD</span>
+/**
+ * The markets block on the landing page. When no exchange is deployed on this network there is nothing to load, so it
+ * says so at once instead of showing a skeleton; with a deployment it shows the featured market and the board.
+ */
+export function LiveMarkets() {
+  const any = useMarkets({ status: "all", sort: "newest", limit: 1, offset: 0 }, { enabled: deployment.ready });
+  if (!deployment.ready || (any.data && any.data.total === 0)) {
+    return (
+      <div className="panel grid gap-8 p-8 md:grid-cols-[1.2fr_1fr] md:items-center md:p-12">
+        <div className="space-y-3">
+          <p className="text-2xl font-semibold tracking-tight">The first markets are on their way.</p>
+          <p className="max-w-lg text-ink-2">
+            {deployment.ready
+              ? "Nothing has been published yet. Suggestions are reviewed in public; you can propose the first question."
+              : "Trading isn't switched on for this network yet. Suggestions are already open and reviewed in public."}
           </p>
         </div>
-        <p className={cx("mono pb-2 text-sm", net >= 0 ? "text-gain" : "text-loss")}>
-          {net >= 0 ? "+" : "−"}
-          <AnimatedNumber value={Math.abs(net)} format={(n) => n.toFixed(2)} />
-        </p>
+        <div className="flex flex-wrap gap-3 md:justify-end">
+          <ButtonLink href="/suggest" size="lg">Suggest a market</ButtonLink>
+          <ButtonLink href="/proposals" size="lg" variant="secondary">See suggestions</ButtonLink>
+        </div>
       </div>
-      <p className="min-h-10 text-sm text-ink-2">{o.note}</p>
+    );
+  }
+  return (
+    <div className="space-y-10">
+      <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr] lg:items-start">
+        <HeroTicket />
+        <div className="space-y-4 lg:pt-2">
+          <p className="text-2xl font-semibold tracking-tight">Pick a side straight from the board.</p>
+          <p className="text-ink-2">
+            Prices come from real trades. With no trade yet you see the middle of the best offers, labelled as indicative, or no
+            number at all.
+          </p>
+          <HeroCounts />
+        </div>
+      </div>
+      <Board />
     </div>
   );
 }

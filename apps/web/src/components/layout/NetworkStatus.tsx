@@ -4,12 +4,12 @@ import { Status } from "@/components/ui/primitives";
 import { useHealth } from "@/hooks/useHealth";
 import { deployment } from "@/lib/chain/config";
 
-/** Dot + word describing the real state of chain, contract and indexer. */
+/** Dot + network name. The dot colour and tooltip carry the state; the banner below the header explains problems. */
 export function NetworkStatus({ compact = false }: { compact?: boolean }) {
   const { data, isLoading, isError } = useHealth();
   const name = deployment.isLocalFork ? "Local fork" : deployment.chain.name;
   let tone: "yes" | "warn" | "no" | "muted" = "muted";
-  let text = compact ? name : `${name} · checking`;
+  let text = name;
   let title = "Checking network status";
   if (isError) {
     tone = "no";
@@ -22,11 +22,11 @@ export function NetworkStatus({ compact = false }: { compact?: boolean }) {
       title = "The Mezo RPC did not respond.";
     } else if (!data.chain.ready) {
       tone = "warn";
-      text = compact ? "Not deployed" : `${name} · trading off`;
+      text = name; // the banner under the header explains; the dot and tooltip carry the state
       title = data.chain.message;
     } else if (!data.indexer || data.indexer.stale) {
       tone = "warn";
-      text = compact ? name : `${name} · data delayed`;
+      text = name;
       title = "Indexed data is behind the chain. Balances and trades shown from the chain are still live.";
     } else {
       tone = "yes";

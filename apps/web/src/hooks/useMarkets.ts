@@ -21,11 +21,13 @@ export function marketsUrl(p: MarketQuery) {
   return `/api/markets?${s}`;
 }
 
-export function useMarkets(p: MarketQuery) {
+export function useMarkets(p: MarketQuery, opts: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ["markets", p],
     queryFn: () => apiGet<MarketListDto>(marketsUrl(p)),
     placeholderData: keepPreviousData,
-    refetchInterval: 20_000,
+    enabled: opts.enabled ?? true,
+    // Back off while the index is down instead of hammering it every 20s.
+    refetchInterval: (q) => (q.state.status === "error" ? 60_000 : 20_000),
   });
 }
