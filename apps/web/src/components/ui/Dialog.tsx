@@ -33,6 +33,8 @@ export function Dialog({
       ref={ref}
       onClose={onClose}
       onCancel={onClose}
+      // Clicking the dimmed backdrop closes, like Esc. Nothing is sent from a dialog until its own button is pressed.
+      onClick={(e) => e.target === e.currentTarget && onClose()}
       aria-labelledby={titleId}
       className="glass m-0 mt-auto w-full max-w-none rounded-t-xl border p-0 text-ink shadow-3 backdrop:bg-[var(--overlay)] backdrop:backdrop-blur-sm sm:m-auto sm:max-w-lg sm:rounded-xl"
     >

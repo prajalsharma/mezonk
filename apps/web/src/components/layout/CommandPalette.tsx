@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Search } from "lucide-react";
+import { ArrowRight, Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cx } from "@/components/ui/cx";
@@ -67,6 +67,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       ref={dialog}
       onClose={onClose}
       onCancel={onClose}
+      // A click on the backdrop lands on the <dialog> element itself (its content fills the box): close.
+      onClick={(e) => e.target === e.currentTarget && onClose()}
       aria-label="Search and navigate"
       className="glass m-0 mt-[10vh] w-full max-w-none justify-self-center rounded-lg border p-0 text-ink shadow-3 backdrop:bg-[var(--overlay)] sm:mx-auto sm:max-w-xl"
     >
@@ -87,7 +89,14 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           aria-activedescendant={items[active] ? `palette-${active}` : undefined}
           className="h-12 w-full bg-transparent text-base text-ink placeholder:text-muted focus:outline-none"
         />
-        <kbd className="hidden rounded border border-line px-1.5 text-[11px] text-muted sm:block">esc</kbd>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close search"
+          className="press -mr-2 inline-flex size-10 shrink-0 items-center justify-center rounded-md text-muted hover:bg-surface-2 hover:text-ink"
+        >
+          <X className="size-4" aria-hidden />
+        </button>
       </div>
       <ul id="palette-list" role="listbox" className="max-h-[60vh] overflow-y-auto p-2">
         {items.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted">{markets.isFetching ? "Searching…" : "Nothing matches."}</li>}

@@ -15,3 +15,12 @@ test("resolution panel and bottom navigation are usable at phone width", async (
   await expect(page.getByText(/^Challenged · /)).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Primary" }).last().getByRole("link", { name: "Portfolio" })).toBeVisible();
 });
+
+test("search can be dismissed by tapping outside it at phone width", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Search markets/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Search and navigate" });
+  await expect(dialog).toBeVisible();
+  await page.mouse.click(10, page.viewportSize()!.height - 10);
+  await expect(dialog).toBeHidden();
+});

@@ -67,7 +67,7 @@ export function StoryVisual({ step, active = true }: { step: number; active?: bo
         <p className="max-w-xs text-lg font-medium leading-snug">{QUESTION}</p>
         <span className="shrink-0 text-xs text-muted">Illustration</span>
       </div>
-      <div className="relative min-h-[15rem]">
+      <div className="relative min-h-[12.5rem]">
         {/* 1. Seeding */}
         <div className={cx("story-layer space-y-5", step === 0 ? "is-on" : "")} aria-hidden={step !== 0}>
           <Chip tone="warn">Seeding · not trading yet</Chip>
@@ -141,7 +141,7 @@ export function StoryVisual({ step, active = true }: { step: number; active?: bo
           </div>
         </div>
       </div>
-      <ol className="mt-6 flex gap-1.5" aria-hidden>
+      <ol className="mt-5 flex gap-1.5" aria-hidden>
         {STEPS.map((_, i) => (
           <li key={i} className={cx("h-1 flex-1 rounded-full transition-colors duration-500", i <= step ? "bg-yes" : "bg-surface-2")} />
         ))}
@@ -178,7 +178,7 @@ export function Story() {
             ref={(el) => {
               refs.current[i] = el;
             }}
-            className="space-y-6 lg:flex lg:min-h-[70vh] lg:flex-col lg:justify-center"
+            className="space-y-6 lg:flex lg:min-h-[42vh] lg:flex-col lg:justify-center"
           >
             <div className="space-y-3">
               <span
