@@ -33,7 +33,7 @@ function seam(p: number) {
 // Server-rendered first frame, so the square is there before JavaScript loads.
 const INITIAL = seam(DRIFT[0]!);
 
-export function SeamSplit() {
+export function SeamSplit({ onChange, target }: { onChange?: (yesCents: number) => void; target?: number } = {}) {
   const box = useRef<HTMLDivElement>(null);
   const noPath = useRef<SVGPathElement>(null);
   const yesPath = useRef<SVGPathElement>(null);
@@ -43,6 +43,11 @@ export function SeamSplit() {
   const touched = useRef(false);
   const raf = useRef(0);
   const tapStart = useRef<{ y: number; t: number } | null>(null);
+  const last = useRef(Math.round(DRIFT[0]!));
+  // Only the visitor's own drag, tap or keys report a price; the idle drift and outside-driven glides don't.
+  const fromUser = useRef(false);
+  const emit = useRef(onChange);
+  emit.current = onChange;
 
   const paint = useCallback((v: number) => {
     p.current = v;
@@ -54,6 +59,10 @@ export function SeamSplit() {
     if (noLabel.current) noLabel.current.textContent = `${100 - y}¢`;
     box.current?.setAttribute("aria-valuenow", String(y));
     box.current?.setAttribute("aria-valuetext", `Yes ${y} cents, No ${100 - y} cents`);
+    if (y !== last.current) {
+      last.current = y;
+      if (fromUser.current) emit.current?.(y);
+    }
   }, []);
 
   const glide = useCallback(
@@ -74,7 +83,8 @@ export function SeamSplit() {
   // Slow drift until the visitor takes over: 2.6s glide, then a long rest.
   useEffect(() => {
     paint(p.current);
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // As a price input it holds still; drifting would change the price under the visitor.
+    if (emit.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     let i = 0;
     let visible = true;
     const io = new IntersectionObserver(([e]) => (visible = !!e?.isIntersecting));
@@ -90,6 +100,14 @@ export function SeamSplit() {
       io.disconnect();
     };
   }, [glide, paint]);
+
+  // Driven from outside (the calculator's price slider): glide there and stop drifting.
+  useEffect(() => {
+    if (target == null || target === last.current) return;
+    touched.current = true;
+    fromUser.current = false;
+    glide(Math.min(MAX, Math.max(MIN, target)), 320);
+  }, [target, glide]);
 
   const fromPointer = (clientY: number) => {
     const r = box.current!.getBoundingClientRect();
@@ -115,6 +133,7 @@ export function SeamSplit() {
             return;
           }
           touched.current = true;
+          fromUser.current = true;
           e.currentTarget.setPointerCapture(e.pointerId);
           glide(fromPointer(e.clientY), 260);
         }}
@@ -129,6 +148,7 @@ export function SeamSplit() {
           if (e.pointerType !== "touch" || !t) return;
           if (Math.abs(e.clientY - t.y) > 8 || performance.now() - t.t > 500) return; // that was a scroll, not a tap
           touched.current = true;
+          fromUser.current = true;
           glide(fromPointer(e.clientY), 420);
         }}
         onPointerCancel={() => (tapStart.current = null)}
@@ -137,6 +157,7 @@ export function SeamSplit() {
           if (!d) return;
           e.preventDefault();
           touched.current = true;
+          fromUser.current = true;
           glide(Math.min(MAX, Math.max(MIN, Math.round(p.current) + d * (e.shiftKey ? 10 : 1))), 180);
         }}
       >
@@ -154,9 +175,8 @@ export function SeamSplit() {
         </div>
       </div>
       <figcaption className="mt-4 text-[0.9375rem] text-ink-2">
-        <span className="hidden md:inline">Drag the line.</span>
-        <span className="md:hidden">Tap the square to move the line.</span> However you split it, a Yes and a No add up to exactly
-        1 MUSD.
+        <span className="hidden md:inline">Drag the line to set the price.</span>
+        <span className="md:hidden">Tap the square to set the price.</span> A Yes and a No always add up to exactly 1 MUSD.
       </figcaption>
     </figure>
   );

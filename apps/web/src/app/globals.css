@@ -525,33 +525,91 @@ dialog::backdrop {
   .reveal, .reveal-line, .split-yes, .split-no { animation: none !important; }
 }
 
-/* Story illustration layers: one visible at a time, crossfaded with a little lift and blur. */
-.story-layer {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  transform: translateY(14px);
-  filter: blur(4px);
-  pointer-events: none;
-  transition: opacity 450ms var(--ease-out-quart), transform 600ms var(--ease-out-expo), filter 450ms var(--ease-out-quart);
+/* ---------- Landing v3: depth, light, grain (2026-10-22) ----------
+ * Depth ladder: page (grain + one light) → flat .panel → .float (raised product) → .glass-card (floats over product).
+ * Glass appears only where something sits over something else.
+ */
+:root {
+  --shadow-float: inset 0 1px 0 oklch(1 0 0 / 0.6), 0 8px 16px -8px oklch(0.17 0.012 262 / 0.12), 0 28px 64px -16px oklch(0.17 0.012 262 / 0.26);
+  --light: oklch(0.5 0.22 262 / 0.1);
+  --grain-opacity: 0.035;
 }
-.story-layer.is-on {
-  position: relative;
-  opacity: 1;
-  transform: none;
-  filter: none;
-  pointer-events: auto;
+:root[data-theme="dark"] {
+  --shadow-float: inset 0 1px 0 oklch(1 0 0 / 0.06), 0 8px 16px -8px oklch(0 0 0 / 0.5), 0 28px 64px -16px oklch(0 0 0 / 0.7);
+  --light: oklch(0.65 0.2 262 / 0.16);
+  --grain-opacity: 0.05;
 }
-@media (prefers-reduced-motion: reduce) {
-  .story-layer { transition: opacity 1ms; transform: none; filter: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --shadow-float: inset 0 1px 0 oklch(1 0 0 / 0.06), 0 8px 16px -8px oklch(0 0 0 / 0.5), 0 28px 64px -16px oklch(0 0 0 / 0.7);
+    --light: oklch(0.65 0.2 262 / 0.16);
+    --grain-opacity: 0.05;
+  }
+}
+@layer utilities {
+  .float {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-float);
+  }
+  .glass-card {
+    background: color-mix(in oklch, var(--surface) 62%, transparent);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    backdrop-filter: blur(20px) saturate(140%);
+    box-shadow: var(--shadow-float);
+  }
+  @supports not (backdrop-filter: blur(1px)) {
+    .glass-card { background: var(--surface); }
+  }
+  /* Film grain over the whole page, below content. */
+  .grain::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: var(--grain-opacity);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  /* One soft light, top right of the hero. */
+  .hero-light {
+    background: radial-gradient(30% 50% at 70% 40%, var(--light), transparent 100%);
+  }
 }
 
-/* Funding flow: a dot travels borrow → trade → payout, rests, repeats. Transform only. */
-@keyframes flow {
-  0% { transform: translateX(0); opacity: 0; }
-  8% { opacity: 1; }
-  70% { transform: translateX(100%); opacity: 1; }
-  78%, 100% { transform: translateX(100%); opacity: 0; }
+/* Hero stack: front ticket rises in, cards behind fan out. Pointer tilt via --rx/--ry (set in JS, hover devices only). */
+@keyframes stack-in {
+  from { opacity: 0; transform: translateY(24px) scale(0.98); }
+  to { opacity: 1; transform: none; }
 }
-.flow-track { animation: flow 4.2s var(--ease-standard) infinite; }
-@media (prefers-reduced-motion: reduce) { .flow-track { animation: none; opacity: 0; } }
+@keyframes fan-in {
+  from { opacity: 0; transform: var(--from); }
+  to { opacity: 1; transform: var(--to); }
+}
+.stack-front { animation: stack-in 600ms var(--ease-out-expo) 120ms both; }
+.stack-back { transform: var(--to); animation: fan-in 700ms var(--ease-out-expo) 260ms both; }
+.tilt {
+  transform: perspective(1200px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 220ms var(--ease-out-expo);
+  will-change: transform;
+}
+.sheen {
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 0%), oklch(1 0 0 / 0.08), transparent 70%);
+  opacity: 0;
+  transition: opacity 220ms var(--ease-out-quart);
+}
+.tilt:hover .sheen { opacity: 1; }
+
+/* Tab content: slides 12px from the side of the chosen tab, with a fade. */
+@keyframes from-left { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
+@keyframes from-right { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+.enter-left { animation: from-left 240ms var(--ease-out-expo) both; }
+.enter-right { animation: from-right 240ms var(--ease-out-expo) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stack-front, .stack-back, .enter-left, .enter-right { animation: none; }
+  .tilt { transform: none; transition: none; }
+}

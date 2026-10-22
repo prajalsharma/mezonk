@@ -37,6 +37,8 @@ const ZERO = "0x0000000000000000000000000000000000000000" as const;
 const chain = { id: 31611, name: "fork", nativeCurrency: { name: "BTC", symbol: "BTC", decimals: 18 }, rpcUrls: { default: { http: [RPC] } } } as const;
 export const client = createTestClient({ mode: "anvil", chain, transport: http(RPC) }).extend(publicActions);
 const w = (r: Role) => createWalletClient({ account: privateKeyToAccount(KEYS[r]), chain, transport: http(RPC) });
+/** Signs and sends as a role (for setup outside the exchange, e.g. Mezo's loan contracts). */
+export const walletOf = w;
 export const addr = (r: Role) => privateKeyToAccount(KEYS[r]).address;
 export const E = (n: number) => parseUnits(String(n), 18);
 const send = async (p: Promise<Hash>) => {

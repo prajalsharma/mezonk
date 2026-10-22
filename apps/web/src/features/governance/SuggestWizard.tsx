@@ -146,7 +146,9 @@ interface CheckDto {
 export function SuggestWizard() {
   const router = useRouter();
   const qc = useQueryClient();
-  const editId = useSearchParams().get("edit");
+  const params = useSearchParams();
+  const editId = params.get("edit");
+  const prefill = params.get("q");
   const { isConnected } = useAccount();
   const session = useSession();
   const me = useMe();
@@ -178,7 +180,9 @@ export function SuggestWizard() {
     } catch {
       /* storage unavailable */
     }
-  }, [editId]);
+    // A question typed on the landing page arrives as ?q= and wins over an older draft's question.
+    if (prefill) setF((x) => ({ ...x, question: prefill.slice(0, 160) }));
+  }, [editId, prefill]);
   // Edit mode: load the proposal once signed in (its private fields need the author's session).
   useEffect(() => {
     if (!editId) return;

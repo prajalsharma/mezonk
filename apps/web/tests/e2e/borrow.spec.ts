@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { addr, client, connect, E, musdOf } from "./chain";
+import { parseAbi } from "viem";
+import { addr, client, connect, E, musdOf, walletOf } from "./chain";
+
+const TROVE_MANAGER = "0xE47c80e8c23f6B4A1aE41c34837a0599D5D16bb0";
+const BORROWER_OPS = "0xCdF7028ceAB81fA0C6971208e83fa7872994beE5";
 
 /**
  * Borrowing MUSD on Mezo from the /borrow page, signed by a test wallet against Mezo's real loan contracts on the fork.
@@ -12,6 +16,12 @@ const MOCK_ORACLE = "0x608060405234801561001057600080fd5b50600436106100365760003
 test.beforeAll(async () => {
   await client.setCode({ address: ORACLE, bytecode: MOCK_ORACLE });
   await client.setBalance({ address: addr("creator"), value: E(1) });
+  // Re-runs on the same fork: close the loan a previous run opened (the wallet holds plenty of MUSD to repay it).
+  const status = await client.readContract({ address: TROVE_MANAGER, abi: parseAbi(["function getTroveStatus(address) view returns (uint8)"]), functionName: "getTroveStatus", args: [addr("creator")] });
+  if (status === 1) {
+    const hash = await walletOf("creator").writeContract({ address: BORROWER_OPS, abi: parseAbi(["function closeTrove()"]), functionName: "closeTrove", gas: 3_000_000n });
+    await client.waitForTransactionReceipt({ hash });
+  }
 });
 
 test("a BTC holder borrows MUSD without selling BTC, and sees the terms first", async ({ page }) => {

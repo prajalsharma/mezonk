@@ -185,7 +185,8 @@ export function Board() {
 
 /**
  * The markets block on the landing page. When no exchange is deployed on this network there is nothing to load, so it
- * says so at once instead of showing a skeleton; with a deployment it shows the featured market and the board.
+ * says so at once instead of showing a skeleton; with a deployment it shows real counts and the board (the featured
+ * market lives in the hero).
  */
 export function LiveMarkets() {
   const any = useMarkets({ status: "all", sort: "newest", limit: 1, offset: 0 }, { enabled: deployment.ready });
@@ -208,18 +209,8 @@ export function LiveMarkets() {
     );
   }
   return (
-    <div className="space-y-10">
-      <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr] lg:items-start">
-        <HeroTicket />
-        <div className="space-y-4 lg:pt-2">
-          <p className="text-2xl font-semibold tracking-tight">Pick a side straight from the board.</p>
-          <p className="text-ink-2">
-            Prices come from real trades. With no trade yet you see the middle of the best offers, labelled as indicative, or no
-            number at all.
-          </p>
-          <HeroCounts />
-        </div>
-      </div>
+    <div className="space-y-6">
+      <HeroCounts />
       <Board />
     </div>
   );
