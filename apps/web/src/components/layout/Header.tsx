@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Activity, BookOpen, Compass, LayoutList, Lightbulb, Search, Wallet } from "lucide-react";
+import { BookOpen, LayoutList, Lightbulb, Search, Wallet } from "lucide-react";
 import { Lockup, LogoMark } from "@/components/brand/Logo";
 import { cx } from "@/components/ui/cx";
 import { useAccount } from "wagmi";
@@ -14,12 +14,11 @@ import { NetworkStatus } from "./NetworkStatus";
 import { ThemeToggle } from "./ThemeToggle";
 import { WalletButton } from "@/components/wallet/WalletButton";
 
+// Three primary destinations plus docs. Discover, Activity, Resolution and Status live in the footer.
 export const NAV = [
-  { href: "/discover", label: "Discover", icon: Compass },
   { href: "/markets", label: "Markets", icon: LayoutList },
-  { href: "/suggest", label: "Suggest", icon: Lightbulb },
   { href: "/portfolio", label: "Portfolio", icon: Wallet },
-  { href: "/activity", label: "Activity", icon: Activity },
+  { href: "/suggest", label: "Suggest", icon: Lightbulb },
   { href: "/docs", label: "Docs", icon: BookOpen },
 ] as const;
 
@@ -114,8 +113,8 @@ export function MobileNav() {
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-[var(--z-sticky)] px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] lg:hidden"
     >
-      <ul className="glass mx-auto grid max-w-md grid-cols-5 rounded-xl border shadow-3">
-        {NAV.slice(0, 5).map((n) => {
+      <ul className="glass mx-auto grid max-w-md grid-cols-4 rounded-xl border shadow-3">
+        {NAV.map((n) => {
           const active = isActive(path, n.href);
           return (
             <li key={n.href}>

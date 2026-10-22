@@ -96,8 +96,8 @@ export function ResolutionPanel({
 
   if (!m || chain.stage === undefined) {
     return (
-      <section aria-labelledby="resolution" className="space-y-3">
-        <h2 id="resolution" className="text-xl font-semibold">Resolution</h2>
+      <section aria-labelledby="resolution-title" className="space-y-3">
+        <h2 id="resolution-title" className="text-xl font-semibold">Resolution</h2>
         {chain.isError ? (
           <Notice tone="error" title="Couldn't read the market from the chain">The RPC didn&apos;t respond. Retry shortly.</Notice>
         ) : (
@@ -143,9 +143,9 @@ export function ResolutionPanel({
     claims.push(<ClaimButton key="b" fn="withdrawBond" variant="secondary" marketId={marketId} account={address} avail={p.withdrawBond} amount={p.withdrawBond.amount} title="Withdraw bonds" details={<KeyValue label="Covers">All bonds returned or won, across markets</KeyValue>} onDone={refreshAll} />);
 
   return (
-    <section aria-labelledby="resolution" className="space-y-6">
+    <section aria-labelledby="resolution-title" className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="resolution" className="text-xl font-semibold">Resolution</h2>
+        <h2 id="resolution-title" className="text-xl font-semibold">Resolution</h2>
         <Button variant="ghost" size="sm" loading={refreshing} icon={<RefreshCw className="size-3.5" />} onClick={reconcile}>
           Refresh from chain
         </Button>

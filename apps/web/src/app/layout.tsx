@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Hanken_Grotesk, Instrument_Serif } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { RefCapture } from "@/features/portfolio/Incentives";
@@ -7,29 +7,27 @@ import { Header, MobileNav } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { DeploymentBanner } from "@/components/layout/DeploymentBanner";
 
-// UI: Geist. Numbers: Geist Mono. Hero moments: Instrument Serif. Wordmark only: Hanken Grotesk (brand sheet).
+// One sans for everything (Geist) and a mono for numbers only (Geist Mono). The wordmark is an SVG.
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
-const serif = Instrument_Serif({ subsets: ["latin"], variable: "--font-serif", weight: "400", style: ["normal", "italic"] });
-const hanken = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-hanken", weight: ["600"] });
 
 export const metadata: Metadata = {
   title: { default: "MEZONK · Prediction markets settled in MUSD", template: "%s · MEZONK" },
   description:
-    "Turn your conviction into a market. Trade YES or NO with MUSD on Mezo, with rules committed on-chain and a public dispute trail.",
+    "Trade Yes or No on questions with public rules. Built on Mezo, settled in MUSD.",
   icons: { icon: "/mezonk-icon.svg" },
 };
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#F3F5F8" },
-    { media: "(prefers-color-scheme: dark)", color: "#090C13" },
+    { media: "(prefers-color-scheme: light)", color: "#F8F9FC" },
+    { media: "(prefers-color-scheme: dark)", color: "#080A0E" },
   ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${geist.variable} ${geistMono.variable} ${serif.variable} ${hanken.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${geist.variable} ${geistMono.variable}`}>
       <body className="min-h-dvh">
         <Providers>
           <RefCapture />

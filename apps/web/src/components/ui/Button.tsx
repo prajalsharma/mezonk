@@ -11,9 +11,9 @@ const base =
   "press disabled:opacity-45 disabled:pointer-events-none";
 
 const variants: Record<Variant, string> = {
-  primary: "bg-primary text-on-primary hover:bg-primary/90 shadow-1",
-  accent: "bg-accent text-white hover:bg-accent/90 shadow-[0_8px_24px_-10px_var(--accent)]",
-  secondary: "bg-surface-2 text-ink border border-line hover:border-ink-2/50 hover:bg-surface",
+  primary: "bg-primary text-on-primary hover:bg-primary-hover shadow-1",
+  accent: "bg-accent text-on-primary hover:bg-accent-hover shadow-1",
+  secondary: "bg-surface text-ink border border-line hover:border-line-strong",
   ghost: "text-ink-2 hover:text-ink hover:bg-surface-2",
   yes: "bg-yes text-on-yes hover:bg-yes/90",
   no: "bg-no text-on-no hover:bg-no/90",

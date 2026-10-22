@@ -150,7 +150,7 @@ export function MarketsBrowser() {
               aria-pressed={query.category === c}
               onClick={() => set({ category: query.category === c ? "" : c })}
               className={cx(
-                "press shrink-0 rounded-full border px-3 py-1 text-sm transition-colors",
+                "press shrink-0 rounded-md border px-3 py-1 text-sm transition-colors",
                 query.category === c ? "border-accent bg-accent-soft text-accent-text" : "border-line text-ink-2 hover:border-ink-2/40 hover:text-ink",
               )}
             >

@@ -200,3 +200,31 @@ export interface SignedOrder {
 export interface OrderWithSig extends SignedOrder {
   signature: Hex;
 }
+
+/**
+ * How many shares a budget buys walking taker-priced levels best-first, fee included, in whole lots.
+ * Exact bigint: one lot at p cents costs p·1e14 and its fee is p·bps·1e10, both integers.
+ * `worst` is the highest price touched (use it as the limit), `exhausted` means the book ran out first.
+ */
+export function sharesForBudget(
+  levels: Array<{ price: number; shares: bigint }>,
+  budget: bigint,
+  feeBps: number,
+): { qty: bigint; worst: number | null; exhausted: boolean } {
+  let left = budget;
+  let qty = 0n;
+  let worst: number | null = null;
+  for (const l of [...levels].sort((x, y) => x.price - y.price)) {
+    const perLot = cost(LOT, l.price);
+    const perLotTotal = perLot + feeOf(perLot, feeBps);
+    const avail = l.shares / LOT;
+    const lots = left / perLotTotal < avail ? left / perLotTotal : avail;
+    if (lots > 0n) {
+      qty += lots * LOT;
+      left -= lots * perLotTotal;
+      worst = l.price;
+    }
+    if (lots < avail) return { qty, worst, exhausted: false };
+  }
+  return { qty, worst, exhausted: true };
+}

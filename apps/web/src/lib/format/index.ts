@@ -57,7 +57,13 @@ export const formatDateTime = (d: Date | number) =>
 export const formatDuration = (secs: number) => {
   if (secs % 86400 === 0) return `${secs / 86400} day${secs === 86400 ? "" : "s"}`;
   if (secs % 3600 === 0) return `${secs / 3600} hour${secs === 3600 ? "" : "s"}`;
-  return `${Math.round(secs / 60)} minutes`;
+  // Countdowns: largest two units, never "7941 minutes".
+  const d = Math.floor(secs / 86400);
+  const h = Math.floor((secs % 86400) / 3600);
+  const m = Math.round((secs % 3600) / 60);
+  if (d > 0) return h > 0 ? `${d}d ${h}h` : `${d} day${d === 1 ? "" : "s"}`;
+  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h} hour${h === 1 ? "" : "s"}`;
+  return `${Math.max(1, m)} minute${m === 1 ? "" : "s"}`;
 };
 
 /** Cents as a price label: 55 → "55¢". */

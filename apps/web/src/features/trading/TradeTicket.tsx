@@ -2,7 +2,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { type Address } from "viem";
+import { type Address, parseUnits } from "viem";
 import { useAccount, usePublicClient, useSignTypedData, useWriteContract } from "wagmi";
 import { Button } from "@/components/ui/Button";
 import { cx } from "@/components/ui/cx";
@@ -17,7 +17,7 @@ import { deployment, TESTNET_FUNDING } from "@/lib/chain/config";
 import { exchangeAbi } from "@/lib/contracts/abi";
 import { explainError } from "@/lib/contracts/errors";
 import { formatMusd } from "@/lib/format";
-import { cost, formatShares, parseShares } from "@/lib/orderbook/math";
+import { cost, formatShares, parseShares, sharesForBudget } from "@/lib/orderbook/math";
 import { approveMusd, placeEscrowed, signAndPost, take, takeArgs } from "./actions";
 import { useBook, useQuote } from "./api";
 
@@ -25,6 +25,7 @@ type Action = "buy" | "sell";
 type Side = "yes" | "no";
 type Kind = "market" | "limit";
 type Rest = "signed" | "escrow";
+type Mode = "simple" | "advanced";
 
 const EXPIRY: Record<string, number> = { "1d": 86400, "7d": 7 * 86400, "30d": 30 * 86400 };
 
@@ -64,9 +65,25 @@ export function TradeTicket({
   const [allOrNothing, setAllOrNothing] = useState(false);
   const [restResult, setRestResult] = useState<string | null>(null);
   const [restError, setRestError] = useState<string | null>(null);
+  // Simple: spend an amount of MUSD on one outcome at the best offers. Advanced: shares, limits, selling.
+  const [mode, setModeState] = useState<Mode>("simple");
+  const [amountIn, setAmountIn] = useState("");
+  const [feeBpsSeen, setFeeBpsSeen] = useState(100);
+  const simple = mode === "simple";
+  const setMode = (m: Mode) => {
+    setModeState(m);
+    tx.reset();
+    setRestResult(null);
+    if (m === "simple") {
+      setAction("buy");
+      setKind("market");
+      setAllOrNothing(false);
+    }
+  };
 
   useEffect(() => {
     if (!preset) return;
+    setModeState("advanced");
     setAction(preset.action);
     setKind("limit");
     setPriceIn(String(preset.price));
@@ -74,20 +91,34 @@ export function TradeTicket({
 
   const outcome = side === "yes" ? 0 : 1;
   const sideIdx = action === "buy" ? 0 : 1;
-  const qty = parseShares(qtyIn);
   // Best executable price for this outcome and direction, from the live book (YES terms → outcome terms).
   const b = book.data;
+  const budget = simple && /^\d{1,9}(\.\d{0,2})?$/.test(amountIn) && Number(amountIn) > 0 ? parseUnits(amountIn, 18) : null;
+  const est = useMemo(() => {
+    if (budget == null || !b) return null;
+    const levels =
+      outcome === 0
+        ? b.asks.map((l) => ({ price: l.yes, shares: BigInt(l.shares) }))
+        : b.bids.map((l) => ({ price: 100 - l.yes, shares: BigInt(l.shares) }));
+    return sharesForBudget(levels, budget, feeBpsSeen);
+  }, [budget, b, outcome, feeBpsSeen]);
+  const qty = simple ? (est && est.qty > 0n ? est.qty : null) : parseShares(qtyIn);
   const bestForTaker =
     !b ? null : action === "buy"
       ? outcome === 0 ? b.bestAsk : b.bestBid == null ? null : 100 - b.bestBid
       : outcome === 0 ? b.bestBid : b.bestAsk == null ? null : 100 - b.bestAsk;
   const defaultLimit = bestForTaker == null ? null : action === "buy" ? Math.min(99, bestForTaker + 3) : Math.max(1, bestForTaker - 3);
   const priceNum = /^\d{1,2}$/.test(priceIn) ? Number(priceIn) : null;
-  const limit = priceNum != null && priceNum >= 1 && priceNum <= 99 ? priceNum : kind === "market" ? defaultLimit : null;
+  const limit = simple
+    ? (est?.worst ?? null)
+    : priceNum != null && priceNum >= 1 && priceNum <= 99 ? priceNum : kind === "market" ? defaultLimit : null;
 
   const live = chain.exStage === 1;
   const quote = useQuote(marketId, { outcome, side: sideIdx, quantity: qty, limit, taker: address }, live && !!qty && !!limit);
   const qd = quote.data && quote.data.quote.requested === String(qty) ? quote.data : null;
+  useEffect(() => {
+    if (quote.data && quote.data.feeBps !== feeBpsSeen) setFeeBpsSeen(quote.data.feeBps);
+  }, [quote.data, feeBpsSeen]);
   const filled = qd ? BigInt(qd.quote.filled) : 0n;
   const notional = qd ? BigInt(qd.quote.notional) : 0n;
   const fee = qd ? BigInt(qd.quote.fee) : 0n;
@@ -178,6 +209,7 @@ export function TradeTicket({
     }
     if (kind === "limit" && restQty > 0n) await restRemainder(restQty);
     setQtyIn("");
+    setAmountIn("");
   }
 
   if (!deployment.ready) return <Notice tone="warn" title="Trading is off">The exchange isn&apos;t deployed on this network.</Notice>;
@@ -188,6 +220,8 @@ export function TradeTicket({
   const what = kind === "limit" && filled === 0n ? "Place order" : `${action === "buy" ? "Buy" : "Sell"} ${side === "yes" ? "Yes" : "No"}`;
   if (!isConnected || wrongChain) cta = <WalletButton block />;
   else if (chain.paused) cta = <Button disabled className="w-full" size="lg">Trading paused</Button>;
+  else if (simple && budget == null) cta = <Button disabled className="w-full" size="lg">Enter an amount</Button>;
+  else if (simple && est && est.qty === 0n) cta = <Button disabled className="w-full" size="lg">{est.worst == null && est.exhausted ? "No one is selling" : "Amount too small"}</Button>;
   else if (!qty) cta = <Button disabled className="w-full" size="lg">Enter shares</Button>;
   else if (!limit) cta = <Button disabled className="w-full" size="lg">{kind === "market" ? "No liquidity to trade against" : "Enter a limit price"}</Button>;
   else if (!qd) cta = <Button disabled loading className="w-full" size="lg">Getting a quote</Button>;
@@ -202,10 +236,21 @@ export function TradeTicket({
 
   return (
     <section aria-label="Trade" className="panel space-y-4 p-5 shadow-2">
-      <div className="grid grid-cols-2 gap-2">
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold">{simple ? "Buy" : "Trade"}</h2>
+        <button
+          type="button"
+          onClick={() => setMode(simple ? "advanced" : "simple")}
+          aria-pressed={!simple}
+          className="press rounded-sm px-2 py-1 text-sm font-medium text-ink-2 hover:bg-surface-2 hover:text-ink"
+        >
+          {simple ? "Advanced: sell, limit orders" : "Back to simple"}
+        </button>
+      </div>
+      {!simple && <div className="grid grid-cols-2 gap-2">
         <Segmented label="Direction" value={action} onChange={(v) => { setAction(v); tx.reset(); setRestResult(null); }} options={[{ value: "buy", label: "Buy" }, { value: "sell", label: "Sell" }]} />
         <Segmented label="Order type" value={kind} onChange={(v) => { setKind(v); tx.reset(); }} options={[{ value: "market", label: "Market" }, { value: "limit", label: "Limit" }]} />
-      </div>
+      </div>}
 
       <div role="radiogroup" aria-label="Outcome" className="grid grid-cols-2 gap-2">
         {(["yes", "no"] as const).map((s) => {
@@ -232,6 +277,38 @@ export function TradeTicket({
         })}
       </div>
 
+      {simple ? (
+        <div className="space-y-1.5">
+          <div className="flex items-baseline justify-between text-sm">
+            <label htmlFor="tt-amount" className="font-medium">Amount</label>
+            {isConnected && musd.balance !== undefined && musd.balance > 0n && (
+              <button
+                type="button"
+                className="mono text-xs text-ink-2 hover:text-ink"
+                onClick={() => setAmountIn(formatMusd(musd.balance!).replace(/,/g, ""))}
+              >
+                Balance {formatMusd(musd.balance)}
+              </button>
+            )}
+          </div>
+          <div className="relative">
+            <input
+              id="tt-amount"
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder="0"
+              value={amountIn}
+              onChange={(e) => {
+                const v = e.target.value.replace(",", ".");
+                if (/^\d{0,9}(\.\d{0,2})?$/.test(v)) setAmountIn(v);
+                if (tx.state.phase === "confirmed" || tx.state.phase === "failed") tx.reset();
+              }}
+              className={cx(inputClass, "mono h-12 pr-16 text-xl font-semibold")}
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">MUSD</span>
+          </div>
+        </div>
+      ) : (
       <div className="grid grid-cols-[1fr_7rem] gap-2">
         <div className="space-y-1.5">
           <div className="flex items-baseline justify-between text-sm">
@@ -279,6 +356,7 @@ export function TradeTicket({
           </div>
         </div>
       </div>
+      )}
 
       {kind === "limit" && (
         <fieldset className="space-y-2 rounded-md border border-line p-3">
@@ -302,7 +380,7 @@ export function TradeTicket({
           )}
         </fieldset>
       )}
-      {kind === "market" && (
+      {kind === "market" && !simple && (
         <label className="flex items-center gap-2 text-sm text-ink-2">
           <input type="checkbox" checked={allOrNothing} onChange={(e) => setAllOrNothing(e.target.checked)} />
           All or nothing (otherwise fill what&apos;s available and cancel the rest)
@@ -311,7 +389,11 @@ export function TradeTicket({
 
       {qty && limit && qd && (
         <dl className="divide-y divide-line rounded-md border border-line bg-sunk/60 px-3.5" aria-live="polite">
-          <KeyValue label="Fills now">{formatShares(filled)} of {formatShares(qty)} shares</KeyValue>
+          {simple ? (
+            <KeyValue label="Shares you get">{formatShares(filled)} {side === "yes" ? "Yes" : "No"}</KeyValue>
+          ) : (
+            <KeyValue label="Fills now">{formatShares(filled)} of {formatShares(qty)} shares</KeyValue>
+          )}
           {filled > 0n && (
             <>
               <KeyValue label="Average price">{avg != null ? `${avg.toFixed(2)}¢` : "—"}{qd.quote.worstPrice != null && qd.quote.worstPrice !== qd.quote.bestPrice ? ` (up to ${qd.quote.worstPrice}¢)` : ""}</KeyValue>
@@ -331,6 +413,11 @@ export function TradeTicket({
         </dl>
       )}
 
+      {simple && est?.exhausted && est.qty > 0n && (
+        <Notice tone="warn" title="That's more than is on offer">
+          Only {formatShares(est.qty)} {side === "yes" ? "Yes" : "No"} shares are offered right now. The rest of your amount stays in your wallet.
+        </Notice>
+      )}
       {qty && limit && qd && kind === "market" && unfilled > 0n && (
         <Notice tone="warn" title="Not enough liquidity at this price">
           {filled > 0n

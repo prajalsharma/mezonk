@@ -40,8 +40,8 @@ export function OrderBook({ marketId, onPick }: { marketId: number; onPick?: (p:
           className="group relative grid w-full grid-cols-[4rem_1fr_1fr] items-center gap-2 px-3 py-1 text-left text-sm hover:bg-surface-2"
           aria-label={`${kind === "ask" ? "Offer to sell" : "Bid to buy"} ${formatShares(BigInt(l.shares))} ${view === "yes" ? "Yes" : "No"} at ${l.yes} cents. Use this price.`}
         >
-          <span aria-hidden className={cx("absolute inset-y-0.5 right-0 rounded-l-sm", kind === "ask" ? "bg-danger-soft" : "bg-success-soft")} style={{ width: `${pct}%` }} />
-          <span className={cx("mono relative font-semibold", kind === "ask" ? "text-danger" : "text-success")}>{l.yes}¢</span>
+          <span aria-hidden className={cx("absolute inset-y-0.5 right-0 rounded-l-sm", kind === "ask" ? "bg-[var(--ask-depth)]" : "bg-[var(--bid-depth)]")} style={{ width: `${pct}%` }} />
+          <span className={cx("mono relative font-semibold", kind === "ask" ? "text-no-text" : "text-yes-text")}>{l.yes}¢</span>
           <span className="mono relative flex items-center justify-end gap-1 text-ink">
             {BigInt(l.resting) > 0n && <Lock aria-label="includes escrowed liquidity" className="size-3 text-muted" />}
             {formatShares(BigInt(l.shares))}

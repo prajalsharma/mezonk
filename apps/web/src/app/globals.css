@@ -3,110 +3,164 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /*
- * MEZONK design tokens. Every colour in the app comes from here.
- * Brand anchors: cream #F2EFE9, ink #14110F, red #FF004D.
- * Contrast targets (WCAG 2.2 AA) are noted beside text tokens.
- */
-/*
- * MEZONK "Night market" tokens (docs/NEW_DESIGN_LANGUAGE.md). Every colour in the app comes from here.
- * Dark is the native theme; light is crisp cool white (never cream). Accent = logo red = YES.
- * Contrast targets (WCAG 2.2 AA) are noted beside text tokens.
+ * MEZONK tokens (Seam brand, 2026-10-22). Every colour in the app comes from here.
+ * Blue = YES and the brand; near-black/near-white = NO; red/green only for loss/gain and errors.
+ * Light by default, follows the OS, [data-theme] overrides. Contrast ratios: docs/design/contrast.md.
  */
 :root {
   color-scheme: light;
-  --bg: #f3f5f8;
-  --surface: #ffffff;
-  --surface-2: #eef1f5; /* raised / hover / selected */
-  --surface-sunk: #e8ebf0; /* inputs, chart wells */
-  --ink: #0b0f19; /* 17.9:1 on bg */
-  --ink-2: #414a5e; /* 8.6:1 */
-  --muted: #5f687c; /* 5.4:1 */
-  --border: #dde2ea;
-  --border-strong: #0b0f19;
-  --accent: #ff004d;
-  --accent-text: #d4003f; /* 5.1:1 on bg */
-  --accent-soft: #ffe3eb;
+  --bg: oklch(0.982 0.004 262); /* #F8F9FC page */
+  --surface: oklch(1 0 0); /* #FFFFFF panels */
+  --surface-2: oklch(0.955 0.006 262); /* #EEF0F4 raised / hover / selected */
+  --surface-sunk: oklch(0.965 0.005 262); /* #F1F3F7 inputs, chart wells */
+  --ink: oklch(0.17 0.012 262); /* #0D0F15, 18.2:1 on bg */
+  --ink-2: oklch(0.44 0.02 262); /* #4D535E, 7.35:1 */
+  --muted: oklch(0.52 0.02 262); /* #636975, 5.24:1 */
+  --border: oklch(0.91 0.008 262); /* #DEE1E7 */
+  --border-strong: oklch(0.655 0.02 262); /* #8A919D, 3.0:1 */
+  --accent: oklch(0.5 0.22 262); /* #0A54DD */
+  --accent-hover: oklch(0.45 0.22 262);
+  --accent-pressed: oklch(0.4 0.22 262);
+  --accent-text: oklch(0.5 0.22 262); /* 6.0:1 */
+  --accent-soft: oklch(0.965 0.025 262); /* #EEF4FF */
 
-  /* Outcomes follow the split-coin logo: red half = YES, ink half = NO. */
-  --yes: #ff004d;
-  --on-yes: #ffffff;
-  --yes-text: #d4003f;
-  --yes-soft: #ffe3eb;
-  --no: #0b0f19;
-  --on-no: #ffffff;
-  --no-text: #0b0f19;
-  --no-soft: #e4e8ef;
+  /* Outcomes follow the Seam mark: blue = YES, ink = NO. Never red or green. Always labelled. */
+  --yes: var(--accent);
+  --on-yes: oklch(1 0 0);
+  --yes-text: var(--accent-text);
+  --yes-soft: var(--accent-soft);
+  --no: oklch(0.17 0.012 262);
+  --on-no: oklch(1 0 0);
+  --no-text: oklch(0.17 0.012 262);
+  --no-soft: oklch(0.955 0.004 262);
 
-  --danger: #a33a0b; /* 6.6:1 */
-  --danger-soft: #fde7dc;
-  --success: #037f5e; /* 5.0:1 */
-  --success-soft: #d9f5ec;
-  --gain: #037f5e;
-  --loss: #9a5b00;
-  --warn: #8f5400; /* 5.6:1 */
-  --warn-soft: #fff0d4;
-  --info: #2e57a8;
-  --primary: #0b0f19;
-  --on-primary: #ffffff;
-  --focus: #ff004d;
-  --logo-ink: #0b0f19;
-  --logo-red: #ff004d;
-  --glass: rgba(255, 255, 255, 0.78);
-  --glass-border: rgba(11, 15, 25, 0.08);
-  --grid-line: rgba(11, 15, 25, 0.045);
-  --glow: rgba(255, 0, 77, 0.1);
-  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.05);
-  --shadow-2: 0 10px 30px -12px rgba(16, 24, 40, 0.18);
-  --shadow-3: 0 24px 60px -20px rgba(16, 24, 40, 0.28);
-  --overlay: rgba(9, 12, 19, 0.5);
+  --danger: oklch(0.46 0.2 27); /* #A60A13, 7.5:1 */
+  --danger-soft: oklch(0.96 0.02 27);
+  --success: oklch(0.48 0.13 155); /* #00703E, 5.9:1 */
+  --success-soft: oklch(0.96 0.03 155);
+  --gain: oklch(0.5 0.14 150); /* #057836 */
+  --loss: oklch(0.52 0.2 25); /* #C21725 */
+  --warn: oklch(0.52 0.12 75); /* #8D5E01, 5.3:1 */
+  --warn-soft: oklch(0.96 0.035 85);
+  --info: oklch(0.5 0.1 235); /* #136B94 */
+  --primary: var(--accent);
+  --primary-hover: var(--accent-hover);
+  --on-primary: oklch(1 0 0);
+  --focus: oklch(0.5 0.22 262);
+  --logo-no: oklch(0.17 0.012 262);
+  --logo-yes: oklch(0.5 0.22 262);
+  --glass: color-mix(in oklch, var(--surface) 82%, transparent);
+  --glass-border: color-mix(in oklch, var(--ink) 9%, transparent);
+  --bid-depth: color-mix(in oklch, var(--yes) 18%, transparent);
+  --ask-depth: color-mix(in oklch, var(--no) 12%, transparent);
+  --shadow-1: 0 1px 2px oklch(0.17 0.012 262 / 0.08), 0 2px 8px oklch(0.17 0.012 262 / 0.06);
+  --shadow-2: 0 8px 32px oklch(0.17 0.012 262 / 0.14);
+  --shadow-3: 0 8px 32px oklch(0.17 0.012 262 / 0.16);
+  --overlay: oklch(0.145 0.01 262 / 0.5);
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #090c13;
-  --surface: #10141d;
-  --surface-2: #171c27;
-  --surface-sunk: #06080d;
-  --ink: #e9edf4; /* 16.8:1 on bg */
-  --ink-2: #a8b0c0; /* 9.0:1 */
-  --muted: #7d8699; /* 5.5:1 */
-  --border: #1f2532;
-  --border-strong: #e9edf4;
-  --accent: #ff004d;
-  --accent-text: #ff4f7e; /* 6.1:1 */
-  --accent-soft: #2a0f18;
+  --bg: oklch(0.145 0.01 262); /* #080A0E */
+  --surface: oklch(0.185 0.012 262); /* #101318 */
+  --surface-2: oklch(0.225 0.014 262); /* #181C22 */
+  --surface-sunk: oklch(0.165 0.011 262);
+  --ink: oklch(0.97 0.004 262); /* #F4F5F8, 18.2:1 on bg */
+  --ink-2: oklch(0.76 0.015 262); /* #ACB1BB, 8.65:1 on surface */
+  --muted: oklch(0.66 0.02 262); /* #8C939F, 6.0:1 on surface */
+  --border: oklch(0.3 0.015 262); /* #2A2E36 */
+  --border-strong: oklch(0.5 0.02 262); /* #5D646F */
+  --accent: oklch(0.66 0.19 262); /* #528DFE */
+  --accent-hover: oklch(0.71 0.19 262);
+  --accent-pressed: oklch(0.62 0.19 262);
+  --accent-text: oklch(0.71 0.17 262); /* lighter for small text on surfaces */
+  --accent-soft: oklch(0.25 0.06 262); /* #11213E */
 
-  --yes: #ff004d;
-  --on-yes: #ffffff;
-  --yes-text: #ff4f7e;
-  --yes-soft: #2a0f18;
-  --no: #e9edf4; /* ink half inverts on dark surfaces */
-  --on-no: #090c13;
-  --no-text: #e9edf4;
-  --no-soft: #1c2230;
+  --yes: var(--accent);
+  --on-yes: oklch(0.145 0.01 262);
+  --yes-text: var(--accent-text);
+  --yes-soft: var(--accent-soft);
+  --no: oklch(0.97 0.004 262); /* NO inverts to near-white on dark */
+  --on-no: oklch(0.145 0.01 262);
+  --no-text: oklch(0.97 0.004 262);
+  --no-soft: oklch(0.26 0.008 262);
 
-  --danger: #ff8a4c; /* 7.9:1 */
-  --danger-soft: #2b160c;
-  --success: #2fd4a7; /* 10.1:1 */
-  --success-soft: #0b241e;
-  --gain: #2fd4a7;
-  --loss: #ffb020;
-  --warn: #ffb020;
-  --warn-soft: #2a1e07;
-  --info: #8fb2ff;
-  --primary: #e9edf4;
-  --on-primary: #090c13;
-  --focus: #ff4f7e;
-  --logo-ink: #e9edf4;
-  --logo-red: #ff004d;
-  --glass: rgba(16, 20, 29, 0.72);
-  --glass-border: rgba(233, 237, 244, 0.08);
-  --grid-line: rgba(233, 237, 244, 0.04);
-  --glow: rgba(255, 0, 77, 0.16);
-  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.4);
-  --shadow-2: 0 16px 40px -16px rgba(0, 0, 0, 0.8);
-  --shadow-3: 0 28px 70px -20px rgba(0, 0, 0, 0.9);
-  --overlay: rgba(3, 5, 9, 0.7);
+  --danger: oklch(0.7 0.19 27); /* #FF655A */
+  --danger-soft: oklch(0.24 0.05 27);
+  --success: oklch(0.78 0.15 155);
+  --success-soft: oklch(0.24 0.045 155);
+  --gain: oklch(0.78 0.16 150);
+  --loss: oklch(0.72 0.17 25);
+  --warn: oklch(0.82 0.14 85);
+  --warn-soft: oklch(0.25 0.045 85);
+  --info: oklch(0.76 0.09 235);
+  --primary: var(--accent);
+  --primary-hover: var(--accent-hover);
+  --on-primary: oklch(0.145 0.01 262);
+  --focus: oklch(0.78 0.12 262); /* #91B7FE */
+  --logo-no: oklch(0.97 0.004 262);
+  --logo-yes: oklch(0.66 0.19 262);
+  --glass: color-mix(in oklch, var(--surface) 80%, transparent);
+  --glass-border: color-mix(in oklch, var(--ink) 9%, transparent);
+  --bid-depth: color-mix(in oklch, var(--yes) 22%, transparent);
+  --ask-depth: color-mix(in oklch, var(--no) 14%, transparent);
+  --shadow-1: 0 1px 0 oklch(0 0 0 / 0.4);
+  --shadow-2: 0 8px 32px oklch(0 0 0 / 0.5);
+  --shadow-3: 0 12px 40px oklch(0 0 0 / 0.6);
+  --overlay: oklch(0.1 0.01 262 / 0.7);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+  --bg: oklch(0.145 0.01 262); /* #080A0E */
+  --surface: oklch(0.185 0.012 262); /* #101318 */
+  --surface-2: oklch(0.225 0.014 262); /* #181C22 */
+  --surface-sunk: oklch(0.165 0.011 262);
+  --ink: oklch(0.97 0.004 262); /* #F4F5F8, 18.2:1 on bg */
+  --ink-2: oklch(0.76 0.015 262); /* #ACB1BB, 8.65:1 on surface */
+  --muted: oklch(0.66 0.02 262); /* #8C939F, 6.0:1 on surface */
+  --border: oklch(0.3 0.015 262); /* #2A2E36 */
+  --border-strong: oklch(0.5 0.02 262); /* #5D646F */
+  --accent: oklch(0.66 0.19 262); /* #528DFE */
+  --accent-hover: oklch(0.71 0.19 262);
+  --accent-pressed: oklch(0.62 0.19 262);
+  --accent-text: oklch(0.71 0.17 262); /* lighter for small text on surfaces */
+  --accent-soft: oklch(0.25 0.06 262); /* #11213E */
+
+  --yes: var(--accent);
+  --on-yes: oklch(0.145 0.01 262);
+  --yes-text: var(--accent-text);
+  --yes-soft: var(--accent-soft);
+  --no: oklch(0.97 0.004 262); /* NO inverts to near-white on dark */
+  --on-no: oklch(0.145 0.01 262);
+  --no-text: oklch(0.97 0.004 262);
+  --no-soft: oklch(0.26 0.008 262);
+
+  --danger: oklch(0.7 0.19 27); /* #FF655A */
+  --danger-soft: oklch(0.24 0.05 27);
+  --success: oklch(0.78 0.15 155);
+  --success-soft: oklch(0.24 0.045 155);
+  --gain: oklch(0.78 0.16 150);
+  --loss: oklch(0.72 0.17 25);
+  --warn: oklch(0.82 0.14 85);
+  --warn-soft: oklch(0.25 0.045 85);
+  --info: oklch(0.76 0.09 235);
+  --primary: var(--accent);
+  --primary-hover: var(--accent-hover);
+  --on-primary: oklch(0.145 0.01 262);
+  --focus: oklch(0.78 0.12 262); /* #91B7FE */
+  --logo-no: oklch(0.97 0.004 262);
+  --logo-yes: oklch(0.66 0.19 262);
+  --glass: color-mix(in oklch, var(--surface) 80%, transparent);
+  --glass-border: color-mix(in oklch, var(--ink) 9%, transparent);
+  --bid-depth: color-mix(in oklch, var(--yes) 22%, transparent);
+  --ask-depth: color-mix(in oklch, var(--no) 14%, transparent);
+  --shadow-1: 0 1px 0 oklch(0 0 0 / 0.4);
+  --shadow-2: 0 8px 32px oklch(0 0 0 / 0.5);
+  --shadow-3: 0 12px 40px oklch(0 0 0 / 0.6);
+  --overlay: oklch(0.1 0.01 262 / 0.7);
+  }
 }
 
 @theme inline {
@@ -145,8 +199,8 @@
 
   --font-sans: var(--font-geist), "Helvetica Neue", system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
-  --font-display: var(--font-serif), "Times New Roman", serif;
-  --font-brand: var(--font-hanken), var(--font-geist), sans-serif;
+  --color-accent-hover: var(--accent-hover);
+  --color-primary-hover: var(--primary-hover);
   --color-raised: var(--surface-2);
 
   /* Type scale, ratio ~1.2, fixed rem (product register) */
@@ -169,10 +223,11 @@
   --text-5xl: 4.25rem;
   --text-5xl--line-height: 1;
 
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
-  --radius-xl: 24px;
+  /* One radius scale: 4 / 8 / 14 (xl aliases lg). */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-xl: 14px;
 
   --shadow-1: var(--shadow-1);
   --shadow-2: var(--shadow-2);
@@ -180,6 +235,7 @@
 
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
 
   --breakpoint-xs: 22.5rem;
 }
@@ -212,7 +268,7 @@
   }
   ::selection {
     background: var(--accent);
-    color: #fff;
+    color: var(--on-primary);
   }
   /* z-index scale */
   :root {
@@ -261,34 +317,28 @@
   .theme-transition * {
     transition: background-color 220ms var(--ease-out-quart), color 220ms var(--ease-out-quart), border-color 220ms var(--ease-out-quart) !important;
   }
-  .wordmark {
-    font-family: var(--font-brand);
-    font-weight: 600;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-  }
-  /* Editorial serif for hero and landing section titles only. */
+  /* Display headings: one sans family, tight tracking. No serif, no italic accent words. */
   .display {
-    font-family: var(--font-display);
-    font-weight: 400;
-    letter-spacing: -0.01em;
-    line-height: 0.98;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    line-height: 1.02;
   }
   .display em {
-    font-style: italic;
+    font-style: normal;
   }
-  /* Numbers and data labels. */
+  /* Numbers only. */
   .mono {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.01em;
   }
+  /* Small field label: sentence case, never an uppercase eyebrow. */
   .label {
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    font-size: 0.8125rem;
     line-height: 1rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    font-weight: 500;
+    letter-spacing: 0.005em;
     color: var(--muted);
   }
   /* Raised content surface. Not glass: glass is for floating chrome only. */
@@ -299,21 +349,17 @@
   }
   /* Cards that lift on hover; transform + shadow only. */
   .card-hover {
-    transition: transform 180ms var(--ease-out-quart), box-shadow 180ms var(--ease-out-quart), border-color 180ms var(--ease-out-quart);
+    transition: transform 200ms var(--ease-standard), box-shadow 200ms var(--ease-standard), border-color 200ms var(--ease-standard);
   }
   .card-hover:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-2);
-    border-color: color-mix(in oklab, var(--border) 50%, var(--ink-2));
+    border-color: var(--border-strong);
   }
-  /* Faint terminal grid behind hero moments, masked to fade out. */
-  .grid-bg {
-    background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-    background-size: 44px 44px;
-    mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 30%, transparent 75%);
-  }
+  /* Retired decorative backgrounds (grid paper, glows). Kept as no-ops so old markup stays harmless. */
+  .grid-bg,
   .glow {
-    background: radial-gradient(60% 60% at 70% 30%, var(--glow), transparent 70%);
+    background: none;
   }
   .live-dot {
     position: relative;
@@ -393,4 +439,86 @@ dialog::backdrop {
   0% { opacity: 0.55; }
   50% { opacity: 1; }
   100% { opacity: 0.55; }
+}
+
+/* ---------- Landing motion (Seam) ----------
+ * Load-time motion uses keyframes with `both`, so content is visible once the animation ends.
+ * Scroll reveals use scroll-driven timelines inside @supports, filled forwards only: before an element enters the
+ * viewport it keeps its visible base style, so nothing is ever gated on a scroll position (crawlers, screenshots, no support).
+ */
+@keyframes seam-top {
+  from { transform: translateY(-14%); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes seam-bottom {
+  from { transform: translateY(14%); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes draw {
+  from { stroke-dashoffset: var(--len, 1200); }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes line-in {
+  from { opacity: 0; transform: translateY(0.35em); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes reveal {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes grow-y {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+@keyframes split-yes {
+  from { transform: translateY(0); }
+  to { transform: translateY(10px); }
+}
+@keyframes split-no {
+  from { transform: translateY(0); }
+  to { transform: translateY(-10px); }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@layer utilities {
+  .seam-top { animation: seam-top 900ms var(--ease-out-expo) both; }
+  .seam-bottom { animation: seam-bottom 900ms var(--ease-out-expo) 80ms both; }
+  .draw {
+    stroke-dasharray: var(--len, 1200);
+    animation: draw var(--draw-dur, 2200ms) var(--ease-out-quart) var(--draw-delay, 200ms) both;
+  }
+  .line-in {
+    display: inline-block;
+    animation: line-in 800ms var(--ease-out-expo) both;
+    animation-delay: calc(120ms + var(--i, 0) * 90ms);
+  }
+  .rise-in {
+    animation: reveal 700ms var(--ease-out-expo) both;
+    animation-delay: calc(320ms + var(--i, 0) * 80ms);
+  }
+  .pulse-dot { animation: pulse-dot 2s var(--ease-standard) infinite; }
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: reveal linear forwards;
+      animation-timeline: view();
+      animation-range: entry 0% entry 55%;
+    }
+    .reveal-line {
+      transform-origin: top;
+      animation: grow-y linear forwards;
+      animation-timeline: view();
+      animation-range: entry 20% cover 70%;
+    }
+    .split-yes, .split-no {
+      animation: split-yes linear forwards;
+      animation-timeline: view();
+      animation-range: entry 40% cover 50%;
+    }
+    .split-no { animation-name: split-no; }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .reveal-line, .split-yes, .split-no { animation: none !important; }
 }

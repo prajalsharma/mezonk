@@ -65,15 +65,15 @@ test.describe("seeding and launch", () => {
 });
 
 test.describe("live trading", () => {
-  test("a big market buy fills only real liquidity, says so, and settles exactly", async ({ page }) => {
+  test("a simple buy of more MUSD than is offered takes only real liquidity, says so, and settles exactly", async ({ page }) => {
     const id = await liveMarket("market-buy");
     // Asks left: bob's No bid at 45 has 60 of 80 shares remaining (alice bought 20) = 60 Yes at 55¢.
     await page.goto(`/markets/${id}`);
     await connect(page, "carol");
     const ticket = page.getByRole("region", { name: "Trade" });
-    await ticket.locator("#tt-qty").fill("1000");
-    await expect(ticket.getByText("Not enough liquidity at this price")).toBeVisible();
-    await expect(ticket.getByText(/Only 60 shares are offered/)).toBeVisible();
+    await ticket.locator("#tt-amount").fill("1000");
+    await expect(ticket.getByText("That's more than is on offer")).toBeVisible();
+    await expect(ticket.getByText(/Only 60 Yes shares are offered/)).toBeVisible();
 
     const musd0 = await musdOf(addr("carol"));
     const yes0 = await read<bigint>("sharesOf", [id, YES, addr("carol")]);
@@ -88,6 +88,7 @@ test.describe("live trading", () => {
     await page.goto(`/markets/${id}`);
     await connect(page, "carol");
     const ticket = page.getByRole("region", { name: "Trade" });
+    await ticket.getByRole("button", { name: /Advanced/ }).click();
     await ticket.getByLabel(/All or nothing/).check();
     await ticket.locator("#tt-qty").fill("500");
     await expect(ticket.getByRole("button", { name: "Can't fill all of it" })).toBeDisabled();
@@ -98,6 +99,7 @@ test.describe("live trading", () => {
     await page.goto(`/markets/${id}`);
     await connect(page, "carol");
     const ticket = page.getByRole("region", { name: "Trade" });
+    await ticket.getByRole("button", { name: /Advanced/ }).click();
     await ticket.getByRole("radio", { name: "Limit" }).click();
     await ticket.locator("#tt-qty").fill("10");
     await ticket.locator("#tt-price").fill("50");
@@ -121,6 +123,7 @@ test.describe("live trading", () => {
   test("the order book shows real levels and the mid is labelled indicative", async ({ page }) => {
     const id = await liveMarket("book");
     await page.goto(`/markets/${id}`);
+    await page.getByText("Order book and recent trades").click(); // collapsed by default
     const book = page.getByRole("region", { name: "Order book" });
     await expect(book.getByRole("list", { name: /Asks/ }).getByText("55¢")).toBeVisible();
     await expect(book.getByRole("list", { name: /Bids/ }).getByText("45¢")).toBeVisible();

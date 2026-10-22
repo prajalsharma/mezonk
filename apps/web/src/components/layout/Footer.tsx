@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LogoMark, Wordmark } from "@/components/brand/Logo";
+import { Lockup } from "@/components/brand/Logo";
 import { deployment, explorerAddress, readinessMessage } from "@/lib/chain/config";
 import { shortAddress } from "@/lib/format";
 
@@ -54,8 +54,7 @@ export function Footer() {
       <div className="mx-auto grid max-w-[84rem] gap-12 px-4 py-14 md:px-6 lg:grid-cols-[1.4fr_2fr]">
         <div className="space-y-5">
           <Link href="/" className="inline-flex items-center gap-3 text-ink" aria-label="MEZONK home">
-            <LogoMark size={36} title="" />
-            <Wordmark className="text-lg" />
+            <Lockup size={30} />
           </Link>
           <p className="max-w-sm text-sm text-ink-2">
             Prediction markets built on{" "}

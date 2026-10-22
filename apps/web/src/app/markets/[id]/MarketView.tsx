@@ -83,6 +83,16 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
   const [side, setSide] = useState<"yes" | "no">(params.get("side") === "no" ? "no" : "yes");
   const { add } = useRecentlyViewed();
   useEffect(() => add(id), [id, add]);
+  // In-page links to a collapsed section (#book, #resolution) open it.
+  useEffect(() => {
+    const openTarget = () => {
+      const el = window.location.hash ? document.getElementById(window.location.hash.slice(1)) : null;
+      if (el instanceof HTMLDetailsElement) el.open = true;
+    };
+    openTarget();
+    window.addEventListener("hashchange", openTarget);
+    return () => window.removeEventListener("hashchange", openTarget);
+  }, []);
   const meta = useMemo(() => (indexed ? parseMetadata(indexed.metadataRaw) : null), [indexed]);
   const m = chain.market;
   const raw = chain.raw;
@@ -136,11 +146,11 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
   ) : null;
 
   const sections: Array<[string, string]> = [
-    ...(!preLaunch ? ([["book", "Book"]] as Array<[string, string]>) : []),
     ["chart", "Chart"],
+    ...(!preLaunch ? ([["book", "Order book"]] as Array<[string, string]>) : []),
     ...(indexed ? ([["rules", "Rules"]] as Array<[string, string]>) : []),
-    ["resolution", "Resolution"],
     ...(indexed ? ([["discussion", "Discussion"]] as Array<[string, string]>) : []),
+    ["resolution", "Resolution"],
     ...(indexed ? ([["activity", "Activity"]] as Array<[string, string]>) : []),
     ["contract", "On-chain"],
   ];
@@ -238,11 +248,37 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
                   </p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
+                  {/* One headline number with provenance, then the two ways in. */}
+                  <div className="flex flex-wrap items-end justify-between gap-3">
+                    {shown != null ? (
+                      <p className="flex items-baseline gap-2">
+                        <span className="mono text-5xl font-medium tracking-tight md:text-6xl">
+                          {priceYes == null && "~"}
+                          {formatProb(shown)}
+                        </span>
+                        <span className="text-lg font-semibold text-yes-text">Yes</span>
+                      </p>
+                    ) : (
+                      <p className="text-2xl font-medium text-ink-2">No trades yet</p>
+                    )}
+                    {indexed && priceYes != null && indexed.priceYes24hAgo != null && (
+                      <span className="mono pb-2 text-sm">
+                        <Change from={indexed.priceYes24hAgo} to={priceYes} /> <span className="text-muted">24h</span>
+                      </span>
+                    )}
+                  </div>
+                  {shown != null && <ProbabilityBar priceYes={shown} size="lg" />}
+                  <p className="text-xs text-muted">
+                    {priceYes != null
+                      ? "Chance of Yes from the last trade. A price, not a guarantee."
+                      : indicative != null
+                        ? "No trades yet. This is the middle of the best offers (indicative, not a trade)."
+                        : "No trades and no offers on both sides yet, so there is no price."}
+                  </p>
                   <div className="grid grid-cols-2 gap-2 md:gap-3">
                     {(["yes", "no"] as const).map((s) => {
                       const buyAt = !bk ? null : s === "yes" ? bk.bestAsk : bk.bestBid == null ? null : 100 - bk.bestBid;
-                      const sellAt = !bk ? null : s === "yes" ? bk.bestBid : bk.bestAsk == null ? null : 100 - bk.bestAsk;
                       const active = open && side === s;
                       return (
                         <button
@@ -253,42 +289,30 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
                           onClick={() => setSide(s)}
                           className={cx(
                             m?.finalized && "opacity-60",
-                            "press group rounded-md border p-4 text-left transition-[border-color,background-color,box-shadow] duration-200 disabled:cursor-default md:p-5",
+                            "press flex h-14 items-center justify-between rounded-md border px-4 font-semibold transition-[border-color,background-color,color] duration-200 disabled:cursor-default",
                             active
                               ? s === "yes"
-                                ? "border-yes bg-yes-soft shadow-[0_0_0_3px_var(--accent-soft)]"
-                                : "border-no bg-no-soft shadow-[0_0_0_3px_var(--no-soft)]"
-                              : "border-line bg-surface hover:border-ink-2/40",
+                                ? "border-yes bg-yes text-on-yes"
+                                : "border-no bg-no text-on-no"
+                              : cx("border-line bg-surface hover:border-line-strong", s === "yes" ? "text-yes-text" : "text-no-text"),
                           )}
                         >
-                          <span className={cx("text-sm font-semibold", s === "yes" ? "text-yes-text" : "text-no-text")}>{s === "yes" ? "Yes" : "No"}</span>
-                          <span className="mono mt-1 block text-3xl font-semibold tracking-tight text-ink md:text-4xl">{buyAt != null ? `${buyAt}¢` : "—"}</span>
-                          <span className="mono mt-1 block text-xs text-muted">
-                            {buyAt != null ? "best offer to buy" : "no one selling"} · {sellAt != null ? `sell at ${sellAt}¢` : "no buyers"}
-                          </span>
+                          <span>Buy {s === "yes" ? "Yes" : "No"}</span>
+                          <span className="mono">{buyAt != null ? `${buyAt}¢` : "no offers"}</span>
                         </button>
                       );
                     })}
                   </div>
-                  {shown != null && <ProbabilityBar priceYes={shown} size="lg" />}
-                  <p className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-                    <span>
-                      {priceYes != null
-                        ? `Last trade: Yes at ${formatProb(priceYes)}. A price, not a guarantee.`
-                        : indicative != null
-                          ? `No trades yet. Book midpoint ~${formatProb(indicative)} (indicative, not a trade).`
-                          : "No trades yet and no two-sided book: there is no price."}
-                    </span>
-                    {indexed && priceYes != null && indexed.priceYes24hAgo != null && (
-                      <span className="mono">
-                        <Change from={indexed.priceYes24hAgo} to={priceYes} /> 24h
-                      </span>
-                    )}
-                  </p>
+                  {bk?.bestAsk != null && bk.bestBid != null && bk.bestAsk > bk.bestBid && (
+                    <p className="text-xs text-muted">
+                      Yes and No add up to {bk.bestAsk + 100 - bk.bestBid}¢ because you buy from the cheapest seller on each side. The extra{" "}
+                      {bk.bestAsk - bk.bestBid}¢ is the spread between buyers and sellers.
+                    </p>
+                  )}
                 </div>
               )}
 
-              <dl className="mono grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-5">
+              <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-5">
                 {[
                   ["Volume", indexed ? `${formatMusd(indexed.volume, { compact: true })}` : "—"],
                   ["Open interest", raw ? formatMusd(raw.collateral, { compact: true }) : "—"],
@@ -309,7 +333,7 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
                 ].map(([k, v], i) => (
                   <div key={k} className={cx("bg-surface px-3 py-2.5", i === 4 && "col-span-2 sm:col-span-1")}>
                     <dt className="label">{k}</dt>
-                    <dd className="text-sm font-semibold text-ink">{v}</dd>
+                    <dd className="mono mt-0.5 text-sm font-medium text-ink">{v}</dd>
                   </div>
                 ))}
               </dl>
@@ -327,8 +351,20 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
             ))}
           </nav>
 
+          <section id="chart" aria-label="Price history" className="panel scroll-mt-32 p-5">
+            {indexed ? <PriceChart marketId={id} /> : <p className="text-sm text-muted">Price history needs the market index, which is unavailable.</p>}
+          </section>
+
           {!preLaunch && (
-            <section id="book" aria-label="Order book" className="panel scroll-mt-32 grid gap-6 p-5 md:grid-cols-[1.4fr_1fr]">
+            <details id="book" className="panel group scroll-mt-32">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 font-medium [&::-webkit-details-marker]:hidden">
+                <span>Order book and recent trades</span>
+                <span className="text-sm text-ink-2">
+                  <span className="group-open:hidden">Show</span>
+                  <span className="hidden group-open:inline">Hide</span>
+                </span>
+              </summary>
+              <div role="region" aria-label="Order book" className="grid gap-6 border-t border-line p-5 md:grid-cols-[1.4fr_1fr]">
               <OrderBook
                 marketId={id}
                 onPick={(p) => {
@@ -337,12 +373,9 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
                 }}
               />
               <RecentFills marketId={id} />
-            </section>
+              </div>
+            </details>
           )}
-
-          <section id="chart" aria-label="Price history" className="panel scroll-mt-32 p-5">
-            {indexed ? <PriceChart marketId={id} /> : <p className="text-sm text-muted">Price history needs the market index, which is unavailable.</p>}
-          </section>
 
           {rules && (
             <div className="panel scroll-mt-32 space-y-6 p-5 md:p-6">
@@ -365,11 +398,21 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
               )}
             </div>
           )}
-          <div className="panel scroll-mt-32 p-5 md:p-6">
-            <ResolutionPanel marketId={id} chain={chain} question={question} structured={indexed?.structured ?? false} rules={rules} />
-          </div>
-
           {indexed && <Discussion marketId={id} />}
+
+          {/* Resolution matters once trading closes; while a market trades it stays one click away. */}
+          <details id="resolution" open={!open && !preLaunch} className="panel group scroll-mt-32">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 font-medium md:px-6 [&::-webkit-details-marker]:hidden">
+              <span>How this market resolves</span>
+              <span className="text-sm text-ink-2">
+                <span className="group-open:hidden">Show</span>
+                <span className="hidden group-open:inline">Hide</span>
+              </span>
+            </summary>
+            <div className="border-t border-line p-5 md:p-6">
+              <ResolutionPanel marketId={id} chain={chain} question={question} structured={indexed?.structured ?? false} rules={rules} />
+            </div>
+          </details>
 
           {indexed && (
             <section aria-labelledby="activity" className="panel scroll-mt-32 space-y-3 p-5 md:p-6">
