@@ -134,6 +134,9 @@ export const explorerAddress = (addr: string): string | null =>
   hasExplorer ? `${deployment.explorer}/address/${addr}` : null;
 
 /** Official routes to testnet funds (verified 2026-10-19). */
+/** Where to borrow MUSD against BTC. Testnet page verified; on mainnet we link the Mezo home page rather than guess a path. */
+export const mezoBorrowUrl = () => (deployment.chain.testnet ? TESTNET_FUNDING.borrowMusd : "https://mezo.org");
+
 export const TESTNET_FUNDING = {
   btcFaucet: "https://faucet.test.mezo.org/",
   borrowMusd: "https://testnet.mezo.org/feature/borrow",

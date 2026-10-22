@@ -72,11 +72,11 @@ export function Header() {
             type="button"
             onClick={() => setPalette(true)}
             aria-label="Search markets (⌘K)"
-            className="press inline-flex h-9 items-center gap-2 rounded-md border border-line bg-sunk/70 px-2.5 text-sm text-muted transition-colors hover:border-ink-2/40 hover:text-ink md:w-60 md:justify-start"
+            className="press inline-flex h-9 items-center gap-2 rounded-md border border-line bg-sunk/70 px-2.5 text-sm text-muted transition-colors hover:border-ink-2/40 hover:text-ink md:w-44 md:justify-start xl:w-60"
           >
             <Search className="size-4" aria-hidden />
             <span className="hidden md:inline">Search markets</span>
-            <kbd className="mono ml-auto hidden rounded-sm border border-line bg-surface px-1.5 text-[11px] md:block">⌘K</kbd>
+            <kbd className="mono ml-auto hidden rounded-sm border border-line bg-surface px-1.5 text-[11px] xl:block">⌘K</kbd>
           </button>
           <span className="hidden xl:inline"><NetworkStatus /></span>
           <span className="hidden min-[380px]:inline xl:hidden"><NetworkStatus compact /></span>

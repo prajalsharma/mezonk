@@ -12,9 +12,9 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
 export const metadata: Metadata = {
-  title: { default: "MEZONK · Prediction markets settled in MUSD", template: "%s · MEZONK" },
+  title: { default: "MEZONK · Predict without selling your bitcoin", template: "%s · MEZONK" },
   description:
-    "Trade Yes or No on questions with public rules. Built on Mezo, settled in MUSD.",
+    "The first prediction market on Mezo. Borrow MUSD against your bitcoin, call it right, and keep your BTC.",
   icons: { icon: "/mezonk-icon.svg" },
 };
 

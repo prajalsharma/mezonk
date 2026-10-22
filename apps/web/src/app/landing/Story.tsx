@@ -27,7 +27,7 @@ const STEPS = [
   },
 ];
 
-const QUESTION = "Will US CPI inflation print above 3.0% for March?";
+const QUESTION = "Will BTC close above $150,000 on 31 December?";
 
 function Bar({ label, value, active, tone }: { label: string; value: number; active: boolean; tone: "yes" | "no" }) {
   return (
@@ -113,7 +113,7 @@ export function StoryVisual({ step, active = true }: { step: number; active?: bo
           </div>
           <div className="space-y-1 rounded-md border border-line p-4">
             <p className="text-sm text-muted">Evidence</p>
-            <p className="font-medium">bls.gov · CPI release, March: 3.2%</p>
+            <p className="font-medium">Coinbase BTC-USD daily close, 31 Dec</p>
           </div>
           <div className="space-y-1.5">
             <div className="flex justify-between text-sm">

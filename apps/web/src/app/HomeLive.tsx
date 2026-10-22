@@ -193,7 +193,7 @@ export function LiveMarkets() {
     return (
       <div className="panel grid gap-8 p-8 md:grid-cols-[1.2fr_1fr] md:items-center md:p-12">
         <div className="space-y-3">
-          <p className="text-2xl font-semibold tracking-tight">The first markets are on their way.</p>
+          <p className="text-2xl font-semibold tracking-tight">The first markets on Mezo are on their way.</p>
           <p className="max-w-lg text-ink-2">
             {deployment.ready
               ? "Nothing has been published yet. Suggestions are reviewed in public; you can propose the first question."

@@ -1,89 +1,145 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 /**
- * The hero object: 1 MUSD as a square, cut by the Seam into a Yes half and a No half.
- * The seam moves between illustrative prices; the two halves always add up to 100¢.
- * Labelled as an illustration on the page. It never shows a real market's price.
+ * The hero object: 1 MUSD as a square, cut by the Seam into No (top) and Yes (bottom).
+ * Until someone touches it, the seam drifts slowly between example prices. Drag it (or use the arrow keys) and it
+ * follows you; the two prices always add up to 100¢. Updates go straight to the SVG, not through React state,
+ * so the motion stays smooth. Labelled as an example on the page; it never shows a real market's price.
  */
-const STATES = [62, 38, 55, 71, 47];
 const S = 400;
 const GAP = 10;
 const X1 = 120;
 const X2 = 285;
-const D = 26;
+const D = 24;
+const MIN = 12;
+const MAX = 88;
+const DRIFT = [62, 48, 57, 71, 44, 55];
 
-const ease = (t: number) => 1 - Math.pow(2, -10 * t);
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
-function paths(p: number) {
-  const c = Math.min(330, Math.max(70, S * (1 - p / 100)));
+function seam(p: number) {
+  const c = S * (1 - p / 100);
   const l = c + D * 0.45;
   const m = c - D;
-  const no = `M0 0H${S}V${c}H${X2}V${m}H${X1}V${l}H0Z`;
-  const yes = `M0 ${S}H${S}V${c + GAP}H${X2 - GAP}V${m + GAP}H${X1 + GAP}V${l + GAP}H0Z`;
-  return { no, yes };
+  return {
+    no: `M0 0H${S}V${c}H${X2}V${m}H${X1}V${l}H0Z`,
+    yes: `M0 ${S}H${S}V${c + GAP}H${X2 - GAP}V${m + GAP}H${X1 + GAP}V${l + GAP}H0Z`,
+  };
 }
 
-export function SeamSplit() {
-  const [p, setP] = useState(STATES[0]!);
-  const shown = useRef(STATES[0]!);
-  const box = useRef<HTMLDivElement>(null);
+// Server-rendered first frame, so the square is there before JavaScript loads.
+const INITIAL = seam(DRIFT[0]!);
 
+export function SeamSplit() {
+  const box = useRef<HTMLDivElement>(null);
+  const noPath = useRef<SVGPathElement>(null);
+  const yesPath = useRef<SVGPathElement>(null);
+  const noLabel = useRef<HTMLSpanElement>(null);
+  const yesLabel = useRef<HTMLSpanElement>(null);
+  const p = useRef(DRIFT[0]!);
+  const touched = useRef(false);
+  const raf = useRef(0);
+
+  const paint = useCallback((v: number) => {
+    p.current = v;
+    const { no, yes } = seam(v);
+    noPath.current?.setAttribute("d", no);
+    yesPath.current?.setAttribute("d", yes);
+    const y = Math.round(v);
+    if (yesLabel.current) yesLabel.current.textContent = `${y}¢`;
+    if (noLabel.current) noLabel.current.textContent = `${100 - y}¢`;
+    box.current?.setAttribute("aria-valuenow", String(y));
+    box.current?.setAttribute("aria-valuetext", `Yes ${y} cents, No ${100 - y} cents`);
+  }, []);
+
+  const glide = useCallback(
+    (to: number, ms: number) => {
+      cancelAnimationFrame(raf.current);
+      const from = p.current;
+      const t0 = performance.now();
+      const step = (now: number) => {
+        const k = Math.min(1, (now - t0) / ms);
+        paint(from + (to - from) * easeInOut(k));
+        if (k < 1) raf.current = requestAnimationFrame(step);
+      };
+      raf.current = requestAnimationFrame(step);
+    },
+    [paint],
+  );
+
+  // Slow drift until the visitor takes over: 2.6s glide, then a long rest.
   useEffect(() => {
+    paint(p.current);
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     let i = 0;
-    let raf = 0;
     let visible = true;
     const io = new IntersectionObserver(([e]) => (visible = !!e?.isIntersecting));
     if (box.current) io.observe(box.current);
-    const tween = (to: number) => {
-      const from = shown.current;
-      const t0 = performance.now();
-      const step = (now: number) => {
-        const k = Math.min(1, (now - t0) / 1100);
-        const v = from + (to - from) * ease(k);
-        shown.current = v;
-        setP(v);
-        if (k < 1) raf = requestAnimationFrame(step);
-      };
-      raf = requestAnimationFrame(step);
-    };
     const id = window.setInterval(() => {
-      if (!visible || document.hidden) return;
-      i = (i + 1) % STATES.length;
-      tween(STATES[i]!);
-    }, 3200);
+      if (touched.current || !visible || document.hidden) return;
+      i = (i + 1) % DRIFT.length;
+      glide(DRIFT[i]!, 2600);
+    }, 5200);
     return () => {
       window.clearInterval(id);
-      cancelAnimationFrame(raf);
+      cancelAnimationFrame(raf.current);
       io.disconnect();
     };
-  }, []);
+  }, [glide, paint]);
 
-  const { no, yes } = paths(p);
-  const yesC = Math.round(p);
+  const fromPointer = (clientY: number) => {
+    const r = box.current!.getBoundingClientRect();
+    const v = 100 * (1 - (clientY - r.top) / r.height);
+    return Math.min(MAX, Math.max(MIN, v));
+  };
+
   return (
-    <figure ref={box} className="relative mx-auto w-full max-w-[30rem]">
-      <div className="relative aspect-square">
-        <svg viewBox={`0 0 ${S} ${S}`} className="absolute inset-0 size-full overflow-visible" aria-hidden>
-          <path d={no} fill="var(--no)" />
-          <path d={yes} fill="var(--yes)" />
+    <figure className="mx-auto w-full max-w-[30rem]">
+      <div
+        ref={box}
+        role="slider"
+        tabIndex={0}
+        aria-label="Example price split between Yes and No"
+        aria-valuemin={MIN}
+        aria-valuemax={MAX}
+        aria-valuenow={DRIFT[0]}
+        className="group relative aspect-square cursor-ns-resize touch-none select-none rounded-sm outline-offset-4"
+        onPointerDown={(e) => {
+          touched.current = true;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          glide(fromPointer(e.clientY), 260);
+        }}
+        onPointerMove={(e) => {
+          if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+          cancelAnimationFrame(raf.current);
+          paint(fromPointer(e.clientY));
+        }}
+        onKeyDown={(e) => {
+          const d = e.key === "ArrowUp" || e.key === "ArrowRight" ? 1 : e.key === "ArrowDown" || e.key === "ArrowLeft" ? -1 : 0;
+          if (!d) return;
+          e.preventDefault();
+          touched.current = true;
+          glide(Math.min(MAX, Math.max(MIN, Math.round(p.current) + d * (e.shiftKey ? 10 : 1))), 180);
+        }}
+      >
+        <svg viewBox={`0 0 ${S} ${S}`} className="absolute inset-0 size-full" aria-hidden>
+          <path ref={noPath} d={INITIAL.no} fill="var(--no)" />
+          <path ref={yesPath} d={INITIAL.yes} fill="var(--yes)" />
         </svg>
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-5 text-on-no md:p-7">
           <span className="text-lg font-semibold">No</span>
-          <span className="mono text-4xl font-medium tabular-nums md:text-5xl">{100 - yesC}¢</span>
+          <span ref={noLabel} className="mono text-4xl font-medium tabular-nums md:text-5xl">{100 - DRIFT[0]!}¢</span>
         </div>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between p-5 text-on-yes md:p-7">
           <span className="text-lg font-semibold">Yes</span>
-          <span className="mono text-4xl font-medium tabular-nums md:text-5xl">{yesC}¢</span>
+          <span ref={yesLabel} className="mono text-4xl font-medium tabular-nums md:text-5xl">{DRIFT[0]}¢</span>
         </div>
       </div>
-      <figcaption className="mt-4 flex items-baseline justify-between gap-4 text-sm text-muted">
-        <span>Illustration. One MUSD splits into one Yes and one No; the seam sits where traders agree.</span>
-        <span className="mono shrink-0 text-ink">= 1 MUSD</span>
+      <figcaption className="mt-4 text-[0.9375rem] text-ink-2">
+        Drag the line. However you split it, a Yes and a No add up to exactly 1 MUSD.
       </figcaption>
-      <p className="sr-only">Yes and No prices always add up to 1 MUSD. If Yes trades at 62¢, No is worth 38¢.</p>
     </figure>
   );
 }

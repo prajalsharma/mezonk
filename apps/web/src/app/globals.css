@@ -545,3 +545,13 @@ dialog::backdrop {
 @media (prefers-reduced-motion: reduce) {
   .story-layer { transition: opacity 1ms; transform: none; filter: none; }
 }
+
+/* Funding flow: a dot travels borrow → trade → payout, rests, repeats. Transform only. */
+@keyframes flow {
+  0% { transform: translateX(0); opacity: 0; }
+  8% { opacity: 1; }
+  70% { transform: translateX(100%); opacity: 1; }
+  78%, 100% { transform: translateX(100%); opacity: 0; }
+}
+.flow-track { animation: flow 4.2s var(--ease-standard) infinite; }
+@media (prefers-reduced-motion: reduce) { .flow-track { animation: none; opacity: 0; } }

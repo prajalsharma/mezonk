@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "MEZONK: trade Yes or No on questions with public rules. Built on Mezo, settled in MUSD.";
+export const alt = "MEZONK: the first prediction market on Mezo. Call it right. Keep your bitcoin.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -30,10 +30,10 @@ export default function OpengraphImage() {
           </g>
         </svg>
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <div style={{ display: "flex", fontSize: 46, color: "#F4F5F8", letterSpacing: "-0.02em" }}>
-            Trade&nbsp;<span style={{ color: "#528DFE" }}>Yes</span>&nbsp;or No on questions with public rules.
+          <div style={{ display: "flex", fontSize: 56, color: "#F4F5F8", letterSpacing: "-0.02em" }}>
+            Call it right.&nbsp;<span style={{ color: "#528DFE" }}>Keep your bitcoin.</span>
           </div>
-          <div style={{ display: "flex", fontSize: 28, color: "#8C939F" }}>Built on Mezo. Settled in MUSD.</div>
+          <div style={{ display: "flex", fontSize: 28, color: "#8C939F" }}>The first prediction market on Mezo. Settled in MUSD.</div>
         </div>
       </div>
     ),
