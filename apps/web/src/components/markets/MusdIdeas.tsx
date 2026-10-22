@@ -7,10 +7,10 @@ import { deployment } from "@/lib/chain/config";
 
 /**
  * Optional pointers for MUSD a user isn't trading with. Every item was checked against Mezo's docs and apps on
- * 2026-10-22 (mainnet links). Vezo is a community project built by the MEZONK team; it is disclosed as such.
- * MUSD can't be locked into veBTC/veMEZO (those lock BTC and MEZO), so that isn't offered.
+ * 2026-10-22 (mainnet links). Shown only on /borrow, to people about to borrow MUSD.
+ * MUSD can't be locked into veBTC/veMEZO (those lock BTC and MEZO), so that isn't offered. Everything here keeps MUSD on Mezo.
  */
-const IDEAS: Array<{ title: string; body: string; href: string; cta: string; note?: string }> = [
+const IDEAS: Array<{ title: string; body: string; href: string; cta: string }> = [
   {
     title: "Save it",
     body: "Deposit into Mezo's MUSD Savings Vault. It earns a variable rate from MUSD loan fees, with no lock-up.",
@@ -29,22 +29,17 @@ const IDEAS: Array<{ title: string; body: string; href: string; cta: string; not
     href: "https://mezo.org/feature/borrow",
     cta: "Your Mezo loan",
   },
-  {
-    title: "Pick up a veNFT",
-    body: "Vezo is a marketplace for veBTC and veMEZO positions that accepts MUSD. Listings come and go.",
-    href: "https://vezo.exchange",
-    cta: "Vezo",
-    note: "A community project by the team behind MEZONK, not run by Mezo.",
-  },
-  {
-    title: "Move it to Ethereum or Base",
-    body: "Bridge MUSD with Wormhole if you need it on another chain.",
-    href: "https://mezo.org/docs/users/borrow/musd-bridge/",
-    cta: "How to bridge",
-  },
 ];
 
-export function MusdIdeas({ dismissKey, className }: { dismissKey?: string; className?: string }) {
+export function MusdIdeas({
+  dismissKey,
+  className,
+  title = "Borrowing more than you'll trade?",
+}: {
+  dismissKey?: string;
+  className?: string;
+  title?: string;
+}) {
   const [hidden, setHidden] = useState(false);
   useEffect(() => {
     if (!dismissKey) return;
@@ -59,9 +54,9 @@ export function MusdIdeas({ dismissKey, className }: { dismissKey?: string; clas
     <section aria-labelledby="musd-ideas" className={cx("panel overflow-hidden", className)}>
       <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-5 md:px-8">
         <div className="space-y-1">
-          <h2 id="musd-ideas" className="text-xl font-semibold tracking-tight">Got MUSD you&apos;re not trading with?</h2>
+          <h2 id="musd-ideas" className="text-xl font-semibold tracking-tight">{title}</h2>
           <p className="text-ink-2">
-            It works across Mezo too. A few things you can do with it{deployment.chain.testnet ? " on Mezo mainnet" : ""}:
+            Whatever you don&apos;t trade with can keep working on Mezo{deployment.chain.testnet ? " (these live on Mezo mainnet)" : ""}.
           </p>
         </div>
         {dismissKey && (
@@ -82,12 +77,11 @@ export function MusdIdeas({ dismissKey, className }: { dismissKey?: string; clas
           </button>
         )}
       </div>
-      <ul className="grid sm:grid-cols-2 lg:grid-cols-5 lg:divide-x lg:divide-line">
+      <ul className="grid sm:grid-cols-2 lg:grid-cols-3 lg:divide-x lg:divide-line">
         {IDEAS.map((i) => (
           <li key={i.title} className="flex flex-col gap-3 border-b border-line px-6 py-5 md:px-8 lg:border-b-0">
             <h3 className="font-semibold">{i.title}</h3>
             <p className="text-[0.9375rem] text-ink-2">{i.body}</p>
-            {i.note && <p className="text-sm text-muted">{i.note}</p>}
             <a
               href={i.href}
               target="_blank"

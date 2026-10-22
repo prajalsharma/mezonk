@@ -6,7 +6,6 @@ import { ButtonLink } from "@/components/ui/Button";
 import { deployment } from "@/lib/chain/config";
 import { LiveMarkets } from "./HomeLive";
 import { FundingFlow } from "./landing/FundingFlow";
-import { MusdIdeas } from "@/components/markets/MusdIdeas";
 import { PayoutCalculator } from "./landing/PayoutCalculator";
 import { SeamSplit } from "./landing/SeamSplit";
 import { Story } from "./landing/Story";
@@ -26,11 +25,8 @@ export default function Home() {
       {/* Hero */}
       <section className="grid items-center gap-14 pt-4 md:pt-12 lg:grid-cols-[1.05fr_1fr] lg:gap-20">
         <div className="space-y-8">
-          <p className="rise-in flex items-center gap-3 text-xl font-medium tracking-tight text-ink-2 md:text-2xl" style={at(0)}>
-            <span aria-hidden className="h-0.5 w-8 rounded-full bg-yes" />
-            <span>
-              The first prediction market <span className="font-semibold text-ink">on Mezo</span>
-            </span>
+          <p className="rise-in text-xl font-medium tracking-tight text-ink-2 md:text-2xl" style={at(0)}>
+            The first prediction market <span className="font-semibold text-ink">on Mezo</span>
           </p>
           <h1 className="display text-[3.1rem] sm:text-7xl lg:text-6xl xl:text-[4.25rem] 2xl:text-[4.6rem]">
             <span className="line-in" style={at(0)}>Call it right.</span>{" "}
@@ -63,9 +59,6 @@ export default function Home() {
         </div>
         <div className="reveal">
           <FundingFlow />
-        </div>
-        <div className="reveal">
-          <MusdIdeas />
         </div>
       </section>
 

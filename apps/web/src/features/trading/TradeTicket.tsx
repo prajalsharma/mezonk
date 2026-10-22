@@ -1,6 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { type Address, parseUnits } from "viem";
 import { useAccount, usePublicClient, useSignTypedData, useWriteContract } from "wagmi";
@@ -431,11 +432,14 @@ export function TradeTicket({
       {restResult && <Notice tone="info" title="Order on the book">{restResult}</Notice>}
       {restError && <Notice tone="error" title="The rest wasn't placed">{restError}</Notice>}
 
-      {isConnected && action === "buy" && musd.balance === 0n && deployment.chain.testnet && (
+      {isConnected && action === "buy" && (shortMusd || musd.balance === 0n) && (
         <p className="text-sm text-ink-2">
-          No MUSD in this wallet. Get testnet BTC from the{" "}
-          <a className="underline" href={TESTNET_FUNDING.btcFaucet} target="_blank" rel="noreferrer">faucet</a>, then{" "}
-          <a className="underline" href={TESTNET_FUNDING.borrowMusd} target="_blank" rel="noreferrer">borrow MUSD on Mezo</a>.
+          {musd.balance === 0n ? "No MUSD in this wallet." : "Not enough MUSD for this."} Hold BTC?{" "}
+          <Link className="font-medium text-yes-text underline-offset-4 hover:underline" href="/borrow">Borrow MUSD against it</Link>
+          {deployment.chain.testnet && (
+            <> (testnet BTC from the <a className="underline" href={TESTNET_FUNDING.btcFaucet} target="_blank" rel="noreferrer">faucet</a>)</>
+          )}
+          .
         </p>
       )}
       <p className="text-xs text-muted">

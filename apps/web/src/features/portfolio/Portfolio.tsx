@@ -9,8 +9,6 @@ import { TxLink } from "@/components/ui/Address";
 import { cx } from "@/components/ui/cx";
 import { EmptyState, Hint, Notice, Skeleton, Status, inputClass } from "@/components/ui/primitives";
 import { ActivityList } from "@/components/markets/ActivityList";
-import { MusdIdeas } from "@/components/markets/MusdIdeas";
-import { useMusd } from "@/hooks/useMusd";
 import { WalletButton } from "@/components/wallet/WalletButton";
 import { ClaimButton, RedeemDetails } from "@/features/resolution/Claims";
 import { usePendingTxs } from "@/hooks/usePendingTxs";
@@ -88,7 +86,6 @@ export function Portfolio() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["v"]>("all");
   const [text, setText] = useState("");
   const [since, setSince] = useState<"all" | "7" | "30">("all");
-  const musd = useMusd();
 
   const pf = useQuery({
     queryKey: ["portfolio", address],
@@ -248,9 +245,8 @@ export function Portfolio() {
           <div className="space-y-2"><Skeleton className="h-20 w-full" /><Skeleton className="h-20 w-full" /></div>
         ) : !rows.length ? (
           <EmptyState title="No positions yet" action={<ButtonLink href="/discover">Find a market</ButtonLink>}>
-            {deployment.chain.testnet ? (
-              <>Need MUSD? Get testnet BTC from the <a className="underline" href={TESTNET_FUNDING.btcFaucet} target="_blank" rel="noreferrer">faucet</a> and <a className="underline" href={TESTNET_FUNDING.borrowMusd} target="_blank" rel="noreferrer">borrow MUSD</a>.</>
-            ) : null}
+            Need MUSD? <Link className="underline" href="/borrow">Borrow it against your BTC</Link>
+            {deployment.chain.testnet ? <> (free testnet BTC from the <a className="underline" href={TESTNET_FUNDING.btcFaucet} target="_blank" rel="noreferrer">faucet</a>)</> : null}.
           </EmptyState>
         ) : !filtered.length ? (
           <p className="py-6 text-sm text-muted">Nothing matches these filters.</p>
@@ -315,8 +311,6 @@ export function Portfolio() {
       )}
 
       <LiquidityAndIncentives address={address!} />
-      {/* Optional, only for idle MUSD (at least 1). Dismissible per browser. */}
-      {musd.balance !== undefined && musd.balance >= 10n ** 18n && <MusdIdeas dismissKey="mezonk:musd-ideas:portfolio" />}
 
       <section aria-labelledby="history" className="space-y-3">
         <h2 id="history" className="text-xl font-semibold">History</h2>

@@ -1,11 +1,10 @@
 "use client";
 
-import { ArrowRight, ArrowUpRight, Check, Lock } from "lucide-react";
+import { ArrowRight, Check, Lock } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { cx } from "@/components/ui/cx";
-import { mezoBorrowUrl } from "@/lib/chain/config";
 
 /**
  * Two ways in. Holding BTC: borrow MUSD on Mezo, trade, collect, repay, BTC unlocks. Holding MUSD: trade now.
@@ -109,14 +108,12 @@ export function FundingFlow() {
           <p className="max-w-2xl text-sm text-muted">
             Loans live on Mezo, with Mezo&apos;s fees, interest and liquidation rules. MEZONK never holds or lends your bitcoin.
           </p>
-          <a
-            href={mezoBorrowUrl()}
-            target="_blank"
-            rel="noreferrer"
+          <Link
+            href="/borrow"
             className="inline-flex items-center gap-1.5 text-[0.9375rem] font-medium text-yes-text underline-offset-4 hover:underline"
           >
-            Borrow on Mezo <ArrowUpRight className="size-4" aria-hidden />
-          </a>
+            Borrow MUSD <ArrowRight className="size-4" aria-hidden />
+          </Link>
         </div>
       </div>
 
