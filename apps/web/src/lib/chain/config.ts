@@ -35,6 +35,14 @@ export const MUSD: Record<number, Address> = {
 };
 export const MUSD_DECIMALS = 18;
 
+/**
+ * MEZONK's own deployment per network, used when NEXT_PUBLIC_MARKETS_ADDRESS isn't set. Testnet deployed by the owner on
+ * 2026-10-22 (verified on-chain: code present, factory and owner as expected). Never add mainnet here without sign-off.
+ */
+export const DEFAULT_DEPLOYMENT: Record<number, { exchange: Address; deployBlock: bigint }> = {
+  [MEZO_TESTNET_ID]: { exchange: "0x4555cfF10200e1007435Cffc683C60683c5C49B9", deployBlock: 16298919n },
+};
+
 /** MEZO token (precompile-style address). Not used for any protocol function yet. */
 export const MEZO_TOKEN: Record<number, Address> = {
   [MEZO_TESTNET_ID]: "0x7B7c000000000000000000000000000000000001",
@@ -77,13 +85,19 @@ function readDeployment(): Deployment {
   const chain: Chain = rpcOverride ? { ...baseChain, rpcUrls: { default: { http: [rpcOverride] } } } : baseChain;
   const rpcUrl = rpcOverride || baseChain.rpcUrls.default.http[0]!;
   const isLocalFork = !!rpcOverride && /localhost|127\.0\.0\.1/.test(rpcOverride);
-  const rawAddress = process.env.NEXT_PUBLIC_MARKETS_ADDRESS ?? "";
+  // A local fork always configures its own address (dev-chain.sh); public networks fall back to the known deployment.
+  const fallback = rpcOverride ? undefined : DEFAULT_DEPLOYMENT[chainId];
+  const rawAddress = process.env.NEXT_PUBLIC_MARKETS_ADDRESS || fallback?.exchange || "";
   const base = {
     chain,
     chainId,
     rpcUrl,
     isLocalFork,
-    deployBlock: BigInt(process.env.NEXT_PUBLIC_MARKETS_DEPLOY_BLOCK || "0"),
+    deployBlock: process.env.NEXT_PUBLIC_MARKETS_DEPLOY_BLOCK
+      ? BigInt(process.env.NEXT_PUBLIC_MARKETS_DEPLOY_BLOCK)
+      : !process.env.NEXT_PUBLIC_MARKETS_ADDRESS && !rpcOverride
+        ? (DEFAULT_DEPLOYMENT[chainId]?.deployBlock ?? 0n)
+        : 0n,
     musd: MUSD[chainId] ?? MUSD[MEZO_TESTNET_ID]!,
     explorer: baseChain.blockExplorers.default.url,
   };
