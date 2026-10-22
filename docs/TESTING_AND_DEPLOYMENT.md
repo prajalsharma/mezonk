@@ -78,5 +78,10 @@ review.
 |---|---|
 | Implemented | contracts, indexer, order API, trading/seeding/portfolio/admin UI, docs |
 | Tested | everything in the table above |
-| Configured | local fork only |
-| Deployed | **nothing public**: no testnet or mainnet transaction was sent (no funded deployer key here) |
+| Configured | local fork; Mezo Testnet |
+| Deployed | **Mezo Testnet, 2026-10-22** (by the owner, block 16298919): MezonkExchange `0x4555cfF10200e1007435Cffc683C60683c5C49B9`, MezonkMarketFactory `0x3d596A0317AD7159d0E9f4A15D80A62FFC30D689`, MezonkResolution `0x6Da57dDd874f02E3ad704F75aCC86D0319d3b944`, MezonkIncentives `0xF1a014E4E291EB2690777104D65990efAFC3f06B`, policy 1. Owner `0x017FF5FB886E90f9e5ADb405D8eFddffC1162dD2`. Nothing on mainnet. |
+
+Note: testnet's public RPC includes a node stuck far behind the head. Forge scripts should go through
+`node scripts/rpc-retry-proxy.mjs` (`MEZO_TESTNET_RPC_URL=http://127.0.0.1:8600`); the script's own `deployBlock` log can
+come from that node, so take the block from the broadcast receipt. The app's RPC clients skip that node themselves
+(`lib/chain/laggingNodeFetch.ts`).

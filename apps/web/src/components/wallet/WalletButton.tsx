@@ -2,7 +2,7 @@
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Button } from "@/components/ui/Button";
-import { formatMusd } from "@/lib/format";
+import { WalletPanel } from "./WalletPanel";
 import { useMusd } from "@/hooks/useMusd";
 import { deployment } from "@/lib/chain/config";
 
@@ -10,7 +10,7 @@ export function WalletButton({ block = false }: { block?: boolean }) {
   const { balance } = useMusd();
   return (
     <ConnectButton.Custom>
-      {({ account, chain, openConnectModal, openAccountModal, openChainModal, mounted }) => {
+      {({ account, chain, openConnectModal, openChainModal, mounted }) => {
         if (!mounted) return <span className="inline-block h-9 w-28" aria-hidden />;
         if (!account) {
           return (
@@ -26,18 +26,7 @@ export function WalletButton({ block = false }: { block?: boolean }) {
             </Button>
           );
         }
-        return (
-          <button
-            onClick={openAccountModal}
-            className="inline-flex h-9 items-center gap-2 rounded-md border border-line bg-surface px-3 text-sm font-semibold hover:border-ink-2"
-            aria-label={`Account ${account.displayName}`}
-          >
-            {balance !== undefined && (
-              <span className="tnum hidden text-ink-2 sm:inline">{formatMusd(balance)} MUSD</span>
-            )}
-            <span className="font-mono text-xs">{account.displayName}</span>
-          </button>
-        );
+        return <WalletPanel address={account.address as `0x${string}`} musd={balance} label={account.displayName} />;
       }}
     </ConnectButton.Custom>
   );

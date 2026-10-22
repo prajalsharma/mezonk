@@ -12,6 +12,7 @@ import {
 import { createConfig, createConnector, http } from "wagmi";
 import { mock } from "@wagmi/core";
 import { UserRejectedRequestError, type Address } from "viem";
+import { laggingNodeFetch } from "@/lib/chain/laggingNodeFetch";
 import { deployment } from "@/lib/chain/config";
 
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
@@ -85,6 +86,6 @@ const connectors = connectorsForWallets(groups, {
 export const wagmiConfig = createConfig({
   chains: [deployment.chain],
   connectors,
-  transports: { [deployment.chain.id]: http(deployment.rpcUrl) } as Record<number, ReturnType<typeof http>>,
+  transports: { [deployment.chain.id]: http(deployment.rpcUrl, { fetchFn: laggingNodeFetch }) } as Record<number, ReturnType<typeof http>>,
   ssr: true,
 });

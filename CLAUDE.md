@@ -34,3 +34,6 @@ Read docs/ORDERBOOK_ARCHITECTURE.md and docs/SECURITY_AND_SOLVENCY.md before tou
 ## Chain config (verified 2026-10-19)
 Mezo Testnet 31611, rpc.test.mezo.org, explorer.test.mezo.org, MUSD 0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503.
 Mainnet 31612, MUSD 0xdD468A1DDc392dcdbEf6db6e34E89AA338F9F186. getLogs ≤ 9,999 blocks. EVM target london.
+Deployed on testnet (2026-10-22): MezonkExchange 0x4555cfF10200e1007435Cffc683C60683c5C49B9, deploy block 16298919
+(details in docs/TESTING_AND_DEPLOYMENT.md). Testnet RPC has a lagging node: app clients use laggingNodeFetch, scripts use
+scripts/rpc-retry-proxy.mjs.
