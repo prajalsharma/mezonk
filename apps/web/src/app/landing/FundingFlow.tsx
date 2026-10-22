@@ -1,67 +1,134 @@
-import { ArrowUpRight, Bitcoin, CircleDollarSign, Trophy } from "lucide-react";
+"use client";
+
+import { ArrowRight, ArrowUpRight, Check, Lock } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import { cx } from "@/components/ui/cx";
 import { mezoBorrowUrl } from "@/lib/chain/config";
 
 /**
- * How money gets in without selling BTC: borrow MUSD on Mezo, trade here, repay on Mezo.
- * A real three-step sequence, so the steps are numbered. The connector carries a small dot that travels
- * borrow → trade → payout to show the direction money moves (static under reduced motion).
+ * Two ways in. Holding BTC: borrow MUSD on Mezo, trade, collect, repay, BTC unlocks. Holding MUSD: trade now.
+ * The BTC path is one worked example that plays out step by step when it scrolls into view, so each number
+ * follows from the one before (2,000 MUSD loan, 1,000 MUSD on Yes at 40¢, 2,475 MUSD payout). Labelled as an example.
  */
-const STEPS = [
-  {
-    icon: Bitcoin,
-    title: "Borrow MUSD on Mezo",
-    body: "Lock BTC as collateral on Mezo and borrow MUSD, its bitcoin-backed dollar. Nothing gets sold.",
-  },
-  {
-    icon: CircleDollarSign,
-    title: "Buy Yes or No here",
-    body: "Spend that MUSD on any market. A share costs 1¢ to 99¢ and pays 1 MUSD if you call it right.",
-  },
-  {
-    icon: Trophy,
-    title: "Collect, then repay",
-    body: "Winnings arrive in MUSD. Pay back your Mezo loan whenever you like and your BTC unlocks.",
-  },
-];
+function useInView<T extends Element>() {
+  const ref = useRef<T>(null);
+  // Visible by default (server render, no JS, crawlers). Only once the script runs and the block is still below the
+  // fold does it hide and wait to play.
+  const [seen, setSeen] = useState(true);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (el.getBoundingClientRect().top < window.innerHeight * 0.8) return;
+    setSeen(false);
+    const io = new IntersectionObserver(([e]) => e?.isIntersecting && (setSeen(true), io.disconnect()), { threshold: 0.35 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return [ref, seen] as const;
+}
+
+function Step({ n, title, body, on, children }: { n: number; title: string; body: string; on: boolean; children: React.ReactNode }) {
+  return (
+    <li
+      className={cx(
+        "flex flex-col gap-5 p-6 transition-[opacity,transform] duration-700 ease-[var(--ease-out-expo)] md:p-8",
+        on ? "opacity-100" : "translate-y-3 opacity-0 motion-reduce:translate-y-0 motion-reduce:opacity-100",
+      )}
+      style={{ transitionDelay: on ? `${(n - 1) * 260}ms` : "0ms" }}
+    >
+      <div className="space-y-2">
+        <h3 className="flex items-baseline gap-2.5 text-xl font-semibold tracking-tight">
+          <span className="mono text-base text-yes-text">{n}</span>
+          {title}
+        </h3>
+        <p className="text-ink-2">{body}</p>
+      </div>
+      <div className="mt-auto rounded-md border border-line bg-sunk p-4">{children}</div>
+    </li>
+  );
+}
 
 export function FundingFlow() {
+  const [ref, on] = useInView<HTMLDivElement>();
   return (
-    <div className="panel overflow-hidden">
-      <ol className="relative grid md:grid-cols-3">
-        {/* connector with a travelling dot (desktop) */}
-        <span aria-hidden className="absolute left-[16.6%] right-[16.6%] top-[3.75rem] hidden h-px bg-line md:block">
-          <span className="flow-track absolute inset-0">
-            <span className="absolute -left-[3px] -top-[3px] size-[7px] rounded-full bg-yes" />
-          </span>
-        </span>
-        {STEPS.map((s, i) => (
-          <li key={s.title} className="relative space-y-4 border-line p-7 max-md:border-b max-md:last:border-b-0 md:px-8 md:py-9">
-            <span className="relative z-10 flex size-12 items-center justify-center rounded-md border border-line bg-surface text-ink md:mx-auto">
-              <s.icon className="size-5" strokeWidth={1.75} aria-hidden />
-            </span>
-            <div className="space-y-2 md:text-center">
-              <h3 className="text-lg font-semibold">
-                <span className="mono mr-2 text-sm text-muted">{i + 1}</span>
-                {s.title}
-              </h3>
-              <p className="text-ink-2 md:mx-auto md:max-w-[19rem]">{s.body}</p>
+    <div className="space-y-4">
+      <div ref={ref} className="panel overflow-hidden">
+        <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-line px-6 py-4 md:px-8">
+          <p className="font-semibold">You hold BTC</p>
+          <p className="text-sm text-muted">Example numbers</p>
+        </div>
+        <ol className="grid divide-line max-md:divide-y md:grid-cols-3 md:divide-x">
+          <Step n={1} on={on} title="Borrow MUSD on Mezo" body="Lock BTC as collateral and borrow MUSD, Mezo's bitcoin-backed dollar. Your BTC isn't sold.">
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2 text-sm text-ink-2">
+                <Lock className="size-4 text-ink" aria-hidden /> Locked
+              </span>
+              <span className="mono font-medium">0.10 BTC</span>
             </div>
-          </li>
-        ))}
-      </ol>
-      <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line bg-sunk px-7 py-5 md:px-8">
-        <p className="max-w-2xl text-sm text-ink-2">
-          Borrowing happens on Mezo, with Mezo&apos;s fees and liquidation rules. MEZONK never holds or lends your bitcoin.
-        </p>
-        <a
-          href={mezoBorrowUrl()}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 text-[0.9375rem] font-medium text-yes-text hover:underline underline-offset-4"
-        >
-          Borrow MUSD on Mezo <ArrowUpRight className="size-4" aria-hidden />
-        </a>
+            <div className="my-3 h-px bg-line" />
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-sm text-ink-2">You borrow</span>
+              <span className="mono text-2xl font-medium">
+                <AnimatedNumber value={on ? 2000 : 0} format={(v) => Math.round(v).toLocaleString("en-US")} duration={900} />
+                <span className="ml-1 text-sm text-muted">MUSD</span>
+              </span>
+            </div>
+          </Step>
+          <Step n={2} on={on} title="Buy Yes or No here" body="Use the MUSD on any market. A share costs 1¢ to 99¢ and pays 1 MUSD if you're right.">
+            <div className="flex h-11 items-center justify-between rounded-sm bg-yes px-3.5 font-semibold text-on-yes">
+              <span>Buy Yes</span>
+              <span className="mono">40¢</span>
+            </div>
+            <div className="mt-3 flex items-baseline justify-between gap-3">
+              <span className="text-sm text-ink-2">1,000 MUSD buys</span>
+              <span className="mono text-2xl font-medium">
+                <AnimatedNumber value={on ? 2475 : 0} format={(v) => Math.round(v).toLocaleString("en-US")} duration={1100} />
+                <span className="ml-1 text-sm text-muted">Yes</span>
+              </span>
+            </div>
+          </Step>
+          <Step n={3} on={on} title="Collect, then repay" body="If Yes wins you're paid in MUSD. Repay the loan on Mezo whenever you like and your BTC unlocks.">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-sm text-ink-2">Yes wins, you get</span>
+              <span className="mono text-2xl font-medium text-yes-text">
+                +<AnimatedNumber value={on ? 2475 : 0} format={(v) => Math.round(v).toLocaleString("en-US")} duration={1300} />
+              </span>
+            </div>
+            <div className="my-3 h-px bg-line" />
+            <p className="flex items-center gap-2 text-sm text-ink-2">
+              <Check className="size-4 text-yes-text" aria-hidden /> Repay 2,000 MUSD, your 0.10 BTC unlocks
+            </p>
+          </Step>
+        </ol>
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line px-6 py-4 md:px-8">
+          <p className="max-w-2xl text-sm text-muted">
+            Loans live on Mezo, with Mezo&apos;s fees, interest and liquidation rules. MEZONK never holds or lends your bitcoin.
+          </p>
+          <a
+            href={mezoBorrowUrl()}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-[0.9375rem] font-medium text-yes-text underline-offset-4 hover:underline"
+          >
+            Borrow on Mezo <ArrowUpRight className="size-4" aria-hidden />
+          </a>
+        </div>
       </div>
+
+      <Link
+        href="/markets"
+        className="panel group flex flex-wrap items-center justify-between gap-4 px-6 py-5 transition-colors hover:border-line-strong md:px-8"
+      >
+        <span>
+          <span className="font-semibold">Already hold MUSD?</span>{" "}
+          <span className="text-ink-2">Skip the loan and go straight to the markets.</span>
+        </span>
+        <span className="inline-flex items-center gap-1.5 font-medium text-yes-text">
+          Browse markets <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden />
+        </span>
+      </Link>
     </div>
   );
 }

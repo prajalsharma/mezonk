@@ -150,6 +150,70 @@ export function StoryVisual({ step, active = true }: { step: number; active?: bo
   );
 }
 
+/** Phones: one card per stage in a swipeable row; the visible card plays its animation, dots show where you are. */
+function MobileStory() {
+  const [active, setActive] = useState(0);
+  const scroller = useRef<HTMLOListElement>(null);
+  const slides = useRef<Array<HTMLLIElement | null>>([]);
+  useEffect(() => {
+    const root = scroller.current;
+    if (!root) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) if (e.isIntersecting) setActive(Number((e.target as HTMLElement).dataset.step));
+      },
+      { root, threshold: 0.6 },
+    );
+    for (const s of slides.current) if (s) io.observe(s);
+    return () => io.disconnect();
+  }, []);
+  const go = (i: number) => slides.current[i]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  return (
+    <div className="space-y-5 lg:hidden">
+      <ol
+        ref={scroller}
+        aria-label="Four stages of a market"
+        className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-4 px-4 pb-2 [scrollbar-width:none] md:-mx-6 md:px-6"
+      >
+        {STEPS.map((s, i) => (
+          <li
+            key={s.title}
+            data-step={i}
+            ref={(el) => {
+              slides.current[i] = el;
+            }}
+            className="w-[86%] shrink-0 snap-center space-y-4 sm:w-[70%]"
+          >
+            <div className="space-y-2">
+              <h3 className="flex items-baseline gap-2.5 text-2xl font-semibold tracking-tight">
+                <span className="mono text-base text-yes-text">{i + 1}</span>
+                {s.title}
+              </h3>
+              <p className="text-ink-2">{s.body}</p>
+            </div>
+            <StoryVisual step={i} active={active === i} />
+          </li>
+        ))}
+      </ol>
+      <div className="flex items-center justify-center gap-2" role="tablist" aria-label="Choose a stage">
+        {STEPS.map((s, i) => (
+          <button
+            key={s.title}
+            type="button"
+            role="tab"
+            aria-selected={active === i}
+            aria-label={`Stage ${i + 1}: ${s.title}`}
+            onClick={() => go(i)}
+            className="flex h-11 items-center px-1"
+          >
+            <span className={cx("block h-1.5 rounded-full transition-all duration-300", active === i ? "w-8 bg-yes" : "w-3 bg-line-strong")} />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Story() {
   const [step, setStep] = useState(0);
   const refs = useRef<Array<HTMLLIElement | null>>([]);
@@ -164,13 +228,15 @@ export function Story() {
     return () => io.disconnect();
   }, []);
   return (
-    <div className="grid gap-10 lg:grid-cols-2 lg:gap-20">
+    <>
+    <MobileStory />
+    <div className="hidden gap-20 lg:grid lg:grid-cols-2">
       <div className="hidden lg:block">
         <div className="sticky top-32">
           <StoryVisual step={step} />
         </div>
       </div>
-      <ol className="space-y-16 lg:space-y-0">
+      <ol>
         {STEPS.map((s, i) => (
           <li
             key={s.title}
@@ -178,7 +244,7 @@ export function Story() {
             ref={(el) => {
               refs.current[i] = el;
             }}
-            className="space-y-6 lg:flex lg:min-h-[42vh] lg:flex-col lg:justify-center"
+            className="flex min-h-[42vh] flex-col justify-center"
           >
             <div className="space-y-3">
               <span
@@ -189,15 +255,13 @@ export function Story() {
               >
                 {i + 1}
               </span>
-              <h3 className={cx("display text-3xl transition-colors duration-500 md:text-4xl", step === i ? "text-ink" : "lg:text-muted")}>{s.title}</h3>
+              <h3 className={cx("display text-4xl transition-colors duration-500", step === i ? "text-ink" : "text-muted")}>{s.title}</h3>
               <p className="max-w-md text-lg text-ink-2">{s.body}</p>
-            </div>
-            <div className="lg:hidden">
-              <StoryVisual step={i} />
             </div>
           </li>
         ))}
       </ol>
     </div>
+    </>
   );
 }

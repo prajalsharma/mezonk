@@ -13,9 +13,10 @@ const GAP = 10;
 const X1 = 120;
 const X2 = 285;
 const D = 24;
-const MIN = 12;
-const MAX = 88;
-const DRIFT = [62, 48, 57, 71, 44, 55];
+// Clamped so both halves always have room for their label at every size.
+const MIN = 25;
+const MAX = 75;
+const DRIFT = [62, 48, 57, 68, 44, 55];
 
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
@@ -41,6 +42,7 @@ export function SeamSplit() {
   const p = useRef(DRIFT[0]!);
   const touched = useRef(false);
   const raf = useRef(0);
+  const tapStart = useRef<{ y: number; t: number } | null>(null);
 
   const paint = useCallback((v: number) => {
     p.current = v;
@@ -105,17 +107,31 @@ export function SeamSplit() {
         aria-valuemin={MIN}
         aria-valuemax={MAX}
         aria-valuenow={DRIFT[0]}
-        className="group relative aspect-square cursor-ns-resize touch-none select-none rounded-sm outline-offset-4"
+        // touch-action pan-y: on phones the page keeps scrolling through the square; a tap (not a swipe) moves the line.
+        className="group relative aspect-square select-none rounded-sm outline-offset-4 [touch-action:pan-y] md:cursor-ns-resize"
         onPointerDown={(e) => {
+          if (e.pointerType === "touch") {
+            tapStart.current = { y: e.clientY, t: performance.now() };
+            return;
+          }
           touched.current = true;
           e.currentTarget.setPointerCapture(e.pointerId);
           glide(fromPointer(e.clientY), 260);
         }}
         onPointerMove={(e) => {
-          if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+          if (e.pointerType === "touch" || !e.currentTarget.hasPointerCapture(e.pointerId)) return;
           cancelAnimationFrame(raf.current);
           paint(fromPointer(e.clientY));
         }}
+        onPointerUp={(e) => {
+          const t = tapStart.current;
+          tapStart.current = null;
+          if (e.pointerType !== "touch" || !t) return;
+          if (Math.abs(e.clientY - t.y) > 8 || performance.now() - t.t > 500) return; // that was a scroll, not a tap
+          touched.current = true;
+          glide(fromPointer(e.clientY), 420);
+        }}
+        onPointerCancel={() => (tapStart.current = null)}
         onKeyDown={(e) => {
           const d = e.key === "ArrowUp" || e.key === "ArrowRight" ? 1 : e.key === "ArrowDown" || e.key === "ArrowLeft" ? -1 : 0;
           if (!d) return;
@@ -138,7 +154,9 @@ export function SeamSplit() {
         </div>
       </div>
       <figcaption className="mt-4 text-[0.9375rem] text-ink-2">
-        Drag the line. However you split it, a Yes and a No add up to exactly 1 MUSD.
+        <span className="hidden md:inline">Drag the line.</span>
+        <span className="md:hidden">Tap the square to move the line.</span> However you split it, a Yes and a No add up to exactly
+        1 MUSD.
       </figcaption>
     </figure>
   );

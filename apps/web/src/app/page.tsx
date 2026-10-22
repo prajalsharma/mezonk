@@ -25,13 +25,19 @@ export default function Home() {
       {/* Hero */}
       <section className="grid items-center gap-14 pt-4 md:pt-12 lg:grid-cols-[1.05fr_1fr] lg:gap-20">
         <div className="space-y-8">
-          <p className="rise-in text-[0.9375rem] font-medium text-yes-text" style={at(0)}>The first prediction market on Mezo</p>
+          <p className="rise-in flex items-center gap-3 text-xl font-medium tracking-tight text-ink-2 md:text-2xl" style={at(0)}>
+            <span aria-hidden className="h-0.5 w-8 rounded-full bg-yes" />
+            <span>
+              The first prediction market <span className="font-semibold text-ink">on Mezo</span>
+            </span>
+          </p>
           <h1 className="display text-[3.1rem] sm:text-7xl lg:text-6xl xl:text-[4.25rem] 2xl:text-[4.6rem]">
             <span className="line-in" style={at(0)}>Call it right.</span>{" "}
             <span className="line-in xl:whitespace-nowrap" style={at(1)}>Keep your bitcoin.</span>
           </h1>
           <p className="rise-in max-w-[31rem] text-xl leading-relaxed text-ink-2" style={at(1)}>
-            Borrow MUSD against your BTC on Mezo, back Yes or No, and get paid in MUSD when you&apos;re right.
+            Borrow MUSD against your BTC on Mezo, back <span className="font-semibold text-yes-text">Yes</span> or{" "}
+            <span className="font-semibold text-ink">No</span>, and get paid in MUSD when you&apos;re right.
           </p>
           <div className="rise-in flex flex-wrap gap-3" style={at(2)}>
             <ButtonLink href="/markets" size="lg">
@@ -50,7 +56,8 @@ export default function Home() {
         <div className="reveal max-w-2xl space-y-4">
           <h2 id="funding-h" className="display text-5xl md:text-6xl">Your bitcoin stays yours.</h2>
           <p className="text-lg text-ink-2">
-            Selling BTC to take a view never made sense. On Mezo you borrow against it instead, and MEZONK runs on what you borrow.
+            You don&apos;t have to sell BTC to place a trade. Borrow MUSD against it on Mezo and trade with that, or use the MUSD you
+            already have.
           </p>
         </div>
         <div className="reveal">
