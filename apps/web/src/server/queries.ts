@@ -59,7 +59,19 @@ export interface MarketSummary {
   cover: MarketCover | null;
   /** Taker fee of the market's policy, in basis points (makers pay none). */
   feeBps: number;
+  /** Who backed each side (excluding the market's creator, who provides the opening liquidity). */
+  crowd: MarketCrowd;
 }
+
+export interface MarketCrowd {
+  yesPeople: number;
+  noPeople: number;
+  /** MUSD put in on each side, as decimal strings (18 decimals). */
+  yesStake: string;
+  noStake: string;
+}
+
+const NO_CROWD: MarketCrowd = { yesPeople: 0, noPeople: 0, yesStake: "0", noStake: "0" };
 
 export interface MarketCover {
   url: string;
@@ -136,7 +148,59 @@ function summarize(
     slug: null,
     cover: null,
     feeBps: m.feeBps,
+    crowd: NO_CROWD,
   };
+}
+
+/**
+ * People per side from the fill history: everyone who ever bought Yes or No, and what they paid. History, not current
+ * positions, so winners who already claimed (positions reset to zero) still count. The market's creator is left out:
+ * their seed and market-making orders are liquidity, not a call.
+ *
+ * Who bought what in a fill: a resting buy is the maker buying its outcome; a complement fill against it is the
+ * taker buying the other outcome (a set is minted); a plain fill against a resting sell is the taker buying it.
+ */
+export async function crowdFor(ids: number[], dbIn?: Awaited<ReturnType<typeof getDb>>, chainId = deployment.chainId): Promise<Map<number, MarketCrowd>> {
+  if (!ids.length) return new Map();
+  const db = dbIn ?? (await getDb());
+  const paid = (cents: ReturnType<typeof sql>) => sql<string>`div(sum(${fills.quantity} * ${cents}), 100)::text`;
+  const inMarkets = inArray(fills.marketId, ids);
+  const [makerBuys, takerComplementBuys, takerBuys, creators] = await Promise.all([
+    db
+      .select({ m: fills.marketId, who: fills.maker, o: fills.makerOutcome, paid: paid(sql`${fills.makerPrice}`) })
+      .from(fills)
+      .where(and(inMarkets, eq(fills.makerSide, 0)))
+      .groupBy(fills.marketId, fills.maker, fills.makerOutcome),
+    db
+      .select({ m: fills.marketId, who: fills.taker, o: sql<number>`(1 - ${fills.makerOutcome})::int`, paid: paid(sql`(100 - ${fills.makerPrice})`) })
+      .from(fills)
+      .where(and(inMarkets, eq(fills.makerSide, 0), eq(fills.complement, true)))
+      .groupBy(fills.marketId, fills.taker, fills.makerOutcome),
+    db
+      .select({ m: fills.marketId, who: fills.taker, o: fills.makerOutcome, paid: paid(sql`${fills.makerPrice}`) })
+      .from(fills)
+      .where(and(inMarkets, eq(fills.makerSide, 1), eq(fills.complement, false)))
+      .groupBy(fills.marketId, fills.taker, fills.makerOutcome),
+    db.select({ m: markets.marketId, creator: markets.creator }).from(markets).where(and(inArray(markets.marketId, ids), eq(markets.chainId, chainId))),
+  ]);
+  const creator = new Map(creators.map((r) => [r.m, r.creator.toLowerCase()]));
+  const acc = new Map<number, { yes: Set<string>; no: Set<string>; yesStake: bigint; noStake: bigint }>();
+  for (const r of [...makerBuys, ...takerComplementBuys, ...takerBuys]) {
+    const who = r.who.toLowerCase();
+    if (!creator.has(r.m) || creator.get(r.m) === who) continue;
+    let a = acc.get(r.m);
+    if (!a) acc.set(r.m, (a = { yes: new Set(), no: new Set(), yesStake: 0n, noStake: 0n }));
+    if (Number(r.o) === 0) {
+      a.yes.add(who);
+      a.yesStake += BigInt(r.paid);
+    } else {
+      a.no.add(who);
+      a.noStake += BigInt(r.paid);
+    }
+  }
+  return new Map(
+    [...acc].map(([m, a]) => [m, { yesPeople: a.yes.size, noPeople: a.no.size, yesStake: a.yesStake.toString(), noStake: a.noStake.toString() }]),
+  );
 }
 
 /** Cover image per market, taken from its proposal. Removed images are skipped. */
@@ -216,8 +280,11 @@ export async function listMarkets(p: ListParams) {
   list.sort(sorters[p.sort ?? "newest"]);
   const items = list.slice(p.offset, p.offset + p.limit);
   const pageIds = items.map((m) => m.id);
-  const [slugs, covers] = await Promise.all([slugsFor(pageIds), coversFor(pageIds)]);
-  return { total: list.length, items: items.map((m) => ({ ...m, slug: slugs.get(m.id) ?? null, cover: covers.get(m.id) ?? null })) };
+  const [slugs, covers, crowds] = await Promise.all([slugsFor(pageIds), coversFor(pageIds), crowdFor(pageIds)]);
+  return {
+    total: list.length,
+    items: items.map((m) => ({ ...m, slug: slugs.get(m.id) ?? null, cover: covers.get(m.id) ?? null, crowd: crowds.get(m.id) ?? NO_CROWD })),
+  };
 }
 
 export async function getMarket(id: number) {
@@ -229,9 +296,9 @@ export async function getMarket(id: number) {
   if (!m) return null;
   const now = await chainNowMs();
   const [s, tops] = await Promise.all([stats24h([id], now), bookTops([id])]);
-  const [slugs, covers] = await Promise.all([slugsFor([id]), coversFor([id])]);
+  const [slugs, covers, crowds] = await Promise.all([slugsFor([id]), coversFor([id]), crowdFor([id])]);
   const slug = slugs.get(id) ?? null;
-  return { row: m, summary: { ...summarize(m, s.get(id)!, now, tops.get(id)), slug, cover: covers.get(id) ?? null } };
+  return { row: m, summary: { ...summarize(m, s.get(id)!, now, tops.get(id)), slug, cover: covers.get(id) ?? null, crowd: crowds.get(id) ?? NO_CROWD } };
 }
 
 export async function getHistory(id: number) {

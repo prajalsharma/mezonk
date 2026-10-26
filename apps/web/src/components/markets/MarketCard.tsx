@@ -63,19 +63,42 @@ export function MarketStatusChip({ m, now }: { m: MarketSummaryDto; now: number 
   return <span className="rounded-full bg-info/12 px-2 py-0.5 text-xs font-medium text-info">{m.stage.label}</span>;
 }
 
-/** Outcome strip for settled markets: the result replaces the buy buttons. */
+/** Outcome strip for settled markets: the result replaces the buy buttons, with how many people called it. */
 function Settled({ m }: { m: MarketSummaryDto }) {
   const o = m.finalOutcome;
   const label = o === 1 ? "Resolved Yes" : o === 2 ? "Resolved No" : "Invalid · 0.5 MUSD per share";
+  const { yesPeople, noPeople } = m.crowd;
+  const right = o === 1 ? yesPeople : o === 2 ? noPeople : null;
   return (
     <div
       className={cx(
-        "flex h-11 items-center justify-center rounded-md text-sm font-semibold",
+        "flex min-h-11 flex-col items-center justify-center rounded-md px-3 py-2 text-center",
         o === 1 ? "bg-yes-soft text-yes-text" : o === 2 ? "bg-no-soft text-no-text" : "bg-warn-soft text-warn",
       )}
     >
-      {label}
+      <span className="text-sm font-semibold">{label}</span>
+      {right != null && yesPeople + noPeople > 0 && (
+        <span className="text-xs opacity-80">
+          {right} of {yesPeople + noPeople} {yesPeople + noPeople === 1 ? "person" : "people"} called it
+        </span>
+      )}
     </div>
+  );
+}
+
+/** How many people backed each side, and with how much. Nothing when no one has. */
+export function CrowdSplit({ m, className }: { m: Pick<MarketSummaryDto, "crowd">; className?: string }) {
+  const { yesPeople, noPeople, yesStake, noStake } = m.crowd;
+  if (yesPeople + noPeople === 0) return null;
+  return (
+    <p className={cx("flex flex-wrap items-center gap-x-3 gap-y-1 text-xs", className)}>
+      <span className="text-yes-text">
+        <span className="mono font-semibold">{yesPeople}</span> on Yes · <span className="mono">{formatMusd(yesStake, { compact: true })}</span> MUSD
+      </span>
+      <span className="text-ink-2">
+        <span className="mono font-semibold text-ink">{noPeople}</span> on No · <span className="mono">{formatMusd(noStake, { compact: true })}</span> MUSD
+      </span>
+    </p>
   );
 }
 
@@ -187,6 +210,7 @@ export function MarketCard({ m, now, index = 0, featured = false }: { m: MarketS
           )}
         </div>
         {sig.kind !== "none" && <ProbabilityBar priceYes={sig.p} size="sm" />}
+        <CrowdSplit m={m} />
       </div>
 
       {settled ? (

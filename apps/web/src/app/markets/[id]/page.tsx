@@ -47,6 +47,7 @@ async function load(id: number): Promise<{ indexed: IndexedMarket | null; dbErro
         tradeCount: r.tradeCount,
         traderCount: r.traderCount,
         priceYes24hAgo: m.summary.priceYes24hAgo,
+        crowd: m.summary.crowd,
         presentation: await marketPresentation(id, r.creator).catch(() => null),
       },
     };

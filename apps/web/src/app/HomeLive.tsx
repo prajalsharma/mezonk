@@ -218,3 +218,28 @@ export function LiveMarkets() {
     </div>
   );
 }
+
+/**
+ * Closed and settled markets: what happened and how many people called it. Settled first, then those waiting on a
+ * result. Renders nothing until at least one market has closed (no placeholders).
+ */
+export function Results() {
+  const settled = useMarkets({ status: "resolved", sort: "newest", limit: 3, offset: 0 }, { enabled: deployment.ready });
+  const closing = useMarkets({ status: "resolving", sort: "newest", limit: 3, offset: 0 }, { enabled: deployment.ready });
+  const items = [...(settled.data?.items ?? []), ...(closing.data?.items ?? [])].slice(0, 3);
+  if (!items.length) return null;
+  return (
+    <section aria-labelledby="results" className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="max-w-2xl space-y-2">
+          <h2 id="results" className="display text-4xl md:text-5xl">Results</h2>
+          <p className="text-lg text-ink-2">How closed markets ended, and how many people called them right.</p>
+        </div>
+        <Link href="/markets?status=resolved" className="inline-flex items-center gap-1.5 font-medium text-ink-2 hover:text-ink">
+          All results <ArrowUpRight className="size-4" />
+        </Link>
+      </div>
+      <MarketGrid items={items} isLoading={false} empty={null} />
+    </section>
+  );
+}

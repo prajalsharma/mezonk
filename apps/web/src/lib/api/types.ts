@@ -30,6 +30,8 @@ export interface MarketSummaryDto {
   cover: { url: string; width: number; height: number } | null;
   /** Taker fee in basis points, charged on top of the price when you buy. */
   feeBps: number;
+  /** People per side and MUSD put in, excluding the market's creator. */
+  crowd: { yesPeople: number; noPeople: number; yesStake: string; noStake: string };
 }
 
 export interface MarketListDto {

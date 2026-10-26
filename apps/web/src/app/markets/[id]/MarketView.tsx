@@ -1,5 +1,7 @@
 "use client";
 
+import type { MarketSummaryDto } from "@/lib/api/types";
+import { CrowdSplit } from "@/components/markets/MarketCard";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Share2 } from "lucide-react";
 import Link from "next/link";
@@ -45,6 +47,8 @@ export interface IndexedMarket {
   tradeCount: number;
   traderCount: number;
   priceYes24hAgo: number | null;
+  /** People per side and MUSD put in, excluding the market's creator. */
+  crowd: MarketSummaryDto["crowd"];
   presentation: {
     creator: PublicPerson;
     suggestedBy: PublicPerson | null;
@@ -271,6 +275,7 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
                     )}
                   </div>
                   {shown != null && <ProbabilityBar priceYes={shown} size="lg" />}
+                  {indexed && <CrowdSplit m={{ crowd: indexed.crowd }} className="text-sm" />}
                   <p className="text-xs text-muted">
                     {priceYes != null
                       ? "Chance of Yes from the last trade. A price, not a guarantee."

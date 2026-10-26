@@ -3,7 +3,7 @@ import Link from "next/link";
 import { LogoMark } from "@/components/brand/Logo";
 import { ButtonLink } from "@/components/ui/Button";
 import { deployment, TESTNET_FUNDING } from "@/lib/chain/config";
-import { LiveMarkets } from "./HomeLive";
+import { LiveMarkets, Results } from "./HomeLive";
 import { FundingCard } from "./landing/FundingCard";
 import { HeroStack } from "./landing/HeroStack";
 import { PayoutCalculator } from "./landing/PayoutCalculator";
@@ -69,6 +69,8 @@ export default function Home() {
         </div>
         <LiveMarkets />
       </section>
+
+      <Results />
 
       {/* Try a trade: drag the seam, see the payout. */}
       <section aria-labelledby="calc" className="space-y-10">

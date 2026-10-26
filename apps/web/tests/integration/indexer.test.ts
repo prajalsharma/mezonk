@@ -6,6 +6,7 @@ import { serializeMetadata, metadataHash } from "@/lib/market/metadata";
 import { exchangeAbi as exchangeAbiForTest } from "@/lib/contracts/abi";
 import { openDb, schema, type Db } from "@/server/db/client";
 import { createIndexer } from "@/server/indexer/indexer";
+import { crowdFor } from "@/server/queries";
 import { buildTimeline, type TimelineEventInput } from "@/lib/market/timeline";
 import { BUY, E, NO, startChain, YES } from "./chain";
 
@@ -100,6 +101,17 @@ describe("indexer against a real chain", () => {
     expect(carol.redeemed).toBe(true);
     expect(BigInt(carol.yesShares)).toBe(0n);
     expect(BigInt(carol.realizedPnl)).toBe(E(30) - E(16.5) - E(0.165)); // paid 16.5 + 1% fee, redeemed 30
+
+    // "Who backed what" comes from fill history, so carol still counts on Yes after redeeming; the creator never counts.
+    const [row] = await db.select().from(schema.markets).where(eq(schema.markets.marketId, Number(id)));
+    const crowd = (await crowdFor([Number(id)], db, 31611)).get(Number(id))!;
+    expect(crowd.yesPeople).toBeGreaterThan(0);
+    expect(BigInt(crowd.yesStake)).toBeGreaterThanOrEqual(E(16.5)); // includes carol's 16.5 (fee excluded)
+    const fillsHere = await db.select().from(schema.fills).where(eq(schema.fills.marketId, Number(id)));
+    const people = new Set(fillsHere.flatMap((f) => [f.maker.toLowerCase(), f.taker.toLowerCase()]));
+    people.delete(row!.creator.toLowerCase());
+    expect(crowd.yesPeople + crowd.noPeople).toBeLessThanOrEqual(2 * people.size);
+    expect(people.has(c.addr("carol").toLowerCase())).toBe(true);
 
     // Timeline reconstructed from stored events is complete and ordered.
     const evs = await db.select().from(schema.chainEvents).where(eq(schema.chainEvents.marketId, Number(id)));
