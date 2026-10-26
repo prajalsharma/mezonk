@@ -176,7 +176,7 @@ async function send(s: Signer, to: Address, data: Hex, label: string) {
   }
 }
 
-/** Signs in to the app (SIWE) and returns the session cookie. */
+/** Signs in to the app (SIWE) and returns the session token, sent back as a Bearer header (the app's script path). */
 async function signIn(s: Signer): Promise<string> {
   const n = await (await fetch(`${APP}/api/auth/nonce?wallet=${s.address}`, { cache: "no-store" })).json();
   const signature = cast(["wallet", "sign", ...auth(s), n.message]).trim() as Hex;
@@ -187,16 +187,17 @@ async function signIn(s: Signer): Promise<string> {
     body: JSON.stringify({ wallet: s.address, nonce: n.nonce, issuedAt: n.issuedAt, signature }),
   });
   if (!r.ok) throw new Error(`sign-in failed for ${s.name}: ${await r.text()}`);
-  const cookie = (r.headers.get("set-cookie") ?? "").split(";")[0];
-  if (!cookie) throw new Error("sign-in returned no session cookie");
+  // Cookie-authenticated writes must come from the site's own origin; scripts use the token as a Bearer header.
+  const token = (r.headers.get("set-cookie") ?? "").split(";")[0]?.split("=").slice(1).join("=") ?? "";
+  if (!token) throw new Error("sign-in returned no session token");
   console.log(`  ✓ signed in ${s.name} (${s.address})`);
-  return cookie;
+  return token;
 }
 
-async function api<T>(cookie: string, url: string, init: RequestInit = {}): Promise<T> {
+async function api<T>(token: string, url: string, init: RequestInit = {}): Promise<T> {
   const r = await fetch(`${APP}${url}`, {
     ...init,
-    headers: { cookie, ...(init.body instanceof FormData ? {} : { "content-type": "application/json" }), ...(init.headers ?? {}) },
+    headers: { authorization: `Bearer ${token}`, ...(init.body instanceof FormData ? {} : { "content-type": "application/json" }), ...(init.headers ?? {}) },
   });
   const body = r.status === 204 ? null : await r.json().catch(() => null);
   if (!r.ok) throw new Error(`${init.method ?? "GET"} ${url}: ${body?.error?.message ?? r.status}${body?.error?.details ? ` ${JSON.stringify(body.error.details)}` : ""}`);
