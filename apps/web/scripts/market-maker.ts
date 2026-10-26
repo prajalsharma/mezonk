@@ -22,6 +22,7 @@
  *      MM_INTERVAL seconds (30), MM_CLOSE_MARGIN seconds (600), MM_ONCE=1, MM_DRY=1 + MM_ADDRESS.
  */
 import { execFileSync } from "node:child_process";
+import { createServer } from "node:http";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -99,6 +100,24 @@ process.on("SIGINT", () => {
   console.log("\nStopping after the current step (Ctrl-C again to quit now).");
   wake?.();
 });
+// Hosts stop containers with SIGTERM: finish the current step, then exit.
+process.on("SIGTERM", () => {
+  stopping = true;
+  wake?.();
+});
+
+/**
+ * Free hosts that only run web services (e.g. Render's free tier) need something listening on $PORT, and sleep
+ * without traffic; an uptime pinger hitting /health keeps it awake. Reports the last pass so the ping is useful.
+ * Off when PORT isn't set (local runs).
+ */
+let lastPass = { at: "", summary: "starting" };
+if (process.env.PORT) {
+  createServer((req, res) => {
+    res.writeHead(req.url === "/health" || req.url === "/" ? 200 : 404, { "content-type": "application/json", "cache-control": "no-store" });
+    res.end(JSON.stringify({ ok: true, lastPass }));
+  }).listen(Number(process.env.PORT), "0.0.0.0");
+}
 
 const sleep = (ms: number) =>
   new Promise<void>((res) => {
@@ -349,6 +368,7 @@ async function pass(w: Wallet) {
     }
   }
   console.log(`pass done: ${musd(escrowed)} escrowed of ${musd(BUDGET)}${w.signer ? "" : " (dry run, includes would-place orders)"}`);
+  lastPass = { at: new Date().toISOString(), summary: `${musd(escrowed)} escrowed of ${musd(BUDGET)}` };
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
