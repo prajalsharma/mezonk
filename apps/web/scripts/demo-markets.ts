@@ -237,8 +237,11 @@ async function main() {
   const curator = await signer(CURATOR);
   const creator = await signer(CREATOR);
   if (curator.address.toLowerCase() === creator.address.toLowerCase()) throw new Error("Curator and creator must be different wallets");
-  for (const s of [curator, creator]) {
-    if ((await client.getBalance({ address: s.address })) < 10n ** 14n) throw new Error(`${s.name} (${s.address}) needs test BTC for gas: https://faucet.test.mezo.org/`);
+  if ((await client.getBalance({ address: curator.address })) < 10n ** 15n) throw new Error(`${curator.name} (${curator.address}) needs test BTC for gas: https://faucet.test.mezo.org/`);
+  if ((await client.getBalance({ address: creator.address })) < 5n * 10n ** 14n) {
+    // A fresh creator wallet has no gas: the curator sends it a little test BTC.
+    cast(["send", creator.address, "--value", "0.002ether", ...auth(curator), "--rpc-url", RPC, "--json"]);
+    console.log(`  ✓ sent 0.002 test BTC to the creator for gas`);
   }
   const f = { address: P.factoryAddress, abi: factoryAbi } as const;
 
