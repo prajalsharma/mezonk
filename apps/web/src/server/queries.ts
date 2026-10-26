@@ -57,6 +57,8 @@ export interface MarketSummary {
   slug: string | null;
   /** Cover image from the proposal the market was published from; null when it has none. */
   cover: MarketCover | null;
+  /** Taker fee of the market's policy, in basis points (makers pay none). */
+  feeBps: number;
 }
 
 export interface MarketCover {
@@ -133,6 +135,7 @@ function summarize(
     trendingScore: trendingScore(s.vol, s.traders, live),
     slug: null,
     cover: null,
+    feeBps: m.feeBps,
   };
 }
 

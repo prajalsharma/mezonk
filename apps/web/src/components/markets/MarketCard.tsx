@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/primitives";
 import { type MarketSummaryDto, marketHref } from "@/lib/api/types";
 import { formatCents, formatMusd, formatProb, marketSignal, relativeTime } from "@/lib/format";
 import { categoryLabel, type Category } from "@/lib/market/metadata";
+import { winAtBest } from "@/lib/market/payout";
 import { Change, ProbabilityBar } from "./Probability";
 
 export const CATEGORY_ICON: Record<string, LucideIcon> = {
@@ -75,6 +76,43 @@ function Settled({ m }: { m: MarketSummaryDto }) {
     >
       {label}
     </div>
+  );
+}
+
+/** Example stake on every card: small enough that the best price holds, big enough to feel real. */
+const CARD_STAKE = 10;
+
+/**
+ * One outcome as a button that says what you get: the price, and what a 10 MUSD stake pays if it wins
+ * (best price, fee included). Opens the market with that side and stake picked; nothing is bought from here.
+ */
+function OutcomeButton({ m, side, cents }: { m: MarketSummaryDto; side: "yes" | "no"; cents: number | null }) {
+  const win = winAtBest(BigInt(CARD_STAKE) * 10n ** 18n, cents, m.feeBps);
+  const yes = side === "yes";
+  const label = yes ? "Yes" : "No";
+  return (
+    <Link
+      href={marketHref(m, side, win ? CARD_STAKE : undefined)}
+      aria-label={
+        cents == null
+          ? `${label}: no sellers right now: ${m.question}`
+          : `Buy ${label} at ${cents} cents. ${CARD_STAKE} MUSD pays about ${win ? formatMusd(win.payout) : "—"} MUSD if ${label} wins: ${m.question}`
+      }
+      className={cx(
+        "press group/out flex min-h-14 flex-col justify-center gap-0.5 rounded-md px-3 py-2 ring-1 transition-colors",
+        yes ? "bg-yes-soft text-yes-text ring-yes/25 hover:bg-yes hover:text-on-yes" : "bg-no-soft text-no-text ring-line hover:bg-no hover:text-on-no",
+      )}
+    >
+      <span className="flex items-center justify-between text-sm font-semibold">
+        <span>{label}</span>
+        <span className="mono">{cents != null ? formatCents(cents) : "no offers"}</span>
+      </span>
+      {win && (
+        <span className="mono text-[11px] font-medium opacity-80">
+          {CARD_STAKE} → {formatMusd(win.payout)} MUSD
+        </span>
+      )}
+    </Link>
   );
 }
 
@@ -155,22 +193,8 @@ export function MarketCard({ m, now, index = 0, featured = false }: { m: MarketS
         <Settled m={m} />
       ) : open ? (
         <div className="relative z-10 grid grid-cols-2 gap-2">
-          <Link
-            href={marketHref(m, "yes")}
-            aria-label={buyYes != null ? `Buy Yes from ${buyYes} cents: ${m.question}` : `Yes: no sellers right now: ${m.question}`}
-            className="press flex h-11 items-center justify-between rounded-md bg-yes-soft px-3 text-sm font-semibold text-yes-text ring-1 ring-yes/25 transition-colors hover:bg-yes hover:text-on-yes"
-          >
-            <span>Yes</span>
-            <span className="mono">{buyYes != null ? formatCents(buyYes) : "no offers"}</span>
-          </Link>
-          <Link
-            href={marketHref(m, "no")}
-            aria-label={buyNo != null ? `Buy No from ${buyNo} cents: ${m.question}` : `No: no sellers right now: ${m.question}`}
-            className="press flex h-11 items-center justify-between rounded-md bg-no-soft px-3 text-sm font-semibold text-no-text ring-1 ring-line transition-colors hover:bg-no hover:text-on-no"
-          >
-            <span>No</span>
-            <span className="mono">{buyNo != null ? formatCents(buyNo) : "no offers"}</span>
-          </Link>
+          <OutcomeButton m={m} side="yes" cents={buyYes} />
+          <OutcomeButton m={m} side="no" cents={buyNo} />
         </div>
       ) : seeding ? (
         <Link

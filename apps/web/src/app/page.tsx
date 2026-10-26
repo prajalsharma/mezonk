@@ -57,7 +57,12 @@ export default function Home() {
       {/* The board. */}
       <section aria-labelledby="markets" className="space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <h2 id="markets" className="display text-4xl md:text-5xl">On the board</h2>
+          <div className="max-w-2xl space-y-2">
+            <h2 id="markets" className="display text-4xl md:text-5xl">Make your call</h2>
+            <p className="text-lg text-ink-2">
+              Each share costs its price in cents and pays 1 MUSD if you&apos;re right. Every button shows what 10 MUSD turns into.
+            </p>
+          </div>
           <Link href="/markets" className="inline-flex items-center gap-1.5 font-medium text-ink-2 hover:text-ink">
             All markets <ArrowRight className="size-4" />
           </Link>

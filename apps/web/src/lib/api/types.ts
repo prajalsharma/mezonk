@@ -28,6 +28,8 @@ export interface MarketSummaryDto {
   slug: string | null;
   /** Cover image uploaded with the market's proposal; null when it has none. */
   cover: { url: string; width: number; height: number } | null;
+  /** Taker fee in basis points, charged on top of the price when you buy. */
+  feeBps: number;
 }
 
 export interface MarketListDto {
@@ -68,8 +70,8 @@ export async function apiGet<T>(url: string, timeoutMs = 8_000): Promise<T> {
 }
 
 /** Canonical public URL of a market: its slug when assigned, else the numeric id (which redirects). */
-export const marketHref = (m: { id: number; slug?: string | null }, side?: "yes" | "no") =>
-  `/markets/${m.slug ?? m.id}${side ? `?side=${side}` : ""}`;
+export const marketHref = (m: { id: number; slug?: string | null }, side?: "yes" | "no", amount?: number) =>
+  `/markets/${m.slug ?? m.id}${side ? `?side=${side}${amount ? `&amount=${amount}` : ""}` : ""}`;
 
 /** Retry only transient failures; a 4xx or an explicit "unavailable" answer won't change on retry. */
 export const shouldRetry = (count: number, e: unknown) =>

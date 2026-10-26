@@ -39,6 +39,7 @@ export function TradeTicket({
   side,
   onSideChange,
   preset,
+  initialAmount,
 }: {
   marketId: number;
   chain: MarketChain;
@@ -46,6 +47,8 @@ export function TradeTicket({
   onSideChange: (s: Side) => void;
   /** A price picked in the order book. */
   preset?: { action: Action; price: number; nonce: number } | null;
+  /** MUSD amount prefilled from a link (?amount=), e.g. a "bet 10" button on the landing page. */
+  initialAmount?: string;
 }) {
   const { address, isConnected, chainId } = useAccount();
   const client = usePublicClient({ chainId: deployment.chainId });
@@ -68,7 +71,7 @@ export function TradeTicket({
   const [restError, setRestError] = useState<string | null>(null);
   // Simple: spend an amount of MUSD on one outcome at the best offers. Advanced: shares, limits, selling.
   const [mode, setModeState] = useState<Mode>("simple");
-  const [amountIn, setAmountIn] = useState("");
+  const [amountIn, setAmountIn] = useState(initialAmount ?? "");
   const [feeBpsSeen, setFeeBpsSeen] = useState(100);
   const simple = mode === "simple";
   const setMode = (m: Mode) => {

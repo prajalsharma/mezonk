@@ -81,6 +81,8 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
   const params = useSearchParams();
   // The outcome picked on a card (?side=) or on the tiles below drives the trade ticket.
   const [side, setSide] = useState<"yes" | "no">(params.get("side") === "no" ? "no" : "yes");
+  // A stake picked on the landing page (?amount=10) prefills the ticket. Whole MUSD only, 1–100,000.
+  const amountParam = /^\d{1,6}$/.test(params.get("amount") ?? "") && Number(params.get("amount")) >= 1 ? params.get("amount")! : undefined;
   const { add } = useRecentlyViewed();
   useEffect(() => add(id), [id, add]);
   // In-page links to a collapsed section (#book, #resolution) open it.
@@ -162,7 +164,7 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
   ) : (
     <>
       {open ? (
-        <TradeTicket marketId={id} chain={chain} side={side} onSideChange={setSide} preset={preset} />
+        <TradeTicket marketId={id} chain={chain} side={side} onSideChange={setSide} preset={preset} initialAmount={amountParam} />
       ) : stage ? (
         <div className="panel space-y-1 p-5 text-sm">
           <p className="font-medium text-ink">Trading has closed</p>

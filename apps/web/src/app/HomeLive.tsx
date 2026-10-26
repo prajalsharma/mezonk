@@ -9,9 +9,10 @@ import { Skeleton } from "@/components/ui/primitives";
 import { CategoryGlyph, MarketGrid, MarketStatusChip } from "@/components/markets/MarketCard";
 import { Change, ProbabilityBar, SignalValue } from "@/components/markets/Probability";
 import { Sparkline } from "@/components/markets/Sparkline";
+import { WinPicker } from "@/components/markets/WinPicker";
 import { useMarkets } from "@/hooks/useMarkets";
 import { type MarketSummaryDto, marketHref } from "@/lib/api/types";
-import { formatCents, formatMusd, marketSignal } from "@/lib/format";
+import { formatMusd, marketSignal } from "@/lib/format";
 import { deployment } from "@/lib/chain/config";
 import { CATEGORIES, categoryLabel, type Category } from "@/lib/market/metadata";
 
@@ -104,25 +105,9 @@ export function HeroTicket() {
             return sig.kind === "none" ? null : <ProbabilityBar priceYes={sig.p} />;
           })()}
 
-          <div className="grid grid-cols-2 gap-2">
-            <Link
-              href={marketHref(m, "yes")}
-              className="press flex h-12 items-center justify-between rounded-md bg-yes px-4 font-semibold text-on-yes transition-[background-color] hover:bg-accent-hover"
-            >
-              <span>Buy Yes</span>
-              <span className="mono">{m.bestAsk != null ? formatCents(m.bestAsk) : "no offers"}</span>
-            </Link>
-            <Link
-              href={marketHref(m, "no")}
-              className="press flex h-12 items-center justify-between rounded-md bg-no px-4 font-semibold text-on-no transition-opacity hover:opacity-90"
-            >
-              <span>Buy No</span>
-              <span className="mono">{m.bestBid != null ? formatCents(100 - m.bestBid) : "no offers"}</span>
-            </Link>
-          </div>
+          <WinPicker m={m} />
           <p className="flex flex-wrap justify-between gap-2 text-xs text-muted">
             <span className="mono">{m.tradeCount ? `${formatMusd(m.volume, { compact: true })} MUSD traded · ${m.tradeCount} trades` : "No trades yet"}</span>
-            <span>A winning share pays 1 MUSD</span>
           </p>
         </div>
       )}
