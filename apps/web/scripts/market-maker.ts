@@ -8,10 +8,14 @@
  * price one cent further from the spread than its lowest order so far (85,84,83 → 82,81…; 8,7,6 → 5,4…), so the
  * price walks as testers buy. It never cancels, never crosses the book and never escrows more than MM_BUDGET_MUSD.
  *
- * Signing happens on this machine with a Foundry keystore via `cast`. The password is asked once, kept in a 0600
- * temp file for the run and deleted on exit. Testnet only.
+ * Signing, two ways. Testnet only either way.
+ *  - On your machine: a Foundry keystore via `cast`. The password is asked once, kept in a 0600 temp file for the run
+ *    and deleted on exit.
+ *  - On a server (no one to type a password): MM_PRIVATE_KEY, the bot wallet's key, set as a secret in the host's
+ *    environment. Use a wallet that only ever holds test funds. Never commit it or put it in a NEXT_PUBLIC_ variable.
  *
  *   MM_ACCOUNT=creator pnpm --filter web mm
+ *   MM_PRIVATE_KEY=0x… pnpm --filter web mm                    # server / container (see Dockerfile.mm)
  *   MM_DRY=1 MM_ONCE=1 MM_ADDRESS=0x… pnpm --filter web mm      # read-only: prints what it would place
  *
  * Env: MM_ACCOUNT (creator), MM_MARKETS (all live), MM_SHARES (100), MM_LEVELS (3), MM_BUDGET_MUSD (2000),
@@ -25,6 +29,7 @@ import { createInterface } from "node:readline";
 import { Writable } from "node:stream";
 import {
   createPublicClient,
+  createWalletClient,
   encodeFunctionData,
   erc20Abi,
   getAddress,
@@ -34,7 +39,11 @@ import {
   parseUnits,
   type Address,
   type Hex,
+  type Transport,
+  type WalletClient,
 } from "viem";
+import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
+import { mezoTestnet } from "../src/lib/chain/config";
 import { laggingNodeFetch } from "../src/lib/chain/laggingNodeFetch";
 import { exchangeAbi } from "../src/lib/contracts/abi";
 
@@ -120,12 +129,21 @@ function cast(args: string[]): string {
   return execFileSync("cast", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
 
-interface Signer { name: string; pwFile: string; address: Address }
+type Signer =
+  | { kind: "cast"; name: string; pwFile: string; address: Address }
+  | { kind: "key"; address: Address; wallet: WalletClient<Transport, typeof mezoTestnet, PrivateKeyAccount> };
 async function signer(name: string): Promise<Signer> {
+  const key = process.env.MM_PRIVATE_KEY?.trim();
+  if (key) {
+    if (!/^0x[0-9a-fA-F]{64}$/.test(key)) throw new Error("MM_PRIVATE_KEY must be 0x followed by 64 hex characters");
+    const account = privateKeyToAccount(key as Hex);
+    const wallet = createWalletClient({ account, chain: mezoTestnet, transport: http(RPC, { retryCount: 3, retryDelay: 1000, fetchFn: laggingNodeFetch }) });
+    return { kind: "key", address: account.address, wallet };
+  }
   const pwFile = path.join(dir, `${name}.pw`);
   writeFileSync(pwFile, await askHidden(`Password for keystore "${name}": `), { mode: 0o600 });
   const address = getAddress(cast(["wallet", "address", "--account", name, "--password-file", pwFile]).trim());
-  return { name, pwFile, address };
+  return { kind: "cast", name, pwFile, address };
 }
 
 /** Highest block we know is mined (receipts we waited for); reads are pinned at or after it. */
@@ -134,9 +152,14 @@ let minBlock = 0n;
 async function send(s: Signer, to: Address, data: Hex, label: string) {
   let hash: Hex;
   try {
-    hash = cast(["send", to, data, "--account", s.name, "--password-file", s.pwFile, "--rpc-url", RPC, "--async"]).trim() as Hex;
+    // Sent once, never retried here: a retry after a broadcast that did land could place the order twice.
+    // A failed pass is retried on the next pass, which re-reads the book first.
+    hash =
+      s.kind === "key"
+        ? await s.wallet.sendTransaction({ to, data })
+        : (cast(["send", to, data, "--account", s.name, "--password-file", s.pwFile, "--rpc-url", RPC, "--async"]).trim() as Hex);
   } catch (e) {
-    const msg = (e as { stderr?: string }).stderr || (e as Error).message;
+    const msg = (e as { stderr?: string }).stderr || short(e) || String(e);
     throw new Error(`${label} failed: ${msg.trim().split("\n").slice(-3).join(" ")}`);
   }
   // The public RPC sometimes serves a lagging node that returns null receipts; poll by hash until it's mined.
@@ -343,7 +366,7 @@ async function main() {
   } else {
     const s = await signer(ACCOUNT);
     w = { address: s.address, signer: s, balance: 0n, allowance: 0n, approved: false };
-    console.log(`Market maker running as ${ACCOUNT} (${s.address}) on Mezo Testnet.`);
+    console.log(`Market maker running as ${s.kind === "key" ? "MM_PRIVATE_KEY" : ACCOUNT} (${s.address}) on Mezo Testnet.`);
   }
   console.log(
     `Shares ${shares(SHARES)} per level, ${LEVELS} levels per side, budget ${musd(BUDGET)}, markets ${MARKETS ? MARKETS.join(",") : "all live"}, ` +

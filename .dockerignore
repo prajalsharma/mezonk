@@ -1,0 +1,7 @@
+**/node_modules
+**/.next
+**/.pglite*
+**/.env*
+contracts
+docs
+.git
