@@ -44,6 +44,10 @@ const CURATOR = process.env.CURATOR_ACCOUNT ?? "deployer";
 const CREATOR = process.env.CREATOR_ACCOUNT ?? "creator";
 const COVERS = process.env.COVERS_DIR ?? path.join(process.env.HOME ?? "", "Pictures/shubham/mezonk-covers");
 const SHARES = 20; // per side, the policy's minimum depth
+/** Extra depth after launch: this many shares at each ladder price on both sides (0 = none). */
+const LADDER = Number(process.env.LADDER_SHARES ?? 100);
+const FAV_LADDER = [85, 84, 83]; // favourite bids: the long shot is buyable from 15¢
+const LONG_LADDER = [8, 7, 6]; // long-shot bids: the favourite is buyable from 92¢
 const S = (n: number) => parseUnits(String(n), 18);
 const YES = 0, NO = 1, BUY = 0;
 
@@ -222,6 +226,19 @@ async function btcFavourite(): Promise<Side> {
   return fav;
 }
 
+/** The creator's resting buy quantity (original size) per "outcome:price" on one market. */
+async function creatorRestingByPrice(maker: Address, marketId: bigint): Promise<Map<string, bigint>> {
+  const out = new Map<string, bigint>();
+  const n = await client.readContract({ address: EXCHANGE, abi: exchangeAbi, functionName: "restingCount" });
+  for (let i = 1n; i <= n; i++) {
+    const o = await client.readContract({ address: EXCHANGE, abi: exchangeAbi, functionName: "getResting", args: [i] });
+    if (o.marketId !== marketId || o.maker.toLowerCase() !== maker.toLowerCase() || o.side !== BUY) continue;
+    const k = `${o.outcome}:${o.price}`;
+    out.set(k, (out.get(k) ?? 0n) + o.quantity);
+  }
+  return out;
+}
+
 /** Market id created with this approval nonce, read from the factory's MarketApprovalUsed event. */
 async function marketForApproval(nonce: Hex): Promise<bigint> {
   const head = await client.getBlockNumber();
@@ -267,15 +284,16 @@ async function main() {
   if (!resolver) throw new Error("No approved resolver found");
   console.log(`  resolver: ${resolver}`);
 
-  // Seeding cost per market: 20 shares at 85¢ plus 20 at 8¢ = 18.6 MUSD. Keep a margin.
-  const need = S(SHARES) * 93n / 100n * BigInt(DEMOS.length) + S(5);
+  // Seeding: 20 shares at 85¢ + 20 at 8¢ = 18.6 MUSD per market. Ladder: LADDER shares at each ladder price. Keep a margin.
+  const ladderCents = BigInt([...FAV_LADDER, ...LONG_LADDER].reduce((a, b) => a + b, 0));
+  const need = (S(SHARES) * 93n / 100n + (S(LADDER) * ladderCents) / 100n) * BigInt(DEMOS.length) + S(5);
   const bal = await client.readContract({ address: MUSD, abi: erc20Abi, functionName: "balanceOf", args: [creator.address] });
   if (bal < need) {
     const top = need - bal;
     await send(curator, MUSD, encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [creator.address, top] }), `send ${Number(top / 10n ** 16n) / 100} MUSD to creator for seeding`);
   } else console.log(`  ✓ creator has ${Number(bal / 10n ** 16n) / 100} MUSD`);
   const allowance = await client.readContract({ address: MUSD, abi: erc20Abi, functionName: "allowance", args: [creator.address, EXCHANGE] });
-  if (allowance < need) await send(creator, MUSD, encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [EXCHANGE, need * 4n] }), "let the exchange use the creator's MUSD");
+  if (allowance < need * 2n) await send(creator, MUSD, encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [EXCHANGE, need * 4n] }), "let the exchange use the creator's MUSD");
 
   console.log("\nSigning in to the app");
   const creatorCookie = await signIn(creator);
@@ -417,6 +435,21 @@ async function main() {
       g = await client.readContract({ address: EXCHANGE, abi: exchangeAbi, functionName: "graduationCheck", args: [marketId] });
       if (!(g.open && g.spreadOk && g.depthOk && g.seedersOk)) throw new Error(`market #${marketId} isn't ready to launch: ${JSON.stringify(g, (_k, v) => (typeof v === "bigint" ? v.toString() : v))}`);
       await send(creator, EXCHANGE, ex("graduate", [marketId]), "launch");
+    }
+    // 5. Depth: a small ladder on both sides so people can buy more than the 20 seed shares.
+    if (LADDER > 0) {
+      const ex = (args: readonly unknown[]) => encodeFunctionData({ abi: exchangeAbi, functionName: "placeOrder", args } as never);
+      const mineAt = await creatorRestingByPrice(creator.address, marketId);
+      const favOutcome = fav === "yes" ? YES : NO;
+      const longOutcome = fav === "yes" ? NO : YES;
+      for (const [outcome, prices] of [[favOutcome, FAV_LADDER], [longOutcome, LONG_LADDER]] as const) {
+        for (const price of prices) {
+          // Seed orders already sit at 85¢ and 8¢; the ladder adds LADDER on top, once.
+          const base = price === 85 || price === 8 ? S(SHARES) : 0n;
+          if ((mineAt.get(`${outcome}:${price}`) ?? 0n) >= base + S(LADDER)) continue;
+          await send(creator, EXCHANGE, ex([marketId, outcome, BUY, price, S(LADDER)]), `depth: buy ${outcome === YES ? "Yes" : "No"} at ${price}¢ × ${LADDER}`);
+        }
+      }
     }
     void fetch(`${APP}/api/markets/${marketId}/refresh`, { method: "POST" }).catch(() => undefined);
     done.push(`#${marketId}  ${d.metadata.question}`);
