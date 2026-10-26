@@ -93,10 +93,12 @@ export function CrowdSplit({ m, className }: { m: Pick<MarketSummaryDto, "crowd"
   return (
     <p className={cx("flex flex-wrap items-center gap-x-3 gap-y-1 text-xs", className)}>
       <span className="text-yes-text">
-        <span className="mono font-semibold">{yesPeople}</span> on Yes · <span className="mono">{formatMusd(yesStake, { compact: true })}</span> MUSD
+        <span className="mono font-semibold">{yesPeople}</span> on Yes
+        {yesPeople > 0 && <> · <span className="mono">{formatMusd(yesStake, { compact: true })}</span> MUSD</>}
       </span>
       <span className="text-ink-2">
-        <span className="mono font-semibold text-ink">{noPeople}</span> on No · <span className="mono">{formatMusd(noStake, { compact: true })}</span> MUSD
+        <span className="mono font-semibold text-ink">{noPeople}</span> on No
+        {noPeople > 0 && <> · <span className="mono">{formatMusd(noStake, { compact: true })}</span> MUSD</>}
       </span>
     </p>
   );
@@ -235,7 +237,7 @@ export function MarketCard({ m, now, index = 0, featured = false }: { m: MarketS
 
       <footer className="mono flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-3 text-[11px] text-muted">
         <span>{m.tradeCount ? `${formatMusd(m.volume, { compact: true })} MUSD vol` : "No trades yet"}</span>
-        {m.traders24h > 0 && <span>{m.traders24h} traders 24h</span>}
+        {m.traders24h > 0 && <span>{m.traders24h} {m.traders24h === 1 ? "trader" : "traders"} 24h</span>}
         {open && <span>Closes {new Date(m.closeTime).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}</span>}
         {seeding && m.stage.deadline && <span>Seeding ends {relativeTime(new Date(m.stage.deadline).getTime(), now)}</span>}
         {!m.structured && <span className="text-warn">Unstructured rules</span>}
