@@ -337,7 +337,7 @@ export default function DocsPage() {
           <li><strong>Market order:</strong> fills now against the best offers, never past your price limit. Whatever can&apos;t fill at that price is cancelled.</li>
           <li><strong>Limit order:</strong> fills what it can now, and the rest waits on the book at your price. You choose to sign it (free, funds stay in your wallet) or escrow it on-chain (funds locked, always executable).</li>
           <li><strong>If everyone wants Yes</strong> and nobody offers it, nothing fills. The ticket says so; you can raise your limit or wait. No shares are invented.</li>
-          <li><strong>Prices shown:</strong> the only number shown as a price is the last real trade. The middle of the book is labelled indicative. A market with no trades shows no number.</li>
+          <li><strong>Prices shown:</strong> the chance shown is the last real trade. Before anyone has traded, the site shows an estimate marked ~, halfway between the best offers to buy and sell. With no offers at all, it shows no number.</li>
         </ul>
         <h3>What a share pays</h3>
         <ul className="list-disc space-y-1 pl-5">

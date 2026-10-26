@@ -120,7 +120,7 @@ test.describe("live trading", () => {
     await expect(orders).toHaveCount(0, { timeout: 20_000 });
   });
 
-  test("the order book shows real levels and the mid is labelled indicative", async ({ page }) => {
+  test("the order book shows real levels and the middle is labelled an estimate", async ({ page }) => {
     const id = await liveMarket("book");
     await page.goto(`/markets/${id}`);
     await page.getByText("Order book and recent trades").click(); // collapsed by default
@@ -128,6 +128,6 @@ test.describe("live trading", () => {
     await expect(book.getByRole("list", { name: /Asks/ }).getByText("55¢")).toBeVisible();
     await expect(book.getByRole("list", { name: /Bids/ }).getByText("45¢")).toBeVisible();
     await expect(book.getByText("Spread 10¢")).toBeVisible();
-    await expect(book.getByTitle(/Indicative only, not a trade/)).toBeVisible();
+    await expect(book.getByTitle(/An estimate, not a trade/)).toBeVisible();
   });
 });

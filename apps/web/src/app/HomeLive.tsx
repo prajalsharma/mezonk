@@ -87,7 +87,7 @@ export function HeroTicket() {
             <p className="flex items-baseline gap-2">
               <SignalValue m={m} className="mono text-5xl font-medium tracking-tight" />
               <span className="text-sm text-muted">
-                {m.priceYes != null ? "Yes, last trade" : marketSignal(m).kind === "indicative" ? "indicative" : "no trades yet"}
+                {m.priceYes != null ? "chance of Yes" : marketSignal(m).kind === "indicative" ? "estimated chance · no trades yet" : "no trades yet"}
               </span>
             </p>
             {m.priceYes != null && m.priceYes24hAgo != null && (

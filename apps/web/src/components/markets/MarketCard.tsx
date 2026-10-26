@@ -177,7 +177,7 @@ export function MarketCard({ m, now, index = 0, featured = false }: { m: MarketS
                 {sig.kind === "indicative" ? "~" : ""}
                 {formatProb(sig.p)}
               </span>
-              <span className="text-xs text-muted">{settled ? "final trade" : sig.kind === "trade" ? "last trade" : "book midpoint"}</span>
+              <span className="text-xs text-muted">{settled ? "final price" : sig.kind === "trade" ? "chance of Yes" : "estimated chance · no trades yet"}</span>
             </p>
           )}
           {!settled && m.priceYes != null && m.priceYes24hAgo != null && Math.abs(m.priceYes - m.priceYes24hAgo) >= 0.005 && (

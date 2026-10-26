@@ -80,8 +80,8 @@ export function OrderBook({ marketId, onPick }: { marketId: number; onPick?: (p:
           </ol>
           <div className="mono flex items-center justify-between border-y border-line bg-sunk/60 px-3 py-1.5 text-xs text-ink-2">
             <span>Spread {bestBid != null && bestAsk != null ? `${bestAsk - bestBid}¢` : "—"}</span>
-            <span title="Midpoint of best bid and ask. Indicative only, not a trade.">
-              Mid {bestBid != null && bestAsk != null ? `~${(bestBid + bestAsk) / 2}¢` : "—"}
+            <span title="Halfway between the best offers to buy and sell. An estimate, not a trade.">
+              Middle {bestBid != null && bestAsk != null ? `~${(bestBid + bestAsk) / 2}¢` : "—"}
             </span>
             <span>Last trade {b.lastPrice != null ? `${view === "yes" ? b.lastPrice : 100 - b.lastPrice}¢` : "none"}</span>
           </div>

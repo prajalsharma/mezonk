@@ -102,7 +102,7 @@ export function SignalValue({ m, className }: { m: { priceYes: number | null; be
   const s = marketSignal(m);
   if (s.kind === "none") return <span className={cx("text-muted", className)} title="No trades and no two-sided book yet">—</span>;
   return (
-    <span className={cx(s.kind === "indicative" && "text-ink-2", className)} title={s.kind === "trade" ? "Last trade" : "Book midpoint (indicative, not a trade)"}>
+    <span className={cx(s.kind === "indicative" && "text-ink-2", className)} title={s.kind === "trade" ? "Chance of Yes, from the last trade" : "Estimate: halfway between the best offers to buy and sell. No one has traded yet."}>
       {s.kind === "indicative" ? "~" : ""}
       {formatProb(s.p)}
     </span>

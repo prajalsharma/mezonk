@@ -275,7 +275,7 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
                     {priceYes != null
                       ? "Chance of Yes from the last trade. A price, not a guarantee."
                       : indicative != null
-                        ? "No trades yet. This is the middle of the best offers (indicative, not a trade)."
+                        ? "No trades yet, so this is an estimate: halfway between the best offers to buy and sell."
                         : "No trades and no offers on both sides yet, so there is no price."}
                   </p>
                   <div className="grid grid-cols-2 gap-2 md:gap-3">
