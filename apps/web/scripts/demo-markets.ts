@@ -157,23 +157,18 @@ function cast(args: string[]): string {
 }
 
 async function send(s: Signer, to: Address, data: Hex, label: string) {
-  for (let attempt = 1; ; attempt++) {
-    try {
-      const out = cast(["send", to, data, ...auth(s), "--rpc-url", RPC, "--json"]);
-      const r = JSON.parse(out);
-      if (r.status !== "0x1" && r.status !== 1 && r.status !== "1") throw new Error(`${label} reverted: ${r.transactionHash}`);
-      console.log(`  ✓ ${label} (${r.transactionHash.slice(0, 12)}…)`);
-      return r as { transactionHash: Hex; logs: Parameters<typeof parseEventLogs>[0]["logs"] };
-    } catch (e) {
-      const msg = (e as { stderr?: string }).stderr || (e as Error).message;
-      // The public RPC sometimes serves a lagging node; retry transient errors, never reverts.
-      if (attempt < 3 && /timed out|not found|connection|nonce too low|replacement/i.test(msg)) {
-        await new Promise((r) => setTimeout(r, 3000));
-        continue;
-      }
-      throw new Error(`${label} failed: ${msg.trim().split("\n").slice(-3).join(" ")}`);
-    }
+  let hash: Hex;
+  try {
+    hash = cast(["send", to, data, ...auth(s), "--rpc-url", RPC, "--async"]).trim() as Hex;
+  } catch (e) {
+    const msg = (e as { stderr?: string }).stderr || (e as Error).message;
+    throw new Error(`${label} failed: ${msg.trim().split("\n").slice(-3).join(" ")}`);
   }
+  // The public RPC sometimes serves a lagging node that returns null receipts; poll by hash until it's mined.
+  const r = await client.waitForTransactionReceipt({ hash, pollingInterval: 2000, timeout: 180_000, retryCount: 20 });
+  if (r.status !== "success") throw new Error(`${label} reverted: ${hash}`);
+  console.log(`  ✓ ${label} (${hash.slice(0, 12)}…)`);
+  return r;
 }
 
 /** Signs in to the app (SIWE) and returns the session token, sent back as a Bearer header (the app's script path). */
@@ -227,6 +222,17 @@ async function btcFavourite(): Promise<Side> {
   return fav;
 }
 
+/** Market id created with this approval nonce, read from the factory's MarketApprovalUsed event. */
+async function marketForApproval(nonce: Hex): Promise<bigint> {
+  const head = await client.getBlockNumber();
+  for (let to = head; to > head - 200_000n; to -= 9_999n) {
+    const logs = await client.getContractEvents({ address: P.factoryAddress, abi: factoryAbi, eventName: "MarketApprovalUsed", fromBlock: to - 9_998n, toBlock: to });
+    const hit = logs.find((l) => (l.args as { nonce?: Hex }).nonce?.toLowerCase() === nonce.toLowerCase());
+    if (hit) return (hit.args as { marketId: bigint }).marketId;
+  }
+  throw new Error(`approval ${nonce} was used but its market wasn't found`);
+}
+
 async function main() {
   for (const [k, v] of [["FED_FAVOURITE", FED_FAV], ["HOUSE_FAVOURITE", HOUSE_FAV]] as const) {
     if (v !== "yes" && v !== "no") throw new Error(`Set ${k}=yes or ${k}=no (the side you think is more likely)`);
@@ -276,105 +282,142 @@ async function main() {
   const curatorCookie = await signIn(curator);
 
   const done: string[] = [];
+  const checklist = Object.fromEntries(REVIEW_CHECKLIST.map(([k]) => [k, true]));
+  type Mine = { id: string; status: string; marketId: number | null; approval: StoredApproval | null; metadata: MarketMetadata };
+  const mine = (await api<{ items: Mine[] }>(creatorCookie, "/api/proposals?mine=1&limit=100")).items;
+
   for (const d of DEMOS) {
     const raw = serializeMetadata(d.metadata);
     console.log(`\n${d.metadata.question}`);
     const fav: Side = d.favourite === "btc-spot" ? await btcFavourite() : d.favourite;
+    // Resume: pick up an earlier run's proposal for this question instead of creating a duplicate.
+    let p = mine.find((x) => x.metadata.question === d.metadata.question && !["rejected", "withdrawn"].includes(x.status));
 
     // 1. Suggest (creator is the author and, after review, the publisher)
-    const coverMediaId = await uploadCover(creatorCookie, d.cover);
-    const created = await api<{ id: string }>(creatorCookie, "/api/proposals", {
-      method: "POST",
-      body: JSON.stringify({
-        metadata: d.metadata,
-        outcomeType: "binary",
-        projectId: null,
-        closeTime: d.closeTime,
-        launchWindow: "Today, for the testnet demo",
-        liquidityPlan: `The creator seeds both sides: ${SHARES} shares on the favourite at 85¢ and ${SHARES} on the long shot at 8¢.`,
-        conflicts: "None.",
-        rationale: d.rationale,
-        references: [],
-        summary: d.summary,
-        coverMediaId,
-        contextMediaIds: [],
-        sponsored: false,
-      }),
-    });
-    const id = created.id;
-    await api(creatorCookie, `/api/proposals/${id}/actions`, { method: "POST", body: JSON.stringify({ action: "submit" }) });
-    console.log(`  ✓ suggested (${APP}/proposals/${id})`);
+    if (!p) {
+      const coverMediaId = await uploadCover(creatorCookie, d.cover);
+      const created = await api<{ id: string }>(creatorCookie, "/api/proposals", {
+        method: "POST",
+        body: JSON.stringify({
+          metadata: d.metadata,
+          outcomeType: "binary",
+          projectId: null,
+          closeTime: d.closeTime,
+          launchWindow: "Today, for the testnet demo",
+          liquidityPlan: `The creator seeds both sides: ${SHARES} shares on the favourite at 85¢ and ${SHARES} on the long shot at 8¢.`,
+          conflicts: "None.",
+          rationale: d.rationale,
+          references: [],
+          summary: d.summary,
+          coverMediaId,
+          contextMediaIds: [],
+          sponsored: false,
+        }),
+      });
+      p = { id: created.id, status: "draft", marketId: null, approval: null, metadata: d.metadata };
+    }
+    const id = p.id;
+    if (p.status === "draft") {
+      await api(creatorCookie, `/api/proposals/${id}/actions`, { method: "POST", body: JSON.stringify({ action: "submit" }) });
+      p.status = "submitted";
+      console.log(`  ✓ suggested (${APP}/proposals/${id})`);
+    } else console.log(`  ✓ already suggested (${APP}/proposals/${id}), ${p.status}`);
 
     // 2. Review: claim, assign resolver + publisher, sign the exact approval the server builds, approve.
-    await api(curatorCookie, `/api/proposals/${id}/review`, { method: "POST", body: JSON.stringify({ action: "claim", reason: "", internal: false }) });
-    await api(curatorCookie, `/api/proposals/${id}/review`, { method: "POST", body: JSON.stringify({ action: "assign", resolver, publisher: creator.address, reason: "" }) });
-    const payload = await api<{ domain: { name: string; version: string; chainId: number; verifyingContract: Address }; approval: Omit<StoredApproval, "curator" | "signature"> }>(curatorCookie, `/api/proposals/${id}/approval`);
-    const a = payload.approval;
-    if (a.metadataHash.toLowerCase() !== metadataHash(raw).toLowerCase()) throw new Error("server's metadata hash differs from the local rules; stopping");
-    if (Number(a.policyId) !== 2) console.log(`  ! approval binds policy #${a.policyId}, not the fast demo policy #2`);
-    const message = { metadataHash: a.metadataHash, creator: a.creator, resolver: a.resolver, closeTime: Number(a.closeTime), policyId: Number(a.policyId), deadline: Number(a.deadline), nonce: a.nonce };
-    const typed = {
-      types: {
-        EIP712Domain: [
-          { name: "name", type: "string" },
-          { name: "version", type: "string" },
-          { name: "chainId", type: "uint256" },
-          { name: "verifyingContract", type: "address" },
-        ],
-        ...approvalTypes,
-      },
-      primaryType: "MarketApproval",
-      domain: payload.domain,
-      message,
-    };
-    const typedFile = path.join(dir, `${d.key}.json`);
-    writeFileSync(typedFile, JSON.stringify(typed));
-    const signature = cast(["wallet", "sign", ...auth(curator), "--data", "--from-file", typedFile]).trim() as Hex;
-    const signerAddr = await recoverTypedDataAddress({
-      domain: payload.domain,
-      types: approvalTypes,
-      primaryType: "MarketApproval",
-      message: { ...message, closeTime: BigInt(a.closeTime), deadline: BigInt(a.deadline) },
-      signature,
-    });
-    if (signerAddr.toLowerCase() !== curator.address.toLowerCase()) throw new Error("approval signature doesn't recover to the curator");
-    const checklist = Object.fromEntries(REVIEW_CHECKLIST.map(([k]) => [k, true]));
-    await api(curatorCookie, `/api/proposals/${id}/review`, {
-      method: "POST",
-      body: JSON.stringify({ action: "approve", reason: "Demo market for the testnet review.", checklist, signature, approval: a, internal: false }),
-    });
-    console.log(`  ✓ approved by curator (policy #${a.policyId})`);
+    if (p.status === "submitted" || p.status === "under_review") {
+      if (p.status === "submitted") await api(curatorCookie, `/api/proposals/${id}/review`, { method: "POST", body: JSON.stringify({ action: "claim", reason: "", internal: false }) });
+      await api(curatorCookie, `/api/proposals/${id}/review`, { method: "POST", body: JSON.stringify({ action: "assign", resolver, publisher: creator.address, reason: "" }) });
+      const payload = await api<{ domain: { name: string; version: string; chainId: number; verifyingContract: Address }; approval: Omit<StoredApproval, "curator" | "signature"> }>(curatorCookie, `/api/proposals/${id}/approval`);
+      const a = payload.approval;
+      if (a.metadataHash.toLowerCase() !== metadataHash(raw).toLowerCase()) throw new Error("server's metadata hash differs from the local rules; stopping");
+      if (Number(a.policyId) !== 2) console.log(`  ! approval binds policy #${a.policyId}, not the fast demo policy #2`);
+      const message = { metadataHash: a.metadataHash, creator: a.creator, resolver: a.resolver, closeTime: Number(a.closeTime), policyId: Number(a.policyId), deadline: Number(a.deadline), nonce: a.nonce };
+      const typed = {
+        types: {
+          EIP712Domain: [
+            { name: "name", type: "string" },
+            { name: "version", type: "string" },
+            { name: "chainId", type: "uint256" },
+            { name: "verifyingContract", type: "address" },
+          ],
+          ...approvalTypes,
+        },
+        primaryType: "MarketApproval",
+        domain: payload.domain,
+        message,
+      };
+      const typedFile = path.join(dir, `${d.key}.json`);
+      writeFileSync(typedFile, JSON.stringify(typed));
+      const signature = cast(["wallet", "sign", ...auth(curator), "--data", "--from-file", typedFile]).trim() as Hex;
+      const signerAddr = await recoverTypedDataAddress({
+        domain: payload.domain,
+        types: approvalTypes,
+        primaryType: "MarketApproval",
+        message: { ...message, closeTime: BigInt(a.closeTime), deadline: BigInt(a.deadline) },
+        signature,
+      });
+      if (signerAddr.toLowerCase() !== curator.address.toLowerCase()) throw new Error("approval signature doesn't recover to the curator");
+      await api(curatorCookie, `/api/proposals/${id}/review`, {
+        method: "POST",
+        body: JSON.stringify({ action: "approve", reason: "Demo market for the testnet review.", checklist, signature, approval: a, internal: false }),
+      });
+      p.status = "approved";
+      p.approval = { ...a, curator: curator.address, signature };
+      console.log(`  ✓ approved by curator (policy #${a.policyId})`);
+    }
 
-    // 3. Publish from the creator wallet with the curator's signed approval.
-    const r = await send(
-      creator,
-      P.factoryAddress,
-      encodeFunctionData({
-        abi: factoryAbi,
-        functionName: "createMarket",
-        args: [
-          { metadata: raw, closeTime: BigInt(a.closeTime), resolver: a.resolver, policyId: Number(a.policyId) },
-          { ...message, closeTime: BigInt(a.closeTime), deadline: BigInt(a.deadline) },
-          curator.address,
-          signature,
-        ] as never,
-      }),
-      "publish",
-    );
-    const ev = parseEventLogs({ abi: exchangeAbi, logs: r.logs, eventName: "MarketCreated" })[0];
-    if (!ev) throw new Error("publish confirmed but no MarketCreated event");
-    const marketId = ev.args.marketId as bigint;
-    console.log(`  ✓ market #${marketId} created, seeding`);
+    // 3. Publish from the creator wallet with the curator's signed approval (skipped if it's already on-chain).
+    let marketId = p.marketId != null ? BigInt(p.marketId) : null;
+    if (marketId == null && p.approval) {
+      const a = p.approval;
+      const used = await client.readContract({ ...f, functionName: "approvalUsed", args: [a.nonce] });
+      if (used) marketId = await marketForApproval(a.nonce);
+      else {
+        const r = await send(
+          creator,
+          P.factoryAddress,
+          encodeFunctionData({
+            abi: factoryAbi,
+            functionName: "createMarket",
+            args: [
+              { metadata: raw, closeTime: BigInt(a.closeTime), resolver: a.resolver, policyId: Number(a.policyId) },
+              { metadataHash: a.metadataHash, creator: a.creator, resolver: a.resolver, closeTime: BigInt(a.closeTime), policyId: Number(a.policyId), deadline: BigInt(a.deadline), nonce: a.nonce },
+              a.curator,
+              a.signature,
+            ] as never,
+          }),
+          "publish",
+        );
+        const ev = parseEventLogs({ abi: exchangeAbi, logs: r.logs, eventName: "MarketCreated" })[0];
+        if (!ev) throw new Error("publish confirmed but no MarketCreated event");
+        marketId = ev.args.marketId as bigint;
+      }
+    }
+    if (marketId == null) throw new Error(`proposal ${id} is ${p.status} with no approval to publish; open it on the site`);
+    console.log(`  ✓ market #${marketId} on-chain`);
 
     // 4. Seed: buy the favourite at 85¢ (long shot buyable at 15¢) and the long shot at 8¢, then launch.
-    const favOutcome = fav === "yes" ? YES : NO;
-    const longOutcome = fav === "yes" ? NO : YES;
-    const ex = (fn: "placeOrder" | "graduate", args: readonly unknown[]) => encodeFunctionData({ abi: exchangeAbi, functionName: fn, args } as never);
-    await send(creator, EXCHANGE, ex("placeOrder", [marketId, favOutcome, BUY, 85, S(SHARES)]), `buy ${fav === "yes" ? "Yes" : "No"} at 85¢ × ${SHARES}`);
-    await send(creator, EXCHANGE, ex("placeOrder", [marketId, longOutcome, BUY, 8, S(SHARES)]), `buy ${fav === "yes" ? "No" : "Yes"} at 8¢ × ${SHARES}`);
-    const g = await client.readContract({ address: EXCHANGE, abi: exchangeAbi, functionName: "graduationCheck", args: [marketId] });
-    if (!(g.open && g.spreadOk && g.depthOk && g.seedersOk)) throw new Error(`market #${marketId} isn't ready to launch: ${JSON.stringify(g, (_k, v) => (typeof v === "bigint" ? v.toString() : v))}`);
-    await send(creator, EXCHANGE, ex("graduate", [marketId]), "launch");
+    const m = await client.readContract({ address: EXCHANGE, abi: exchangeAbi, functionName: "getMarket", args: [marketId] });
+    if (m.graduatedAt > 0n) {
+      console.log("  ✓ already live");
+    } else {
+      // Bid depth is YES bids; ask depth is NO bids (a NO bid at q is a YES ask at 100 − q). Only place what's missing.
+      const ex = (fn: "placeOrder" | "graduate", args: readonly unknown[]) => encodeFunctionData({ abi: exchangeAbi, functionName: fn, args } as never);
+      let g = await client.readContract({ address: EXCHANGE, abi: exchangeAbi, functionName: "graduationCheck", args: [marketId] });
+      const want = S(SHARES);
+      const orders: Array<[number, number, string]> = [
+        [fav === "yes" ? YES : NO, 85, `buy ${fav === "yes" ? "Yes" : "No"} at 85¢ × ${SHARES}`],
+        [fav === "yes" ? NO : YES, 8, `buy ${fav === "yes" ? "No" : "Yes"} at 8¢ × ${SHARES}`],
+      ];
+      for (const [outcome, price, label] of orders) {
+        const have = outcome === YES ? g.bidDepth : g.askDepth;
+        if (have >= want) console.log(`  ✓ already seeded: ${label}`);
+        else await send(creator, EXCHANGE, ex("placeOrder", [marketId, outcome, BUY, price, want]), label);
+      }
+      g = await client.readContract({ address: EXCHANGE, abi: exchangeAbi, functionName: "graduationCheck", args: [marketId] });
+      if (!(g.open && g.spreadOk && g.depthOk && g.seedersOk)) throw new Error(`market #${marketId} isn't ready to launch: ${JSON.stringify(g, (_k, v) => (typeof v === "bigint" ? v.toString() : v))}`);
+      await send(creator, EXCHANGE, ex("graduate", [marketId]), "launch");
+    }
     void fetch(`${APP}/api/markets/${marketId}/refresh`, { method: "POST" }).catch(() => undefined);
     done.push(`#${marketId}  ${d.metadata.question}`);
   }
