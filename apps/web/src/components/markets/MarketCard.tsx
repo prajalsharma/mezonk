@@ -96,7 +96,7 @@ function OutcomeButton({ m, side, cents }: { m: MarketSummaryDto; side: "yes" | 
       aria-label={
         cents == null
           ? `${label}: no sellers right now: ${m.question}`
-          : `Buy ${label} at ${cents} cents. ${CARD_STAKE} MUSD pays about ${win ? formatMusd(win.payout) : "—"} MUSD if ${label} wins: ${m.question}`
+          : `Buy ${label} at ${cents} cents. ${win ? `${win.limited ? formatMusd(win.spent) : CARD_STAKE} MUSD pays ${formatMusd(win.payout)} MUSD if ${label} wins` : ""}: ${m.question}`
       }
       className={cx(
         "press group/out flex min-h-14 flex-col justify-center gap-0.5 rounded-md px-3 py-2 ring-1 transition-colors",
@@ -109,7 +109,7 @@ function OutcomeButton({ m, side, cents }: { m: MarketSummaryDto; side: "yes" | 
       </span>
       {win && (
         <span className="mono text-[11px] font-medium opacity-80">
-          {CARD_STAKE} → {formatMusd(win.payout)} MUSD
+          {win.limited ? formatMusd(win.spent) : CARD_STAKE} → {formatMusd(win.payout)} MUSD
         </span>
       )}
     </Link>

@@ -1,4 +1,4 @@
-import { LOT, sharesForBudget } from "@/lib/orderbook/math";
+import { cost, feeOf, LOT, sharesForBudget } from "@/lib/orderbook/math";
 
 /**
  * What a stake turns into if the side wins. Every winning share pays exactly 1 MUSD, so the payout is the
@@ -7,22 +7,38 @@ import { LOT, sharesForBudget } from "@/lib/orderbook/math";
 export interface Win {
   /** MUSD paid out if this side wins (18 decimals). */
   payout: bigint;
-  /** Payout per MUSD staked, ×100 (e.g. 652 = 6.52×). */
+  /** MUSD actually spent, fee included. Less than the stake when the book runs out first. */
+  spent: bigint;
+  /** Payout per MUSD spent, ×100 (e.g. 652 = 6.52×). */
   multipleX100: bigint;
   /** The book ran out before the stake was spent: the payout is for the shares actually on offer. */
   limited: boolean;
 }
 
-function toWin(stake: bigint, qty: bigint, limited: boolean): Win {
+/** Cost of buying `qty` best-first through `offers`, fee included (same per-lot rounding as sharesForBudget). */
+function spendFor(qty: bigint, offers: Array<{ price: number; shares: bigint }>, feeBps: number): bigint {
+  let left = qty / LOT;
+  let spent = 0n;
+  for (const l of [...offers].sort((x, y) => x.price - y.price)) {
+    if (left <= 0n) break;
+    const lots = l.shares / LOT < left ? l.shares / LOT : left;
+    const perLot = cost(LOT, l.price);
+    spent += lots * (perLot + feeOf(perLot, feeBps));
+    left -= lots;
+  }
+  return spent;
+}
+
+function toWin(qty: bigint, spent: bigint, limited: boolean): Win {
   const payout = qty; // one share (1e18) pays one MUSD (1e18)
-  return { payout, multipleX100: stake > 0n ? (payout * 100n) / stake : 0n, limited };
+  return { payout, spent, multipleX100: spent > 0n ? (payout * 100n) / spent : 0n, limited };
 }
 
 /** Walks real offers best-first (prices in the buyer's cents). Use this when the book is loaded. */
 export function winFromBook(stake: bigint, offers: Array<{ price: number; shares: bigint }>, feeBps: number): Win | null {
   if (stake <= 0n || offers.length === 0) return null;
   const r = sharesForBudget(offers, stake, feeBps);
-  return r.qty < LOT ? null : toWin(stake, r.qty, r.exhausted);
+  return r.qty < LOT ? null : toWin(r.qty, spendFor(r.qty, offers, feeBps), r.exhausted);
 }
 
 /** At the best price only (for cards, which don't load the book). Large stakes may move the price. */

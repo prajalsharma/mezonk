@@ -10,6 +10,8 @@ import { formatMultiple, winFromBook, type Win } from "@/lib/market/payout";
 
 const STAKES = [10, 50, 100] as const;
 const wei = (musd: number) => BigInt(musd) * 10n ** 18n;
+/** Whole MUSD, rounded up, for prefilling the ticket with what the shares on offer cost. */
+const wholeMusdUp = (w: bigint) => Number((w + 10n ** 18n - 1n) / 10n ** 18n);
 
 /**
  * Pick a stake, see what each side pays if it wins. Walks the live order book (fee included), so the number is
@@ -54,7 +56,7 @@ export function WinPicker({ m }: { m: MarketSummaryDto }) {
 
       <p className="text-xs text-muted">
         MUSD, at today&apos;s prices with the {fee}% fee included. A winning share pays 1 MUSD; a losing one pays nothing.
-        {(yesWin?.limited || noWin?.limited) && " Fewer shares are on offer than this buys, so the payout shown is for what's available."}
+        {(yesWin?.limited || noWin?.limited) && " Where fewer shares are on offer than your stake buys, you'd only spend what's shown and keep the rest."}
       </p>
     </div>
   );
@@ -65,7 +67,7 @@ function Side({ m, side, stake, cents, win, loading }: { m: MarketSummaryDto; si
   const label = yes ? "Yes" : "No";
   return (
     <Link
-      href={marketHref(m, side, win ? stake : undefined)}
+      href={marketHref(m, side, win ? (win.limited ? wholeMusdUp(win.spent) : stake) : undefined)}
       aria-label={win ? `${label}: put in ${stake} MUSD, get ${formatMusd(win.payout)} MUSD if ${label} wins` : `${label}: no offers right now`}
       className={cx(
         "press flex flex-col gap-2 rounded-md p-3.5 transition-[background-color,opacity]",
@@ -78,10 +80,11 @@ function Side({ m, side, stake, cents, win, loading }: { m: MarketSummaryDto; si
       </span>
       {win ? (
         <span className="space-y-0.5">
-          <span className="block text-xs opacity-80">you get</span>
+          <span className="block text-xs opacity-80">{win.limited ? `only ${formatMusd(win.payout)} shares on offer · you get` : "you get"}</span>
           <span className="mono block text-2xl font-semibold leading-none tracking-tight">{formatMusd(win.payout)}</span>
           <span className="mono block text-xs opacity-80">
-            +{formatMusd(win.payout - wei(stake) > 0n ? win.payout - wei(stake) : 0n)} profit{win.multipleX100 >= 200n ? ` · ${formatMultiple(win.multipleX100)}` : ""}
+            {win.limited ? `for ${formatMusd(win.spent)} · ` : ""}+{formatMusd(win.payout - win.spent)} profit
+            {win.multipleX100 >= 200n ? ` · ${formatMultiple(win.multipleX100)}` : ""}
           </span>
         </span>
       ) : (
