@@ -104,11 +104,26 @@ export function MarketCard({ m, now, index = 0, featured = false }: { m: MarketS
         </span>
       </header>
 
-      <h3 className={cx("font-medium leading-snug text-ink", featured ? "text-lg md:text-xl" : "line-clamp-3 text-[0.9375rem]")}>
-        <Link href={marketHref(m)} className="outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-focus">
-          {m.question}
-        </Link>
-      </h3>
+      <div className="flex items-start gap-3">
+        {m.cover && (
+          // Decorative: the question beside it says what the market is.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={m.cover.url}
+            alt=""
+            width={m.cover.width}
+            height={m.cover.height}
+            loading="lazy"
+            decoding="async"
+            className={cx("shrink-0 rounded-sm border border-line bg-surface-2 object-cover", featured ? "size-16" : "size-12")}
+          />
+        )}
+        <h3 className={cx("min-w-0 font-medium leading-snug text-ink", featured ? "text-lg md:text-xl" : "line-clamp-3 text-[0.9375rem]")}>
+          <Link href={marketHref(m)} className="outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-focus">
+            {m.question}
+          </Link>
+        </h3>
+      </div>
 
       <div className="mt-auto space-y-2.5">
         <div className="flex items-end justify-between gap-3">

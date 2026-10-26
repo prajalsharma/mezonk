@@ -9,8 +9,21 @@ import { chainNowMs } from "@/server/chain";
 import { slugsFor } from "@/server/slugs";
 import { bookTops } from "@/server/orderbook";
 
-const { markets, trades, fills, chainEvents, positions, resolutionProposals, disputes, indexerState, evidence, evidenceDocuments } =
-  schema;
+const {
+  markets,
+  trades,
+  fills,
+  chainEvents,
+  positions,
+  resolutionProposals,
+  disputes,
+  indexerState,
+  evidence,
+  evidenceDocuments,
+  marketProposals,
+  proposalMedia,
+  media,
+} = schema;
 
 export type MarketRow = typeof markets.$inferSelect;
 
@@ -42,6 +55,14 @@ export interface MarketSummary {
   trendingScore: number;
   /** Public URL slug; null until the indexer assigns one (seconds after creation). */
   slug: string | null;
+  /** Cover image from the proposal the market was published from; null when it has none. */
+  cover: MarketCover | null;
+}
+
+export interface MarketCover {
+  url: string;
+  width: number;
+  height: number;
 }
 
 /**
@@ -111,7 +132,21 @@ function summarize(
     finalOutcome: m.finalOutcome,
     trendingScore: trendingScore(s.vol, s.traders, live),
     slug: null,
+    cover: null,
   };
+}
+
+/** Cover image per market, taken from its proposal. Removed images are skipped. */
+async function coversFor(ids: number[]): Promise<Map<number, MarketCover>> {
+  if (!ids.length) return new Map();
+  const db = await getDb();
+  const rows = await db
+    .select({ marketId: marketProposals.marketId, url: media.url, width: media.width, height: media.height })
+    .from(marketProposals)
+    .innerJoin(proposalMedia, and(eq(proposalMedia.proposalId, marketProposals.id), eq(proposalMedia.role, "cover")))
+    .innerJoin(media, eq(media.id, proposalMedia.mediaId))
+    .where(and(inArray(marketProposals.marketId, ids), sql`${media.status} <> 'removed'`));
+  return new Map(rows.flatMap((r) => (r.marketId == null ? [] : [[r.marketId, { url: r.url, width: r.width, height: r.height }] as const])));
 }
 
 export interface ListParams {
@@ -177,8 +212,9 @@ export async function listMarkets(p: ListParams) {
   };
   list.sort(sorters[p.sort ?? "newest"]);
   const items = list.slice(p.offset, p.offset + p.limit);
-  const slugs = await slugsFor(items.map((m) => m.id));
-  return { total: list.length, items: items.map((m) => ({ ...m, slug: slugs.get(m.id) ?? null })) };
+  const pageIds = items.map((m) => m.id);
+  const [slugs, covers] = await Promise.all([slugsFor(pageIds), coversFor(pageIds)]);
+  return { total: list.length, items: items.map((m) => ({ ...m, slug: slugs.get(m.id) ?? null, cover: covers.get(m.id) ?? null })) };
 }
 
 export async function getMarket(id: number) {
@@ -190,8 +226,9 @@ export async function getMarket(id: number) {
   if (!m) return null;
   const now = await chainNowMs();
   const [s, tops] = await Promise.all([stats24h([id], now), bookTops([id])]);
-  const slug = (await slugsFor([id])).get(id) ?? null;
-  return { row: m, summary: { ...summarize(m, s.get(id)!, now, tops.get(id)), slug } };
+  const [slugs, covers] = await Promise.all([slugsFor([id]), coversFor([id])]);
+  const slug = slugs.get(id) ?? null;
+  return { row: m, summary: { ...summarize(m, s.get(id)!, now, tops.get(id)), slug, cover: covers.get(id) ?? null } };
 }
 
 export async function getHistory(id: number) {

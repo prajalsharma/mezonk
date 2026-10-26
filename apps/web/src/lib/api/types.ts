@@ -26,6 +26,8 @@ export interface MarketSummaryDto {
   finalOutcome: number | null;
   trendingScore: number;
   slug: string | null;
+  /** Cover image uploaded with the market's proposal; null when it has none. */
+  cover: { url: string; width: number; height: number } | null;
 }
 
 export interface MarketListDto {

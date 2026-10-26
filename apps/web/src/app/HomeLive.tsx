@@ -57,7 +57,19 @@ export function HeroTicket() {
       ) : (
         <div className="space-y-5 p-5">
           <div className="flex items-start gap-3">
-            <CategoryGlyph category={m.category} className="mt-0.5" />
+            {m.cover ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={m.cover.url}
+                alt=""
+                width={m.cover.width}
+                height={m.cover.height}
+                decoding="async"
+                className="mt-0.5 size-14 shrink-0 rounded-sm border border-line bg-surface-2 object-cover"
+              />
+            ) : (
+              <CategoryGlyph category={m.category} className="mt-0.5" />
+            )}
             <div className="min-w-0 flex-1 space-y-1.5">
               <div className="flex items-center gap-2 text-xs text-muted">
                 {categoryLabel[m.category as Category] ?? m.category}
