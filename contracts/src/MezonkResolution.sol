@@ -11,13 +11,18 @@ interface IExchangeSettle {
     function stageOf(uint256 marketId) external view returns (IMezonkExchange.Stage);
     function settle(uint256 marketId, IMezonkExchange.Outcome outcome) external;
     function collateralToken() external view returns (IERC20);
+    function owner() external view returns (address);
 }
 
 /// @title MezonkResolution
 /// @notice Optimistic resolution for MezonkExchange markets, unchanged in substance from the audited v1 module:
-///  - After close the market's resolver proposes an outcome with an evidence hash and posts a bond.
-///  - Anyone except the resolver and arbitrator can dispute during the challenge window by posting a bond.
-///  - The market's arbitrator rules within the arbitration window; the bond loser's bond goes to the winner.
+///  - After close the market's resolver proposes an outcome with an evidence hash and posts a bond. If the resolver
+///    stays silent for the first half of the proposal window, anyone may propose with the same bond, so a silent
+///    resolver cannot force an Invalid settlement.
+///  - Anyone except the proposer, the resolver and the arbitrator can dispute during the challenge window.
+///  - The market's arbitrator rules within the arbitration window. An upheld proposal takes both bonds. An overturned
+///    one pays the disputer, minus half the proposer bond, which is slashed to the protocol, so disputing your own
+///    false proposal from a second wallet still loses money.
 ///  - No proposal in time, or no ruling in time, settles INVALID (0.5 per share). Bonds are refunded on timeout.
 /// Deployed by the exchange constructor; the only address the exchange accepts outcomes from.
 /// Holds bonds only. Trading collateral never sits here.
@@ -45,6 +50,7 @@ contract MezonkResolution is ReentrancyGuard {
         uint64 disputedAt;
         address disputer;
         bool finalized;
+        address proposer;
     }
 
     IExchangeSettle public immutable exchange;
@@ -54,6 +60,8 @@ contract MezonkResolution is ReentrancyGuard {
     mapping(address => uint256) public bondCredits;
     uint256 public lockedBonds;
     uint256 public bondCreditsTotal;
+    /// @notice Half-bonds slashed from overturned proposals; the exchange owner sweeps them.
+    uint256 public slashedBonds;
 
     event OutcomeProposed(
         uint256 indexed marketId,
@@ -80,6 +88,8 @@ contract MezonkResolution is ReentrancyGuard {
     event MarketFinalized(uint256 indexed marketId, IMezonkExchange.Outcome outcome, FinalizeReason reason);
     event BondCredited(uint256 indexed marketId, address indexed account, uint256 amount);
     event BondWithdrawn(address indexed account, uint256 amount);
+    event BondSlashed(uint256 indexed marketId, address indexed proposer, uint256 amount);
+    event SlashedSwept(address indexed to, uint256 amount);
 
     error WrongStage(RStage stage);
     error NotResolver();
@@ -111,7 +121,10 @@ contract MezonkResolution is ReentrancyGuard {
         string calldata evidenceURI
     ) external nonReentrant {
         IMezonkExchange.Market memory m = exchange.getMarket(marketId);
-        if (msg.sender != m.resolver) revert NotResolver();
+        // The resolver has the first half of the window to itself; after that anyone may propose with the bond.
+        if (msg.sender != m.resolver && block.timestamp < uint256(m.closeTime) + m.proposalWindow / 2) {
+            revert NotResolver();
+        }
         RStage st = stageOf(marketId);
         if (st != RStage.AwaitingProposal) revert WrongStage(st);
         if (block.timestamp >= uint256(m.closeTime) + m.proposalWindow) revert WindowClosed();
@@ -120,6 +133,7 @@ contract MezonkResolution is ReentrancyGuard {
         State storage s = states[marketId];
         s.proposedOutcome = outcome;
         s.proposedAt = uint64(block.timestamp);
+        s.proposer = msg.sender;
         _pull(msg.sender, m.proposerBond);
         lockedBonds += m.proposerBond;
         emit OutcomeProposed(
@@ -141,7 +155,7 @@ contract MezonkResolution is ReentrancyGuard {
         if (st != RStage.Proposed) revert WrongStage(st);
         State storage s = states[marketId];
         if (block.timestamp >= uint256(s.proposedAt) + m.challengeWindow) revert WindowClosed();
-        if (msg.sender == m.resolver || msg.sender == m.arbitrator) revert InvalidParams();
+        if (msg.sender == s.proposer || msg.sender == m.resolver || msg.sender == m.arbitrator) revert InvalidParams();
         if (evidenceHash == bytes32(0)) revert InvalidParams();
         s.disputer = msg.sender;
         s.disputedAt = uint64(block.timestamp);
@@ -166,8 +180,18 @@ contract MezonkResolution is ReentrancyGuard {
         if (block.timestamp >= uint256(s.disputedAt) + m.arbitrationWindow) revert WindowClosed();
         if (outcome == IMezonkExchange.Outcome.None) revert InvalidOutcome();
         if (rationaleHash == bytes32(0)) revert InvalidParams();
-        address winner = outcome == s.proposedOutcome ? m.resolver : s.disputer;
-        _creditBond(marketId, winner, uint256(m.proposerBond) + m.disputeBond);
+        uint256 bonds = uint256(m.proposerBond) + m.disputeBond;
+        if (outcome == s.proposedOutcome) {
+            _creditBond(marketId, s.proposer, bonds);
+        } else {
+            // A wrong proposal always costs the proposer half its bond, so a self-dispute from a second wallet
+            // still loses money.
+            uint256 slashed = m.proposerBond / 2;
+            lockedBonds -= slashed;
+            slashedBonds += slashed;
+            emit BondSlashed(marketId, s.proposer, slashed);
+            _creditBond(marketId, s.disputer, bonds - slashed);
+        }
         emit DisputeArbitrated(marketId, msg.sender, outcome, rationaleHash, rationaleURI);
         _finalize(marketId, s, outcome, FinalizeReason.Arbitrated);
     }
@@ -179,19 +203,30 @@ contract MezonkResolution is ReentrancyGuard {
         State storage s = states[marketId];
         if (st == RStage.Proposed) {
             if (block.timestamp < uint256(s.proposedAt) + m.challengeWindow) revert WindowOpen();
-            _creditBond(marketId, m.resolver, m.proposerBond);
+            _creditBond(marketId, s.proposer, m.proposerBond);
             _finalize(marketId, s, s.proposedOutcome, FinalizeReason.Undisputed);
         } else if (st == RStage.AwaitingProposal) {
             if (block.timestamp < uint256(m.closeTime) + m.proposalWindow) revert WindowOpen();
             _finalize(marketId, s, IMezonkExchange.Outcome.Invalid, FinalizeReason.NoProposal);
         } else if (st == RStage.Disputed) {
             if (block.timestamp < uint256(s.disputedAt) + m.arbitrationWindow) revert WindowOpen();
-            _creditBond(marketId, m.resolver, m.proposerBond);
+            _creditBond(marketId, s.proposer, m.proposerBond);
             _creditBond(marketId, s.disputer, m.disputeBond);
             _finalize(marketId, s, IMezonkExchange.Outcome.Invalid, FinalizeReason.ArbitrationTimeout);
         } else {
             revert WrongStage(st);
         }
+    }
+
+    /// @notice The exchange owner moves slashed half-bonds out.
+    function sweepSlashed(address to) external nonReentrant {
+        if (msg.sender != exchange.owner()) revert InvalidParams();
+        if (to == address(0)) revert InvalidParams();
+        uint256 amount = slashedBonds;
+        if (amount == 0) revert NothingToClaim();
+        slashedBonds = 0;
+        collateralToken.safeTransfer(to, amount);
+        emit SlashedSwept(to, amount);
     }
 
     function withdrawBond() external nonReentrant returns (uint256 amount) {

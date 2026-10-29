@@ -95,6 +95,14 @@ contract MezonkExchange is IMezonkExchange, Ownable2Step, Pausable, ReentrancyGu
     mapping(uint256 => mapping(address => uint256)) public seedWeight; // collateral escrowed in seed orders
     mapping(uint256 => uint256) public totalSeedWeight;
     mapping(uint256 => uint16) public seederCount;
+    /// @dev Seed escrow by price level, so rebates only reward depth that sat inside the graduation band.
+    ///      marketId => seeder => bookSide => YES price => collateral.
+    mapping(uint256 => mapping(address => mapping(uint8 => mapping(uint8 => uint256)))) internal _seedAt;
+    mapping(uint256 => mapping(uint8 => mapping(uint8 => uint256))) internal _seedTotalAt;
+    /// @notice Price window counted for rebates, fixed at graduation: [bidLo, bidHi, askLo, askHi] in YES cents.
+    mapping(uint256 => uint8[4]) internal _rebateBand;
+    /// @notice Sum of every seeder's in-band seed escrow, fixed at graduation.
+    mapping(uint256 => uint256) public totalRebateWeight;
 
     mapping(address => bool) public hasTraded;
 
@@ -218,6 +226,14 @@ contract MezonkExchange is IMezonkExchange, Ownable2Step, Pausable, ReentrancyGu
         emit MarketCreated(marketId, creator, resolver, policyId, seedingDeadline, closeTime, h, metadata);
     }
 
+    /// @notice A seeder's rebate weight: its seed escrow inside the band fixed at graduation (0 before).
+    function rebateWeight(uint256 marketId, address seeder) external view returns (uint256 w) {
+        if (_markets[marketId].graduatedAt == 0) return 0;
+        uint8[4] memory b = _rebateBand[marketId];
+        for (uint8 y = b[0]; y <= b[1]; y++) w += _seedAt[marketId][seeder][0][y];
+        for (uint8 y = b[2]; y <= b[3]; y++) w += _seedAt[marketId][seeder][1][y];
+    }
+
     // ═════════════════════════════ Graduation ═════════════════════════════
 
     /// @notice Permissionless. Moves a SEEDING market to LIVE if its escrowed book meets the market's policy.
@@ -228,6 +244,20 @@ contract MezonkExchange is IMezonkExchange, Ownable2Step, Pausable, ReentrancyGu
         if (!g.open) revert WrongStage(_stage(m));
         if (!(g.spreadOk && g.depthOk && g.seedersOk)) revert GraduationUnmet();
         m.graduatedAt = uint64(block.timestamp);
+        // Fix the rebate window to the same band graduation counted. Seed orders priced outside it (for example
+        // YES at 1 cent) never earn rebates, so far-off escrow that takes no fill risk cannot dilute real seeders.
+        uint8 band = _policies[m.policyId].band;
+        uint8[4] memory w = [
+            g.bestBid > band ? g.bestBid - band : 1,
+            g.bestBid,
+            g.bestAsk,
+            uint256(g.bestAsk) + band < 99 ? g.bestAsk + band : 99
+        ];
+        _rebateBand[marketId] = w;
+        uint256 total;
+        for (uint8 y = w[0]; y <= w[1]; y++) total += _seedTotalAt[marketId][0][y];
+        for (uint8 y = w[2]; y <= w[3]; y++) total += _seedTotalAt[marketId][1][y];
+        totalRebateWeight[marketId] = total;
         emit Graduated(marketId, g.bestBid, g.bestAsk, g.bidDepth, g.askDepth, g.seeders);
     }
 
@@ -297,7 +327,11 @@ contract MezonkExchange is IMezonkExchange, Ownable2Step, Pausable, ReentrancyGu
             uint256 cost = _cost(quantity, price);
             _pull(msg.sender, cost);
             escrowedCollateral += cost;
-            if (seed) _addSeedWeight(marketId, msg.sender, cost, int256(1));
+            if (seed) {
+                _addSeedWeight(marketId, msg.sender, cost, int256(1));
+                _seedAt[marketId][msg.sender][bookSide][y] += cost;
+                _seedTotalAt[marketId][bookSide][y] += cost;
+            }
         } else {
             _debit(marketId, outcome, msg.sender, quantity);
         }
@@ -343,7 +377,11 @@ contract MezonkExchange is IMezonkExchange, Ownable2Step, Pausable, ReentrancyGu
             uint256 refund = _cost(rem, o.price);
             escrowedCollateral -= refund;
             // Seed weight only changes before graduation; after it, weight is fixed for rebates.
-            if (s == Stage.Seeding) _addSeedWeight(o.marketId, msg.sender, refund, int256(-1));
+            if (s == Stage.Seeding && o.seed) {
+                _addSeedWeight(o.marketId, msg.sender, refund, int256(-1));
+                _seedAt[o.marketId][msg.sender][bookSide][y] -= refund;
+                _seedTotalAt[o.marketId][bookSide][y] -= refund;
+            }
             collateralToken.safeTransfer(msg.sender, refund);
         } else {
             sharesOf[o.marketId][o.outcome][msg.sender] += rem;

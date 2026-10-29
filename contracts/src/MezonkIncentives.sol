@@ -9,8 +9,8 @@ import {IMezonkExchange} from "./interfaces/IMezonkExchange.sol";
 interface IExchangeIncentiveView {
     function getMarket(uint256 marketId) external view returns (IMezonkExchange.Market memory);
     function getPolicy(uint32 policyId) external view returns (IMezonkExchange.Policy memory);
-    function seedWeight(uint256 marketId, address seeder) external view returns (uint256);
-    function totalSeedWeight(uint256 marketId) external view returns (uint256);
+    function rebateWeight(uint256 marketId, address seeder) external view returns (uint256);
+    function totalRebateWeight(uint256 marketId) external view returns (uint256);
     function hasTraded(address account) external view returns (bool);
 }
 
@@ -74,7 +74,7 @@ contract MezonkIncentives is ReentrancyGuard {
         IMezonkExchange.Policy memory p = exchange.getPolicy(m.policyId);
         if (
             block.timestamp < uint256(m.graduatedAt) + p.rebatePeriod
-                && exchange.totalSeedWeight(marketId) > 0
+                && exchange.totalRebateWeight(marketId) > 0
         ) {
             rebatePart = (fee * p.rebateShareBps) / 10_000;
             rebatePart = _min(rebatePart, p.rebateCapPerMarket - rebateAccrued[marketId]);
@@ -104,9 +104,9 @@ contract MezonkIncentives is ReentrancyGuard {
         if (m.graduatedAt == 0 || rebatesSwept[marketId]) return 0;
         IMezonkExchange.Policy memory p = exchange.getPolicy(m.policyId);
         if (block.timestamp >= uint256(m.graduatedAt) + p.rebatePeriod + p.claimWindow) return 0;
-        uint256 total = exchange.totalSeedWeight(marketId);
+        uint256 total = exchange.totalRebateWeight(marketId);
         if (total == 0) return 0;
-        uint256 entitled = (rebateAccrued[marketId] * exchange.seedWeight(marketId, seeder)) / total;
+        uint256 entitled = (rebateAccrued[marketId] * exchange.rebateWeight(marketId, seeder)) / total;
         if (entitled > p.rebateCapPerWallet) entitled = p.rebateCapPerWallet;
         uint256 done = rebateClaimed[marketId][seeder];
         return entitled > done ? entitled - done : 0;
