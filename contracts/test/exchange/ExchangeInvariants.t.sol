@@ -377,7 +377,7 @@ abstract contract ExchangeInvariantSetup is Test {
         MezonkIncentives inc = ex.incentives();
         assertEq(musd.balanceOf(address(inc)), inc.rebateReserve() + inc.referralReserve());
         MezonkResolution res = ex.resolution();
-        assertEq(musd.balanceOf(address(res)), res.lockedBonds() + res.bondCreditsTotal());
+        assertEq(musd.balanceOf(address(res)), res.lockedBonds() + res.bondCreditsTotal() + res.slashedBonds());
     }
 
     // 1, 2, 7, 18. Every share is backed: YES supply == NO supply == collateral before finality, and after it

@@ -262,7 +262,7 @@ abstract contract ExchangeBase is Test {
         assertEq(
             musd.balanceOf(address(inc)), inc.rebateReserve() + inc.referralReserve(), "incentive buckets"
         );
-        assertEq(musd.balanceOf(address(res)), res.lockedBonds() + res.bondCreditsTotal(), "bond buckets");
+        assertEq(musd.balanceOf(address(res)), res.lockedBonds() + res.bondCreditsTotal() + res.slashedBonds(), "bond buckets");
     }
 
     function _close(uint256 id) internal {

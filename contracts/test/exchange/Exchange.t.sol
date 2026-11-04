@@ -796,7 +796,9 @@ contract RolesAndResolutionTest is ExchangeBase {
         res.arbitrate(id, IMezonkExchange.Outcome.Yes, keccak256("r"), "ipfs://r");
         assertTrue(ex.getMarket(id).finalized);
         assertEq(uint8(ex.getMarket(id).finalOutcome), uint8(IMezonkExchange.Outcome.Yes));
-        assertEq(res.bondCredits(dave), 100 * ONE, "disputer wins both bonds");
+        // Overturned: the disputer gets both bonds minus half the proposer bond, which is slashed to the protocol.
+        assertEq(res.bondCredits(dave), 75 * ONE, "disputer wins both bonds minus the slashed half");
+        assertEq(res.slashedBonds(), 25 * ONE, "half the proposer bond slashed");
 
         vm.expectRevert();
         res.finalize(id);
