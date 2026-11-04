@@ -20,6 +20,11 @@
  *
  * Env: MM_ACCOUNT (creator), MM_MARKETS (all live), MM_SHARES (100), MM_LEVELS (3), MM_BUDGET_MUSD (2000),
  *      MM_INTERVAL seconds (30), MM_CLOSE_MARGIN seconds (600), MM_ONCE=1, MM_DRY=1 + MM_ADDRESS.
+ *
+ * Keeper: with MM_PRICE_RESOLVER=<MezonkPriceResolver>, each pass also calls settle() on markets that name that
+ * resolver, have closed, have a rule and are still inside its capture window. settle() is permissionless; it reads
+ * Mezo's PriceFeed and proposes the outcome (the resolver contract posts the bond). Mezo's oracle has no history,
+ * so this has to happen within minutes of close, which is why it runs every pass.
  */
 import { execFileSync } from "node:child_process";
 import { createServer } from "node:http";
@@ -46,7 +51,7 @@ import {
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { mezoTestnet } from "../src/lib/chain/config";
 import { laggingNodeFetch } from "../src/lib/chain/laggingNodeFetch";
-import { exchangeAbi } from "../src/lib/contracts/abi";
+import { exchangeAbi, priceResolverAbi, resolutionAbi } from "../src/lib/contracts/abi";
 
 const RPC = "https://rpc.test.mezo.org";
 const CHAIN_ID = 31611;
@@ -76,6 +81,7 @@ const INTERVAL_MS = positiveInt("MM_INTERVAL", "30") * 1000;
 const CLOSE_MARGIN = BigInt(positiveInt("MM_CLOSE_MARGIN", "600"));
 const SHARES = parseUnits(env("MM_SHARES", "100"), 18);
 const BUDGET = parseUnits(env("MM_BUDGET_MUSD", "2000"), 18);
+const PRICE_RESOLVER = isAddress(process.env.MM_PRICE_RESOLVER?.trim() ?? "") ? getAddress(process.env.MM_PRICE_RESOLVER!.trim()) : null;
 const MARKETS: bigint[] | null = process.env.MM_MARKETS?.trim()
   ? process.env.MM_MARKETS.split(",").map((s) => BigInt(s.trim()))
   : null;
@@ -371,6 +377,44 @@ async function pass(w: Wallet) {
   lastPass = { at: new Date().toISOString(), summary: `${musd(escrowed)} escrowed of ${musd(BUDGET)}` };
 }
 
+// ─── Keeper: settle BTC-price markets from Mezo's PriceFeed ───────────────────
+
+/** Markets settled (or found already proposed) this run, so they're skipped on later passes. */
+const settled = new Set<bigint>();
+let resolutionAddr: Address | null = null;
+
+async function keeperPass(w: Wallet) {
+  if (!PRICE_RESOLVER) return;
+  const head = await retry("blockNumber", () => client.getBlockNumber({ cacheTime: 0 }));
+  const at = head < minBlock ? minBlock : head;
+  const now = (await retry("block", () => client.getBlock({ blockNumber: at }))).timestamp;
+  resolutionAddr ??= await retry("resolution", () => client.readContract({ address: EXCHANGE, abi: exchangeAbi, functionName: "resolution" }));
+  const windowS = await retry("captureWindow", () => client.readContract({ address: PRICE_RESOLVER, abi: priceResolverAbi, functionName: "captureWindow" }));
+  const n = await retry("marketCount", () => client.readContract({ address: EXCHANGE, abi: exchangeAbi, functionName: "marketCount", blockNumber: at }));
+  for (let id = 1n; id <= n; id++) {
+    if (stopping || settled.has(id)) continue;
+    const m = await retry(`getMarket(${id})`, () => client.readContract({ address: EXCHANGE, abi: exchangeAbi, functionName: "getMarket", args: [id], blockNumber: at }));
+    if (getAddress(m.resolver) !== PRICE_RESOLVER || m.finalized || m.graduatedAt === 0n) continue;
+    if (now < m.closeTime || now > m.closeTime + BigInt(windowS)) continue;
+    const log = (t: string) => console.log(`  keeper #${id}: ${t}`);
+    const [, , ruleSet] = await retry("rules", () => client.readContract({ address: PRICE_RESOLVER, abi: priceResolverAbi, functionName: "rules", args: [id], blockNumber: at }));
+    if (!ruleSet) { log("no price rule recorded; the owner must propose by hand after the window"); settled.add(id); continue; }
+    const stage = await retry("stageOf", () => client.readContract({ address: resolutionAddr!, abi: resolutionAbi, functionName: "stageOf", args: [id], blockNumber: at }));
+    if (stage !== 1) { log("already proposed or finalized"); settled.add(id); continue; } // 1 = AwaitingProposal
+    if (!w.signer) { log("would settle from Mezo's PriceFeed (dry run)"); continue; }
+    try {
+      const r = await send(w.signer, PRICE_RESOLVER, encodeFunctionData({ abi: priceResolverAbi, functionName: "settle", args: [id] }), `market #${id}: settle from Mezo's PriceFeed`);
+      for (const ev of parseEventLogs({ abi: priceResolverAbi, logs: r.logs, eventName: "PriceCaptured" })) {
+        log(`BTC ${dec2(ev.args.price)} at block ${ev.args.blockNumber} → ${ev.args.outcome === 1 ? "Yes" : "No"}`);
+      }
+      settled.add(id);
+    } catch (e) {
+      // A stale oracle or a lagging node: try again next pass while the window is open.
+      log(`settle failed, will retry: ${short(e)}`);
+    }
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -388,6 +432,7 @@ async function main() {
     w = { address: s.address, signer: s, balance: 0n, allowance: 0n, approved: false };
     console.log(`Market maker running as ${s.kind === "key" ? "MM_PRIVATE_KEY" : ACCOUNT} (${s.address}) on Mezo Testnet.`);
   }
+  if (PRICE_RESOLVER) console.log(`Keeper on: settles BTC-price markets through ${PRICE_RESOLVER}.`);
   console.log(
     `Shares ${shares(SHARES)} per level, ${LEVELS} levels per side, budget ${musd(BUDGET)}, markets ${MARKETS ? MARKETS.join(",") : "all live"}, ` +
       `${ONCE ? "one pass" : `every ${INTERVAL_MS / 1000}s`}.`,
@@ -398,8 +443,14 @@ async function main() {
       if (w.signer) {
         const gas = await retry("gas balance", () => client.getBalance({ address: w.address }));
         if (gas < MIN_GAS) console.log(`${w.address} is low on test BTC for gas (${dec2(gas)}); get some at https://faucet.test.mezo.org/`);
-        else await pass(w);
-      } else await pass(w);
+        else {
+          await keeperPass(w).catch((e) => console.log(`keeper failed: ${short(e)}`));
+          await pass(w);
+        }
+      } else {
+        await keeperPass(w).catch((e) => console.log(`keeper failed: ${short(e)}`));
+        await pass(w);
+      }
     } catch (e) {
       console.log(`pass failed: ${short(e)}`);
     }

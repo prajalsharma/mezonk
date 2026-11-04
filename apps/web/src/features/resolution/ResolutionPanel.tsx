@@ -18,6 +18,7 @@ import { FINALIZE_REASON, outcomeLabel } from "@/lib/market/stage";
 import { ArbitrateAction, DisputeAction, FinalizeAction, ProposeAction } from "./Actions";
 import { ArbitrationWorkspace } from "./ArbitrationWorkspace";
 import { ClaimButton, RedeemDetails } from "./Claims";
+import { PriceFeedRule, isPriceResolved } from "./PriceFeedRule";
 import { Timeline } from "./Timeline";
 import type { ResolutionDto } from "./types";
 import type { Confirmed } from "./useResolutionAction";
@@ -157,6 +158,8 @@ export function ResolutionPanel({
           unambiguously decides it, and anyone may challenge any other proposal. Rules are never added after creation.
         </Notice>
       )}
+
+      {isPriceResolved(m.resolver) && <PriceFeedRule marketId={marketId} closeTime={m.closeTime} chainNow={chainNow} />}
 
       {/* Status summary: authoritative stage read from the contract. */}
       <div className="rounded-lg border border-line bg-surface p-4" aria-live="polite">
