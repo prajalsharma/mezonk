@@ -11,6 +11,7 @@ import { Hint, KeyValue, Notice, Segmented, inputClass } from "@/components/ui/p
 import { useToast } from "@/components/ui/Toast";
 import { WalletButton } from "@/components/wallet/WalletButton";
 import { TxStatus } from "@/components/trading/TxStatus";
+import { BorrowForTrade } from "@/features/borrow/BorrowForTrade";
 import { useMusd } from "@/hooks/useMusd";
 import { useTx } from "@/hooks/useTx";
 import type { MarketChain } from "@/hooks/useMarketChain";
@@ -435,9 +436,12 @@ export function TradeTicket({
       {restResult && <Notice tone="info" title="Order on the book">{restResult}</Notice>}
       {restError && <Notice tone="error" title="The rest wasn't placed">{restError}</Notice>}
 
-      {isConnected && action === "buy" && (shortMusd || musd.balance === 0n) && (
+      {isConnected && action === "buy" && shortMusd && needMusd > 0n && (
+        <BorrowForTrade shortfall={needMusd - (musd.balance ?? 0n)} returnTo={`/markets/${marketId}`} />
+      )}
+      {isConnected && action === "buy" && !shortMusd && musd.balance === 0n && (
         <p className="text-sm text-ink-2">
-          {musd.balance === 0n ? "No MUSD in this wallet." : "Not enough MUSD for this."} Hold BTC?{" "}
+          No MUSD in this wallet. Hold BTC?{" "}
           <Link className="font-medium text-yes-text underline-offset-4 hover:underline" href="/borrow">Borrow MUSD against it</Link>
           {deployment.chain.testnet && (
             <> (testnet BTC from the <a className="underline" href={TESTNET_FUNDING.btcFaucet} target="_blank" rel="noreferrer">faucet</a>)</>

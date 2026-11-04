@@ -2,6 +2,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, ArrowUpRight, Lock } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
@@ -23,12 +24,25 @@ import {
   WAD,
   WARN_RATIO,
   borrowerOperationsAbi,
+  checkAddColl,
+  checkClose,
   checkDraw,
   checkOpen,
+  checkRepay,
+  checkWithdrawColl,
+  collForDebt,
   maxDebtAtRatio,
+  maxRepay,
+  maxWithdrawAtRatio,
   minReceivable,
+  prepareAddColl,
+  prepareClose,
   prepareDraw,
   prepareOpen,
+  prepareRepay,
+  prepareWithdrawColl,
+  liquidationPrice,
+  ratioOf,
   type BorrowParams,
   type PreparedCall,
   type Trove,
@@ -56,6 +70,10 @@ const usd = (wei: bigint) => `$${Math.round(Number(formatUnits(wei, 18))).toLoca
 const pct = (ratio: bigint) => `${(Number(ratio / 10n ** 14n) / 100).toLocaleString("en-US", { maximumFractionDigits: 0 })}%`;
 /** Trim to whole MUSD cents so the input never shows 18 decimals. */
 const toInput = (wei: bigint) => (Number(wei / 10n ** 16n) / 100).toFixed(2).replace(/\.00$/, "");
+/** Same, rounded up to the next cent, for amounts that must cover a shortfall. */
+const toInputUp = (wei: bigint) => toInput(((wei + 10n ** 16n - 1n) / 10n ** 16n) * 10n ** 16n);
+/** BTC for an input box: at most 6 decimals, rounded down so it never exceeds the real amount. */
+const btcInput = (wei: bigint) => formatUnits(wei - (wei % 10n ** 12n), 18);
 
 function tone(ratio: bigint) {
   if (ratio >= WARN_RATIO) return { label: "Comfortable", cls: "text-success", bar: "bg-success" };
@@ -124,7 +142,12 @@ export function BorrowPanel() {
   const musd = useMusd();
   const tx = useTx();
   const prepared = useRef<PreparedCall | null>(null);
-  const [done, setDone] = useState<{ amount: bigint } | null>(null);
+  const [done, setDone] = useState<{ fn: PreparedCall["functionName"]; amount: bigint } | null>(null);
+  // "Bet from your loan": a ticket that is short on MUSD links here with ?need=<MUSD>&return=<market URL>.
+  const search = useSearchParams();
+  const need = parse(search.get("need") ?? "");
+  const ret = search.get("return") ?? "";
+  const returnTo = /^\/markets\/\d+/.test(ret) ? ret : null;
 
   const p = loan.params.data;
   const trove = loan.trove.data;
@@ -150,12 +173,18 @@ export function BorrowPanel() {
       },
       send: () => {
         const c = prepared.current!;
-        return c.functionName === "openTrove"
-          ? writeContractAsync({ address: mezoBorrow!.borrowerOperations, abi: borrowerOperationsAbi, functionName: "openTrove", args: c.args, value: c.value, gas: c.gas, chainId: deployment.chainId })
-          : writeContractAsync({ address: mezoBorrow!.borrowerOperations, abi: borrowerOperationsAbi, functionName: "withdrawMUSD", args: c.args, gas: c.gas, chainId: deployment.chainId });
+        return writeContractAsync({
+          address: mezoBorrow!.borrowerOperations,
+          abi: borrowerOperationsAbi,
+          functionName: c.functionName,
+          args: c.args,
+          ...(c.value > 0n ? { value: c.value } : {}),
+          gas: c.gas,
+          chainId: deployment.chainId,
+        } as never);
       },
       onConfirmed: () => {
-        setDone({ amount: prepared.current!.args[0] });
+        setDone({ fn: prepared.current!.functionName, amount: prepared.current!.amount });
         after();
       },
     });
@@ -164,13 +193,11 @@ export function BorrowPanel() {
   return (
     <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:gap-12">
       <div className="space-y-6">
-        {done && (
-          <Notice
-            tone="success"
-            title={`${formatMusd(done.amount)} MUSD is in your wallet`}
-            action={<ButtonLink href="/markets">Find a market <ArrowRight className="size-4" /></ButtonLink>}
-          >
-            Your BTC is locked on Mezo, not sold. Repay any time to unlock it.
+        {done && <DoneNotice done={done} returnTo={returnTo} />}
+        {p?.recoveryMode && (
+          <Notice tone="warn" title="Mezo is in recovery mode">
+            Mezo&apos;s whole system is under 150%, so it only allows changes that make loans safer: repaying and adding BTC.
+            Borrowing more, taking BTC out and closing are paused until it recovers.
           </Notice>
         )}
         {!done && isConnected && !trove?.active && musd.balance !== undefined && musd.balance >= WAD && (
@@ -190,10 +217,24 @@ export function BorrowPanel() {
             <Spinner className="size-4" /> Getting Mezo&apos;s loan terms…
           </p>
         ) : trove?.active ? (
-          <DrawForm p={p} trove={trove} busy={tx.busy} connected={isConnected && !wrongChain} onSubmit={(amt, floor) => send(() => prepareDraw(client!, mezoBorrow!, address!, amt, floor), "Borrow more")} />
+          <ManageLoan
+            p={p}
+            trove={trove}
+            musdBalance={musd.balance}
+            btcBalance={loan.btc}
+            need={need}
+            busy={tx.busy}
+            connected={isConnected && !wrongChain}
+            onDraw={(amt, floor) => send(() => prepareDraw(client!, mezoBorrow!, address!, amt, floor), "Borrow more")}
+            onRepay={(amt) => send(() => prepareRepay(client!, mezoBorrow!, address!, amt, musd.balance ?? 0n), "Repay MUSD")}
+            onAdd={(amt) => send(() => prepareAddColl(client!, mezoBorrow!, address!, amt, loan.btc ?? 0n), "Add BTC")}
+            onWithdraw={(amt, floor) => send(() => prepareWithdrawColl(client!, mezoBorrow!, address!, amt, floor), "Withdraw BTC")}
+            onClose={() => send(() => prepareClose(client!, mezoBorrow!, address!, musd.balance ?? 0n), "Close loan")}
+          />
         ) : (
           <OpenForm
             p={p}
+            need={need}
             btcBalance={loan.btc}
             busy={tx.busy}
             connected={isConnected && !wrongChain}
@@ -215,7 +256,7 @@ export function BorrowPanel() {
             <li>Anyone can swap MUSD for BTC from the riskiest loans first (a &ldquo;redemption&rdquo;). Your debt drops by the same value, but you&apos;d hold less BTC. A higher ratio makes it less likely.</li>
           </ul>
           <a href={mezoBorrowUrl()} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[0.9375rem] font-medium text-yes-text underline-offset-4 hover:underline">
-            Repay, add BTC or close on Mezo <ArrowUpRight className="size-4" aria-hidden />
+            See loans on mezo.org <ArrowUpRight className="size-4" aria-hidden />
           </a>
         </div>
         {p && (
@@ -253,20 +294,24 @@ function Summary({ rows, ratio, liquidation }: { rows: Array<[string, React.Reac
 
 function OpenForm({
   p,
+  need,
   btcBalance,
   busy,
   connected,
   onSubmit,
 }: {
   p: BorrowParams;
+  /** MUSD a trade is short by (?need=). A new loan still has to meet Mezo's minimum. */
+  need: bigint | null;
   btcBalance: bigint | undefined;
   busy: boolean;
   connected: boolean;
   onSubmit: (coll: bigint, debt: bigint, floor: bigint) => void;
 }) {
-  const [collIn, setCollIn] = useState("");
-  const [debtIn, setDebtIn] = useState("");
-  const [safety, setSafety] = useState<Safety | null>("balanced");
+  const startDebt = need ? (need > minReceivable(p) ? need : minReceivable(p)) : null;
+  const [collIn, setCollIn] = useState(() => (startDebt ? btcInput(collForDebt(startDebt, SUGGESTED_RATIO, p) + 10n ** 12n) : ""));
+  const [debtIn, setDebtIn] = useState(() => (startDebt ? toInputUp(startDebt) : ""));
+  const [safety, setSafety] = useState<Safety | null>(startDebt ? null : "balanced");
   const [ack, setAck] = useState(false);
   const coll = parse(collIn);
   const debt = parse(debtIn);
@@ -297,6 +342,12 @@ function OpenForm({
       <div className="space-y-1">
         <h2 id="open-h" className="text-2xl font-semibold tracking-tight">Borrow MUSD against your BTC</h2>
         <p className="text-ink-2">Minimum loan {formatMusd(minOut)} MUSD, so you&apos;ll need roughly {btc(minColl, 3)} BTC or more.</p>
+        {need && (
+          <p className="text-ink-2">
+            Your trade needs <span className="mono text-ink">{formatMusd(need)}</span> more MUSD.{" "}
+            {need < minOut ? `Mezo's smallest loan is ${formatMusd(minOut)} MUSD, so that's filled in; the rest stays in your wallet.` : "That's filled in below, at a 200% ratio."}
+          </p>
+        )}
       </div>
 
       <Amount
@@ -383,33 +434,122 @@ function OpenForm({
   );
 }
 
-function DrawForm({ p, trove, busy, connected, onSubmit }: { p: BorrowParams; trove: Trove; busy: boolean; connected: boolean; onSubmit: (amt: bigint, floor: bigint) => void }) {
-  const [amtIn, setAmtIn] = useState("");
-  const amt = parse(amtIn);
-  const now = trove.debt === 0n ? 0n : (trove.coll * p.price) / trove.debt;
-  const chk = amt ? checkDraw(trove, amt, p) : null;
-  const room = trove.maxBorrowingCapacity > trove.debt ? trove.maxBorrowingCapacity - trove.debt : 0n;
-  const atBalanced = maxDebtAtRatio(trove.coll, SUGGESTED_RATIO, p);
-  const suggested = atBalanced > trove.debt ? (atBalanced - trove.debt) * WAD / (WAD + p.borrowingRate) : 0n;
 
+/** What just happened, and where to go next. A trade that was short on MUSD gets sent back to its market. */
+function DoneNotice({ done, returnTo }: { done: { fn: PreparedCall["functionName"]; amount: bigint }; returnTo: string | null }) {
+  const back = returnTo ? <ButtonLink href={returnTo}>Back to your trade <ArrowRight className="size-4" /></ButtonLink> : null;
+  switch (done.fn) {
+    case "openTrove":
+    case "withdrawMUSD":
+      return (
+        <Notice tone="success" title={`${formatMusd(done.amount)} MUSD is in your wallet`} action={back ?? <ButtonLink href="/markets">Find a market <ArrowRight className="size-4" /></ButtonLink>}>
+          Your BTC is locked on Mezo, not sold. Repay any time to unlock it.
+        </Notice>
+      );
+    case "repayMUSD":
+      return <Notice tone="success" title={`Repaid ${formatMusd(done.amount)} MUSD`}>Your loan is smaller and its ratio is higher.</Notice>;
+    case "addColl":
+      return <Notice tone="success" title={`Added ${btc(done.amount)} BTC`}>Your loan is safer: it can take a bigger BTC drop before liquidation.</Notice>;
+    case "withdrawColl":
+      return <Notice tone="success" title={`${btc(done.amount)} BTC is back in your wallet`}>Your loan carries less BTC now, so watch its ratio.</Notice>;
+    case "closeTrove":
+      return <Notice tone="success" title="Loan closed">{btc(done.amount)} BTC is unlocked and back in your wallet, along with Mezo&apos;s refundable deposit.</Notice>;
+  }
+}
+
+type Tab = "borrow" | "repay" | "add" | "withdraw" | "close";
+
+/** An open loan: its health, and every change Mezo allows on it, each checked the way Mezo checks it. */
+function ManageLoan({
+  p,
+  trove,
+  musdBalance,
+  btcBalance,
+  need,
+  busy,
+  connected,
+  onDraw,
+  onRepay,
+  onAdd,
+  onWithdraw,
+  onClose,
+}: {
+  p: BorrowParams;
+  trove: Trove;
+  musdBalance: bigint | undefined;
+  btcBalance: bigint | undefined;
+  need: bigint | null;
+  busy: boolean;
+  connected: boolean;
+  onDraw: (amt: bigint, floor: bigint) => void;
+  onRepay: (amt: bigint) => void;
+  onAdd: (amt: bigint) => void;
+  onWithdraw: (amt: bigint, floor: bigint) => void;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<Tab>(need ? "borrow" : "repay");
+  const [amtIn, setAmtIn] = useState(() => (need ? toInputUp(need) : ""));
+  const amt = parse(amtIn);
+  const now = ratioOf(trove.coll, trove.debt, p.price);
+  const liqNow = liquidationPrice(trove.coll, trove.debt, p.mcr);
+  const pick = (t: Tab) => {
+    setTab(t);
+    setAmtIn("");
+  };
+
+  // Each tab computes the loan after the change, with Mezo's own rules (see lib/mezo/borrow).
+  let chk: { ok: true; ratio: bigint; liquidation: bigint; rows: Array<[string, React.ReactNode]> } | { ok: false; reason: string } | null = null;
   let cta: React.ReactNode;
+  let quick: React.ReactNode = null;
+  const unit = tab === "add" || tab === "withdraw" ? "BTC" : "MUSD";
+  const disabled = (label: string) => <Button disabled size="lg" className="w-full">{label}</Button>;
+
+  if (tab === "borrow") {
+    const c = amt ? checkDraw(trove, amt, p) : null;
+    if (c) chk = c.ok ? { ok: true, ratio: c.ratio, liquidation: c.liquidation, rows: [["One-time fee", `${formatMusd(c.fee)} MUSD`], ["You'd owe", `${formatMusd(c.total)} MUSD`], ["Borrowing limit", `${formatMusd(trove.maxBorrowingCapacity)} MUSD`]] } : c;
+    const atBalanced = maxDebtAtRatio(trove.coll, SUGGESTED_RATIO, p);
+    const room = trove.maxBorrowingCapacity > trove.debt ? trove.maxBorrowingCapacity - trove.debt : 0n;
+    const suggested = atBalanced > trove.debt ? ((atBalanced - trove.debt) * WAD) / (WAD + p.borrowingRate) : 0n;
+    const cap = suggested < room ? suggested : room;
+    if (cap > 0n) quick = <button type="button" className="text-sm text-ink-2 hover:text-ink" onClick={() => setAmtIn(toInput(cap))}>Up to 200%: <span className="mono font-medium text-yes-text">{formatMusd(cap)}</span></button>;
+    cta = !amt ? disabled("Enter an amount") : !c?.ok ? disabled("Borrow less") : <Button size="lg" className="w-full" loading={busy} onClick={() => onDraw(amt, c.ratio - c.ratio / 50n)}>Borrow {formatMusd(amt)} more</Button>;
+  } else if (tab === "repay") {
+    const c = amt ? checkRepay(trove, amt, p, musdBalance) : null;
+    if (c) chk = c.ok ? { ok: true, ratio: c.ratio, liquidation: c.liquidation, rows: [["You'd owe", `${formatMusd(c.debt)} MUSD`], ["Paid from", "This wallet's MUSD"]] } : c;
+    const max = maxRepay(trove, p);
+    const fill = musdBalance !== undefined && musdBalance < max ? musdBalance : max;
+    if (fill > 0n) quick = <button type="button" className="text-sm text-ink-2 hover:text-ink" onClick={() => setAmtIn(toInput(fill))}>Max <span className="mono font-medium text-yes-text">{formatMusd(fill)}</span></button>;
+    cta = !amt ? disabled("Enter an amount") : !c?.ok ? disabled(musdBalance !== undefined && amt > musdBalance ? "Not enough MUSD" : "Repay less") : <Button size="lg" className="w-full" loading={busy} onClick={() => onRepay(amt)}>Repay {formatMusd(amt)} MUSD</Button>;
+  } else if (tab === "add") {
+    const c = amt ? checkAddColl(trove, amt, p, btcBalance) : null;
+    if (c) chk = c.ok ? { ok: true, ratio: c.ratio, liquidation: c.liquidation, rows: [["BTC locked", `${btc(c.coll)} BTC`]] } : c;
+    if (btcBalance !== undefined && btcBalance > GAS_RESERVE) quick = <button type="button" className="text-sm text-ink-2 hover:text-ink" onClick={() => setAmtIn(btcInput(btcBalance - GAS_RESERVE))}>Balance <span className="mono">{btc(btcBalance)}</span> · <span className="font-medium text-yes-text">Max</span></button>;
+    cta = !amt ? disabled("Enter an amount") : !c?.ok ? disabled("Not enough BTC") : <Button size="lg" className="w-full" loading={busy} onClick={() => onAdd(amt)}>Add {btc(amt)} BTC</Button>;
+  } else if (tab === "withdraw") {
+    const c = amt ? checkWithdrawColl(trove, amt, p) : null;
+    if (c) chk = c.ok ? { ok: true, ratio: c.ratio, liquidation: c.liquidation, rows: [["BTC locked", `${btc(c.coll)} BTC`]] } : c;
+    const safe = maxWithdrawAtRatio(trove, SUGGESTED_RATIO, p);
+    if (safe > 0n && !p.recoveryMode) quick = <button type="button" className="text-sm text-ink-2 hover:text-ink" onClick={() => setAmtIn(btcInput(safe))}>Keep 200%: <span className="mono font-medium text-yes-text">{btc(safe)}</span></button>;
+    cta = !amt ? disabled(p.recoveryMode ? "Paused in recovery mode" : "Enter an amount") : !c?.ok ? disabled("Take out less") : <Button size="lg" className="w-full" loading={busy} onClick={() => onWithdraw(amt, c.ratio - c.ratio / 50n)}>Take out {btc(amt)} BTC</Button>;
+  } else {
+    const c = checkClose(trove, p, musdBalance);
+    chk = c.ok ? { ok: true, ratio: 0n, liquidation: 0n, rows: [] } : { ok: false, reason: c.reason };
+    cta = c.ok ? <Button size="lg" className="w-full" loading={busy} onClick={onClose}>Repay {formatMusd(c.need)} MUSD and close</Button> : disabled(p.recoveryMode ? "Paused in recovery mode" : "Not enough MUSD");
+  }
   if (!connected) cta = <WalletButton block />;
-  else if (!amt) cta = <Button disabled size="lg" className="w-full">Enter an amount</Button>;
-  else if (!chk?.ok) cta = <Button disabled size="lg" className="w-full">Borrow less</Button>;
-  else cta = <Button size="lg" className="w-full" loading={busy} onClick={() => onSubmit(amt, chk.ratio - chk.ratio / 50n)}>Borrow {formatMusd(amt)} more</Button>;
 
   return (
-    <section aria-labelledby="draw-h" className="panel space-y-6 p-6 md:p-8">
+    <section aria-labelledby="loan-h" className="panel space-y-6 p-6 md:p-8">
       <div className="space-y-1">
-        <h2 id="draw-h" className="text-2xl font-semibold tracking-tight">Your Mezo loan</h2>
-        <p className="text-ink-2">You already have a loan on Mezo. You can borrow more on it without locking more BTC.</p>
+        <h2 id="loan-h" className="text-2xl font-semibold tracking-tight">Your Mezo loan</h2>
+        <p className="text-ink-2">Borrow more, repay, add or take out BTC, or close it. Every change is signed by your wallet on Mezo.</p>
       </div>
       <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[
-          ["BTC locked", `${btc(trove.coll)}`],
+          ["BTC locked", btc(trove.coll)],
           ["You owe", `${formatMusd(trove.debt)}`],
           ["Ratio", pct(now)],
-          ["Liquidation", usd((trove.debt * p.mcr) / (trove.coll || 1n))],
+          ["Liquidation at", usd(liqNow)],
         ].map(([k, v]) => (
           <div key={k} className="space-y-1">
             <dt className="text-sm text-ink-2">{k}</dt>
@@ -417,31 +557,35 @@ function DrawForm({ p, trove, busy, connected, onSubmit }: { p: BorrowParams; tr
           </div>
         ))}
       </dl>
-      <Amount
-        id="draw-musd"
-        label="Borrow more"
-        unit="MUSD"
-        value={amtIn}
-        onChange={setAmtIn}
-        aside={
-          suggested > 0n && (
-            <button type="button" className="text-sm text-ink-2 hover:text-ink" onClick={() => setAmtIn(toInput(suggested < room ? suggested : room))}>
-              Up to 200%: <span className="mono font-medium text-yes-text">{formatMusd(suggested < room ? suggested : room)}</span>
-            </button>
-          )
-        }
-      />
-      <Summary
-        ratio={chk?.ok ? chk.ratio : now}
-        liquidation={chk?.ok ? chk.liquidation : (trove.debt * p.mcr) / (trove.coll || 1n)}
-        rows={[
-          ["One-time fee", chk?.ok ? `${formatMusd(chk.fee)} MUSD` : "—"],
-          ["Total you'd owe", chk?.ok ? `${formatMusd(chk.total)} MUSD` : `${formatMusd(trove.debt)} MUSD`],
-          ["Borrowing limit", `${formatMusd(trove.maxBorrowingCapacity)} MUSD`],
+      <RatioMeter ratio={now} />
+
+      <Segmented
+        label="Change your loan"
+        value={tab}
+        onChange={pick}
+        options={[
+          { value: "repay", label: "Repay" },
+          { value: "borrow", label: "Borrow" },
+          { value: "add", label: "Add BTC" },
+          { value: "withdraw", label: "Take out" },
+          { value: "close", label: "Close" },
         ]}
       />
+
+      {tab === "close" ? (
+        <p className="text-ink-2">
+          Closing repays everything you owe except Mezo&apos;s {formatMusd(p.gasCompensation)} MUSD deposit, which Mezo burns back, and returns all{" "}
+          <span className="mono text-ink">{btc(trove.coll)}</span> BTC to your wallet.
+        </p>
+      ) : (
+        <Amount id={`loan-${tab}`} label={{ borrow: "Borrow more", repay: "Repay", add: "Add BTC", withdraw: "Take out BTC" }[tab]} unit={unit} value={amtIn} onChange={setAmtIn} aside={quick} />
+      )}
+
+      {chk?.ok && tab !== "close" && (
+        <Summary ratio={chk.ratio} liquidation={chk.liquidation} rows={[["Ratio now", pct(now)], ...chk.rows]} />
+      )}
       {chk && !chk.ok && <Notice tone="warn">{chk.reason}</Notice>}
-      {chk?.ok && chk.ratio < DANGER_RATIO && <Notice tone="warn" title="Very little room">A small drop in BTC could get this loan liquidated.</Notice>}
+      {chk?.ok && tab !== "close" && chk.ratio < DANGER_RATIO && <Notice tone="warn" title="Very little room">A small drop in BTC could get this loan liquidated.</Notice>}
       {cta}
     </section>
   );

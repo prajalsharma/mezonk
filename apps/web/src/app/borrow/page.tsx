@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { BorrowPanel } from "@/features/borrow/BorrowPanel";
 
 export const metadata: Metadata = {
@@ -16,7 +17,9 @@ export default function BorrowPage() {
           MEZONK never holds your bitcoin.
         </p>
       </header>
-      <BorrowPanel />
+      <Suspense fallback={null}>
+        <BorrowPanel />
+      </Suspense>
     </div>
   );
 }

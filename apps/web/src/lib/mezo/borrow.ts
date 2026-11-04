@@ -40,6 +40,10 @@ export const MEZO_BORROW: Record<number, MezoBorrowContracts> = {
 export const borrowerOperationsAbi = parseAbi([
   "function openTrove(uint256 _debtAmount, address _upperHint, address _lowerHint) payable",
   "function withdrawMUSD(uint256 _amount, address _upperHint, address _lowerHint)",
+  "function repayMUSD(uint256 _amount, address _upperHint, address _lowerHint)",
+  "function addColl(address _upperHint, address _lowerHint) payable",
+  "function withdrawColl(uint256 _amount, address _upperHint, address _lowerHint)",
+  "function closeTrove()",
   "function minNetDebt() view returns (uint256)",
   "function borrowingRate() view returns (uint256)",
   "function MUSD_GAS_COMPENSATION() view returns (uint256)",
@@ -52,6 +56,9 @@ export const troveManagerAbi = parseAbi([
   "function getEntireDebtAndColl(address) view returns (uint256 coll, uint256 principal, uint256 interest, uint256 pendingCollateral, uint256 pendingPrincipal, uint256 pendingInterest)",
   "function getTroveMaxBorrowingCapacity(address) view returns (uint256)",
   "function checkRecoveryMode(uint256 _price) view returns (bool)",
+  "function getTCR(uint256 _price) view returns (uint256)",
+  "function getEntireSystemColl() view returns (uint256)",
+  "function getEntireSystemDebt() view returns (uint256)",
 ]);
 
 const sortedTrovesAbi = parseAbi([
@@ -88,6 +95,9 @@ export interface BorrowParams {
   ccr: bigint;
   /** Basis points per year, simple interest. */
   interestBps: number;
+  /** Whole-system collateral and debt, for the "system stays above 150%" rule on withdrawals and closing. */
+  systemColl: bigint;
+  systemDebt: bigint;
 }
 
 export interface Trove {
@@ -180,6 +190,85 @@ export function checkDraw(trove: Trove, amount: bigint, p: BorrowParams): DrawCh
   return { ok: true, fee, total, ratio, liquidation: liquidationPrice(trove.coll, total, p.mcr) };
 }
 
+export type AdjustCheck =
+  | { ok: true; coll: bigint; debt: bigint; ratio: bigint; liquidation: bigint }
+  | { ok: false; reason: string };
+
+const after = (coll: bigint, debt: bigint, p: BorrowParams): AdjustCheck => ({
+  ok: true,
+  coll,
+  debt,
+  ratio: ratioOf(coll, debt, p.price),
+  liquidation: liquidationPrice(coll, debt, p.mcr),
+});
+
+/** System ratio after a change, the same "TCR stays at or above 150%" test Mezo runs on withdrawals and closing. */
+const systemRatioAfter = (p: BorrowParams, collOut: bigint, debtOut: bigint) =>
+  p.systemDebt <= debtOut ? 2n ** 255n : ((p.systemColl - collOut) * p.price) / (p.systemDebt - debtOut);
+
+/**
+ * Most MUSD a partial repayment can cover. Mezo keeps every open loan at or above its minimum net debt
+ * (debt minus the refundable deposit), so paying off the rest means closing the loan instead.
+ */
+export const maxRepay = (trove: Trove, p: BorrowParams) => {
+  const room = trove.debt - p.gasCompensation - p.minNetDebt;
+  return room > 0n ? room : 0n;
+};
+
+/** MUSD the wallet needs to close the loan: everything owed except the deposit Mezo burns back. */
+export const closeCost = (trove: Trove, p: BorrowParams) => (trove.debt > p.gasCompensation ? trove.debt - p.gasCompensation : 0n);
+
+/** repayMUSD: allowed in any mode. Interest is paid first, then principal. */
+export function checkRepay(trove: Trove, amount: bigint, p: BorrowParams, musdBalance: bigint | undefined): AdjustCheck {
+  if (amount <= 0n) return { ok: false, reason: "Enter how much MUSD to repay." };
+  const max = maxRepay(trove, p);
+  if (amount > max) {
+    return {
+      ok: false,
+      reason: max === 0n
+        ? `Your loan is at Mezo's minimum size. To pay it off, close it (needs ${fmt(closeCost(trove, p))} MUSD).`
+        : `You can repay up to ${fmt(max)} MUSD and keep the loan open. To pay off everything, close the loan instead.`,
+    };
+  }
+  if (musdBalance !== undefined && musdBalance < amount) return { ok: false, reason: "Not enough MUSD in this wallet." };
+  return after(trove.coll, trove.debt - amount, p);
+}
+
+/** addColl: allowed in any mode; only raises the ratio. */
+export function checkAddColl(trove: Trove, amount: bigint, p: BorrowParams, btcBalance: bigint | undefined): AdjustCheck {
+  if (amount <= 0n) return { ok: false, reason: "Enter how much BTC to add." };
+  if (btcBalance !== undefined && amount + GAS_RESERVE > btcBalance) return { ok: false, reason: "Not enough BTC in this wallet (keep a little for network fees)." };
+  return after(trove.coll + amount, trove.debt, p);
+}
+
+/** withdrawColl: blocked in recovery mode; must keep the loan at 110% and the whole system at 150%. */
+export function checkWithdrawColl(trove: Trove, amount: bigint, p: BorrowParams): AdjustCheck {
+  if (amount <= 0n) return { ok: false, reason: "Enter how much BTC to take out." };
+  if (p.recoveryMode) return { ok: false, reason: "Mezo is in recovery mode, so no BTC can be taken out of loans right now." };
+  if (amount >= trove.coll) return { ok: false, reason: "That's all your BTC. To take everything out, close the loan." };
+  const next = after(trove.coll - amount, trove.debt, p);
+  if (next.ok && next.ratio < p.mcr) return { ok: false, reason: "That would take your loan below Mezo's 110% minimum." };
+  if (systemRatioAfter(p, amount, 0n) < p.ccr) return { ok: false, reason: "Mezo's overall ratio would fall under 150%, which blocks withdrawals. Take out less." };
+  return next;
+}
+
+/** Largest BTC withdrawal that keeps the loan at `ratio` (for the "keep 200%" shortcut). */
+export const maxWithdrawAtRatio = (trove: Trove, ratio: bigint, p: BorrowParams) => {
+  const keep = (trove.debt * ratio + p.price - 1n) / p.price;
+  return trove.coll > keep ? trove.coll - keep : 0n;
+};
+
+export type CloseCheck = { ok: true; need: bigint } | { ok: false; reason: string; need: bigint };
+
+/** closeTrove: needs every MUSD owed (minus the deposit) in the wallet, and isn't allowed in recovery mode. */
+export function checkClose(trove: Trove, p: BorrowParams, musdBalance: bigint | undefined): CloseCheck {
+  const need = closeCost(trove, p);
+  if (p.recoveryMode) return { ok: false, need, reason: "Mezo is in recovery mode, which blocks closing loans. You can still repay part of it." };
+  if (systemRatioAfter(p, trove.coll, trove.debt) < p.ccr) return { ok: false, need, reason: "Closing would take Mezo's overall ratio under 150%, which Mezo blocks right now." };
+  if (musdBalance !== undefined && musdBalance < need) return { ok: false, need, reason: `You need ${fmt(need)} MUSD in this wallet to close; you have ${fmt(musdBalance)}.` };
+  return { ok: true, need };
+}
+
 const fmt = (wei: bigint) => (Number(wei / 10n ** 16n) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 });
 
 // ---------- chain reads ----------
@@ -207,7 +296,8 @@ export async function readBorrowParams(client: PublicClient, c: MezoBorrowContra
     const block = await client.getBlockNumber({ cacheTime: 0 });
     const at = { blockNumber: block } as const;
     const bo = { address: c.borrowerOperations, abi: borrowerOperationsAbi } as const;
-    const [price, minNetDebt, borrowingRate, gasCompensation, mcr, ccr, interestBps] = await Promise.all([
+    const tm = { address: c.troveManager, abi: troveManagerAbi } as const;
+    const [price, minNetDebt, borrowingRate, gasCompensation, mcr, ccr, interestBps, systemColl, systemDebt] = await Promise.all([
       client.readContract({ address: c.priceFeed, abi: priceFeedAbi, functionName: "fetchPrice", ...at }),
       client.readContract({ ...bo, functionName: "minNetDebt", ...at }),
       client.readContract({ ...bo, functionName: "borrowingRate", ...at }),
@@ -215,6 +305,8 @@ export async function readBorrowParams(client: PublicClient, c: MezoBorrowContra
       client.readContract({ ...bo, functionName: "MCR", ...at }),
       client.readContract({ ...bo, functionName: "CCR", ...at }),
       client.readContract({ address: c.interestRateManager, abi: interestRateAbi, functionName: "interestRate", ...at }),
+      client.readContract({ ...tm, functionName: "getEntireSystemColl", ...at }),
+      client.readContract({ ...tm, functionName: "getEntireSystemDebt", ...at }),
     ]);
     const recoveryMode = await client.readContract({
       address: c.troveManager,
@@ -223,7 +315,7 @@ export async function readBorrowParams(client: PublicClient, c: MezoBorrowContra
       args: [price],
       ...at,
     });
-    return { block, price, recoveryMode, minNetDebt, borrowingRate, gasCompensation, mcr, ccr, interestBps: Number(interestBps) };
+    return { block, price, recoveryMode, minNetDebt, borrowingRate, gasCompensation, mcr, ccr, interestBps: Number(interestBps), systemColl, systemDebt };
   });
 }
 
@@ -280,16 +372,25 @@ export function explainBorrowRevert(msg: string): string | null {
   if (/Recovery Mode/i.test(msg)) return "Mezo is in recovery mode right now, which blocks this change.";
   if (/Trove is active/i.test(msg)) return "This wallet already has a Mezo loan. Borrow more on it instead.";
   if (/maxBorrowingCapacity/i.test(msg)) return "That's more than your loan's borrowing limit on Mezo.";
+  if (/Amount repaid must not be larger/i.test(msg)) return "That's more than the loan owes. Close the loan to pay it off.";
+  if (/insufficient balance to repay|Caller doesnt have enough mUSD/i.test(msg)) return "Not enough MUSD in this wallet.";
+  if (/Cannot withdraw and add coll|There must be either a collateral change/i.test(msg)) return "Enter an amount.";
+  if (/collateral withdrawal not permitted Recovery Mode|Operation not permitted during Recovery Mode/i.test(msg)) return "Mezo is in recovery mode, which blocks this change.";
   return null;
 }
 
+export type LoanFn = "openTrove" | "withdrawMUSD" | "repayMUSD" | "addColl" | "withdrawColl" | "closeTrove";
+
 export interface PreparedCall {
-  functionName: "openTrove" | "withdrawMUSD";
-  args: readonly [bigint, Address, Address];
+  functionName: LoanFn;
+  /** Exactly what is sent: amount + hints, hints only (addColl), or nothing (closeTrove). */
+  args: readonly unknown[];
   value: bigint;
   gas: bigint;
+  /** MUSD or BTC this call moves, for confirmation messages. */
+  amount: bigint;
   /** What the checks saw at the fresh block, for the confirmation summary. */
-  check: { fee: bigint; total: bigint; ratio: bigint; liquidation: bigint };
+  check: { fee?: bigint; total?: bigint; ratio: bigint; liquidation: bigint };
 }
 
 /**
@@ -312,7 +413,7 @@ export async function prepareOpen(
   const [upper, lower] = await findHints(client, c, nicrOf(coll, chk.total));
   const args = [debt, upper, lower] as const;
   const gas = await estimate(client, { address: c.borrowerOperations, functionName: "openTrove", args, value: coll, account });
-  return { functionName: "openTrove", args, value: coll, gas, check: chk };
+  return { functionName: "openTrove", args, value: coll, gas, amount: debt, check: chk };
 }
 
 export async function prepareDraw(
@@ -331,21 +432,76 @@ export async function prepareDraw(
   const [upper, lower] = await findHints(client, c, nicrOf(trove.coll, trove.principal + amount + fee));
   const args = [amount, upper, lower] as const;
   const gas = await estimate(client, { address: c.borrowerOperations, functionName: "withdrawMUSD", args, value: 0n, account });
-  return { functionName: "withdrawMUSD", args, value: 0n, gas, check: chk };
+  return { functionName: "withdrawMUSD", args, value: 0n, gas, amount, check: chk };
+}
+
+const fresh = async (client: PublicClient, c: MezoBorrowContracts, account: Address) => {
+  const [p, trove] = await Promise.all([readBorrowParams(client, c), readTrove(client, c, account)]);
+  if (!trove.active) throw new Error("This wallet has no open Mezo loan.");
+  return { p, trove };
+};
+
+/** Principal left after a repayment; Mezo takes accrued interest first. Only used to place the hint. */
+const principalAfterRepay = (trove: Trove, amount: bigint) => {
+  const interest = trove.debt - trove.principal;
+  return amount <= interest ? trove.principal : trove.principal - (amount - interest);
+};
+
+export async function prepareRepay(client: PublicClient, c: MezoBorrowContracts, account: Address, amount: bigint, musdBalance: bigint): Promise<PreparedCall> {
+  const { p, trove } = await fresh(client, c, account);
+  const chk = checkRepay(trove, amount, p, musdBalance);
+  if (!chk.ok) throw new Error(chk.reason);
+  const [upper, lower] = await findHints(client, c, nicrOf(trove.coll, principalAfterRepay(trove, amount)));
+  const args = [amount, upper, lower] as const;
+  const gas = await estimate(client, { address: c.borrowerOperations, functionName: "repayMUSD", args, value: 0n, account });
+  return { functionName: "repayMUSD", args, value: 0n, gas, amount, check: chk };
+}
+
+export async function prepareAddColl(client: PublicClient, c: MezoBorrowContracts, account: Address, amount: bigint, btcBalance: bigint): Promise<PreparedCall> {
+  const { p, trove } = await fresh(client, c, account);
+  const chk = checkAddColl(trove, amount, p, btcBalance);
+  if (!chk.ok) throw new Error(chk.reason);
+  const [upper, lower] = await findHints(client, c, nicrOf(trove.coll + amount, trove.principal));
+  const args = [upper, lower] as const;
+  const gas = await estimate(client, { address: c.borrowerOperations, functionName: "addColl", args, value: amount, account });
+  return { functionName: "addColl", args, value: amount, gas, amount, check: chk };
+}
+
+export async function prepareWithdrawColl(client: PublicClient, c: MezoBorrowContracts, account: Address, amount: bigint, minRatio: bigint): Promise<PreparedCall> {
+  const { p, trove } = await fresh(client, c, account);
+  const chk = checkWithdrawColl(trove, amount, p);
+  if (!chk.ok) throw new Error(chk.reason);
+  if (chk.ratio < minRatio) throw new Error("The BTC price moved and this loan's ratio dropped. Review the new numbers and try again.");
+  const [upper, lower] = await findHints(client, c, nicrOf(trove.coll - amount, trove.principal));
+  const args = [amount, upper, lower] as const;
+  const gas = await estimate(client, { address: c.borrowerOperations, functionName: "withdrawColl", args, value: 0n, account });
+  return { functionName: "withdrawColl", args, value: 0n, gas, amount, check: chk };
+}
+
+export async function prepareClose(client: PublicClient, c: MezoBorrowContracts, account: Address, musdBalance: bigint): Promise<PreparedCall> {
+  const { p, trove } = await fresh(client, c, account);
+  const chk = checkClose(trove, p, musdBalance);
+  if (!chk.ok) throw new Error(chk.reason);
+  const gas = await estimate(client, { address: c.borrowerOperations, functionName: "closeTrove", args: [], value: 0n, account });
+  return { functionName: "closeTrove", args: [], value: 0n, gas, amount: trove.coll, check: { ratio: 0n, liquidation: 0n } };
 }
 
 async function estimate(
   client: PublicClient,
-  call: { address: Address; functionName: "openTrove" | "withdrawMUSD"; args: readonly [bigint, Address, Address]; value: bigint; account: Address },
+  call: { address: Address; functionName: LoanFn; args: readonly unknown[]; value: bigint; account: Address },
 ): Promise<bigint> {
   // A revert with a reason (ratio, minimum, active loan) is final; only node/oracle hiccups are retried.
   let last: unknown;
   for (let i = 0; i < 6; i++) {
     try {
-      const g =
-        call.functionName === "openTrove"
-          ? await client.estimateContractGas({ address: call.address, abi: borrowerOperationsAbi, functionName: "openTrove", args: call.args, value: call.value, account: call.account })
-          : await client.estimateContractGas({ address: call.address, abi: borrowerOperationsAbi, functionName: "withdrawMUSD", args: call.args, account: call.account });
+      const g = await client.estimateContractGas({
+        address: call.address,
+        abi: borrowerOperationsAbi,
+        functionName: call.functionName,
+        args: call.args,
+        ...(call.value > 0n ? { value: call.value } : {}),
+        account: call.account,
+      } as never);
       return (g * 125n) / 100n;
     } catch (e) {
       last = e;

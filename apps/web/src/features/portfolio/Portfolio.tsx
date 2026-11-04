@@ -17,6 +17,7 @@ import { deployment, TESTNET_FUNDING } from "@/lib/chain/config";
 import { exchangeAbi, resolutionAbi } from "@/lib/contracts/abi";
 import { payoutFor } from "@/lib/market/permissions";
 import { LiquidityAndIncentives } from "./Incentives";
+import { LoanCard } from "@/features/borrow/LoanCard";
 import { formatMusd, formatShares, relativeTime } from "@/lib/format";
 import { outcomeLabel, type StageInfo } from "@/lib/market/stage";
 import type { Availability } from "@/lib/market/permissions";
@@ -162,8 +163,10 @@ export function Portfolio() {
       claimable: a.claimable + r.claimable,
       won: a.won + (r.finalized && r.outcome !== 3 && (r.claimable > 0n || (r.status === "claimed" && big(r.p.redeemedPayout) > 0n)) ? 1 : 0),
       lost: a.lost + (r.status === "lost" || (r.status === "claimed" && big(r.p.redeemedPayout) === 0n) ? 1 : 0),
+      // Best case for open positions: each pays 1 MUSD per share on its larger side.
+      ifWin: a.ifWin + (r.finalized ? 0n : r.yes > r.no ? r.yes : r.no),
     }),
-    { realized: 0n, fees: 0n, open: 0n, claimable: 0n, won: 0, lost: 0 },
+    { realized: 0n, fees: 0n, open: 0n, claimable: 0n, won: 0, lost: 0, ifWin: 0n },
   );
 
   const refresh = () => {
@@ -214,6 +217,8 @@ export function Portfolio() {
           <dd className="tnum text-xl font-semibold">{formatMusd(totals.fees)} <span className="text-base text-ink-2">· {totals.won} / {totals.lost}</span></dd>
         </div>
       </dl>
+
+      <LoanCard ifWin={totals.ifWin} claimable={totals.claimable} />
 
       {bondCredits > 0n && (
         <div className="max-w-md">
