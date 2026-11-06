@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Fumadocs (the /docs pages): layout utilities, typography and components. Its colours map to MEZONK tokens below. */
+@import "fumadocs-ui/css/preset.css";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
@@ -613,3 +615,29 @@ dialog::backdrop {
   .stack-front, .stack-back, .enter-left, .enter-right { animation: none; }
   .tilt { transform: none; transition: none; }
 }
+
+/* Fumadocs colours = MEZONK tokens, so the docs follow the brand and the theme toggle with no second palette. */
+@theme inline {
+  --color-fd-background: var(--bg);
+  --color-fd-foreground: var(--ink);
+  --color-fd-muted: var(--surface-2);
+  --color-fd-muted-foreground: var(--muted);
+  --color-fd-popover: var(--surface);
+  --color-fd-popover-foreground: var(--ink);
+  --color-fd-card: var(--surface);
+  --color-fd-card-foreground: var(--ink);
+  --color-fd-border: var(--border);
+  --color-fd-primary: var(--accent-text);
+  --color-fd-primary-foreground: var(--on-primary);
+  --color-fd-secondary: var(--surface-2);
+  --color-fd-secondary-foreground: var(--ink);
+  --color-fd-accent: var(--surface-2);
+  --color-fd-accent-foreground: var(--ink);
+  --color-fd-ring: var(--focus);
+  --color-fd-info: var(--info);
+  --color-fd-warning: var(--warn);
+  --color-fd-error: var(--danger);
+  --color-fd-success: var(--success);
+  --color-fd-idea: var(--accent-text);
+}
+

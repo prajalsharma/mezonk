@@ -1,0 +1,156 @@
+---
+title: Resolution
+description: How a closed market gets its final outcome, who can propose, challenge and rule, what happens to the bonds, and why a market can never get stuck.
+icon: Scale
+---
+
+When trading closes, the market still needs an answer: Yes, No or Invalid. MEZONK uses **optimistic resolution**: one party proposes the answer with evidence and puts money behind it, everyone else has a window to challenge, and only a challenged answer goes to a referee. Every step is a public transaction, and every deadline ends in a defined outcome, so payouts can't be held hostage.
+
+## The plain version
+
+1. **Trading closes** at the time fixed when the market was published. Closing decides nothing.
+2. **The resolver proposes** Yes, No or Invalid, attaches evidence, and posts a bond (a deposit that can be lost).
+3. **Anyone can challenge** during the challenge window by posting their own bond and evidence.
+4. **No challenge?** Once the window ends, anyone can finalize the proposed outcome. The resolver gets the bond back.
+5. **Challenged?** The arbitrator rules, with a published rationale. The side that was right takes both bonds.
+6. **Nobody acted in time?** If no outcome is proposed, or the arbitrator doesn't rule, anyone can finalize the market as **Invalid**: every share pays 0.50 MUSD and bonds are refunded.
+
+The diagram follows those paths. Read it left to right: the top row is the common case, the branch below is a challenge, and the grey exits are the timeouts that end in Invalid.
+
+<ResolutionFlow />
+
+## The steps exactly
+
+Resolution lives in `MezonkResolution`, which the exchange deployed itself and is the only address allowed to settle a market. Each market's resolver, arbitrator, windows and bonds were copied into the market when it was published, so later configuration changes can't touch a market already running. Current values for new markets:
+
+<LiveParams />
+
+### Propose
+
+`proposeOutcome(marketId, outcome, evidenceHash, evidenceURI)`
+
+- **Who:** the market's resolver only (on the live contract).
+- **When:** after close, before `closeTime + proposalWindow`.
+- **What:** one of Yes, No or Invalid, plus the hash of an evidence document (it can't be zero). The resolver's proposer bond is pulled from their wallet.
+- In the app: *Propose outcome*, then *Publish evidence and sign*.
+
+### Challenge
+
+`dispute(marketId, evidenceHash, evidenceURI)`
+
+- **Who:** anyone except the market's resolver and its arbitrator.
+- **When:** before `proposedAt + challengeWindow`. Only one challenge per proposal.
+- **What:** an evidence hash and the dispute bond. The contract doesn't record which outcome the challenger thinks is right; that goes in the evidence document. The arbitrator can rule any outcome.
+- In the app: *Challenge*, then *Publish evidence and sign*.
+
+### Arbitrate
+
+`arbitrate(marketId, outcome, rationaleHash, rationaleURI)`
+
+- **Who:** the market's arbitrator only.
+- **When:** the market is challenged and it is before `disputedAt + arbitrationWindow`.
+- **What:** Yes, No or Invalid, plus the hash of a published rationale (can't be zero). The ruling is final the moment the transaction is mined.
+
+### Finalize
+
+`finalize(marketId)` is **permissionless**. Anyone can call it once one of these is true:
+
+| Situation | Final outcome | Reason recorded |
+|---|---|---|
+| Proposed, challenge window over, no challenge | The proposed outcome | Undisputed |
+| Closed, proposal window over, nothing proposed | Invalid | No proposal |
+| Challenged, arbitration window over, no ruling | Invalid | Arbitration timeout |
+
+There is no admin shortcut: nobody can finalize early, and a ruling ends the market directly without a separate finalize call. In the app the button reads *Finalize as Yes* (or No, or Invalid).
+
+## Who gets the bonds
+
+These are the rules on the live contract. The amounts assume today's testnet bonds of 25 MUSD to propose and 25 MUSD to challenge.
+
+| What happened | Resolver | Challenger |
+|---|---|---|
+| No challenge, finalized | Gets their 25 back | — |
+| Challenged, arbitrator agrees with the proposal | Gets 50 (both bonds) | Loses 25 |
+| Challenged, arbitrator rules any other outcome | Loses 25 | Gets 50 (both bonds) |
+| Challenged, arbitrator never rules | Gets their 25 back | Gets their 25 back |
+| Nothing proposed | No bond was posted | — |
+
+"Any other outcome" includes a third answer: if the resolver proposed Yes, the challenger argued No, and the arbitrator ruled Invalid, the proposal was still wrong, so the challenger takes both bonds.
+
+Bonds won or returned are credited to your address, not sent automatically. Collect them with *Withdraw bonds*, which pays every bond you're owed across all markets in one transaction (`withdrawBond`).
+
+**Why bonds exist.** The proposer bond makes a false proposal cost money as soon as one honest person notices. The dispute bond stops people challenging every proposal just to delay payouts: a frivolous challenge loses its bond.
+
+<Callout type="warn" title="Next deployment">
+These resolution changes are merged on GitHub and tested, but not yet on chain (commit c8fbaff, from an external researcher's report by KupiaSec). Markets on the live contract keep the rules above.
+
+- **Anyone may propose after half the proposal window.** The resolver has the first half to itself. After that, any wallet can propose with the same bond, so a silent resolver can no longer force a market to Invalid. With a 3-day window, that's after 1.5 days.
+- **Bonds follow the proposer,** whoever that was: refunds and an upheld proposal's winnings go to the wallet that proposed.
+- **An overturned proposal loses half its bond to the protocol.** The challenger gets their own bond plus the other half. With 25 MUSD bonds: 12.50 MUSD is set aside for the protocol (the exchange owner can sweep it) and the challenger receives 37.50 MUSD. This makes "propose a wrong answer, then challenge it yourself from a second wallet" lose money, which is otherwise a way for a dishonest resolver to recover its bond while blocking honest challengers.
+- **The proposer can't challenge their own proposal,** in addition to the resolver and arbitrator.
+</Callout>
+
+## Worked example
+
+Today's testnet values: proposal window 3 days, challenge window 1 hour, arbitration window 7 days, bonds 25 MUSD each.
+
+A market closes on Monday at 12:00 UTC.
+
+1. Monday 14:00: the resolver proposes **Yes** with an evidence document and posts 25 MUSD. The challenge window runs until 15:00.
+2. Monday 14:40: a trader thinks the source shows No. They post 25 MUSD and their own evidence. The arbitration window now runs until the following Monday 14:40.
+3. Wednesday: the arbitrator reads both documents and rules **No**, with a published rationale. The market is final.
+4. The challenger is credited 50 MUSD and withdraws it. No holders can now claim 1 MUSD per share; Yes shares pay nothing.
+
+If the arbitrator had done nothing, anyone could have finalized the market as Invalid from the following Monday 14:40, and both bonds would have been refunded.
+
+## How long can it take?
+
+All deadlines are measured against block time, not anyone's clock. With today's testnet windows:
+
+| Path | Earliest final | Latest final |
+|---|---|---|
+| Proposed at close, no challenge | 1 hour after close | 3 days 1 hour after close |
+| Nobody proposes | — | 3 days after close (as Invalid) |
+| Challenged, arbitrator rules | Right after the challenge | Up to about 10 days 1 hour after close |
+| Challenged, arbitrator silent | — | Up to about 10 days 1 hour after close (as Invalid) |
+
+The worst case is the sum of the three windows. After that, the market is guaranteed to be finalizable by anyone.
+
+## Evidence
+
+Every proposal, challenge and ruling commits two things on-chain: a `bytes32` hash and a URI.
+
+- The hash is `keccak256` of a canonical **evidence document**: a small JSON with the market id, the kind (proposal, dispute or arbitration), the outcome, a written summary of at least 20 characters, one to five https links with labels (and optionally a SHA-256 of a linked file), the author's address and a timestamp, serialized with a fixed key order.
+- The app stores the document, but your browser recomputes the hash itself before you sign, so the server can't swap the text under you.
+- Each market's timeline re-hashes every stored document and says which case it is: *Document matches the hash committed on-chain*, a warning that the stored document does not match (do not rely on it), or a note that MEZONK doesn't store a document for that hash and you should check the submitter's reference yourself.
+
+What a hash proves, and what it doesn't: it proves exactly what the submitter **said** at the time. It does not prove that a linked web page still shows the same thing, or ever did. A SHA-256 attached to a link is "claimed by submitter" and is not checked by MEZONK, and the server never fetches submitted links. Prefer archived or immutable sources.
+
+Community evidence (comments with links that any signed-in wallet can post) is a separate channel. It's signed by the poster but has no effect on settlement.
+
+## Who you are trusting
+
+- **The arbitrator** can decide the outcome of any challenged market. This is the main point of trust in MEZONK today. Its power is bounded: it can't act on a market nobody challenged, can't act after its window, must publish a rationale hash, and can't be changed for a market already published. On Mezo testnet today the arbitrator is a single wallet, not a multisig (checked on 6 November 2026). The intended setup before any mainnet use is a multisig, and later a decentralized court behind the same address slot.
+- **The resolver** is trusted to propose honestly and on time. A wrong proposal can be challenged. On the live contract, a silent resolver forces the market to Invalid after the proposal window; the next deployment lets anyone propose after half the window instead.
+- **Challengers** keep the system honest. Optimistic resolution needs at least one attentive person with the bond amount during each challenge window. If a wrong proposal goes unchallenged, it becomes final.
+- **The owner** can't propose, rule, change an outcome, or block resolution. Pausing the exchange doesn't stop proposals, challenges, rulings, finalization, claims or bond withdrawals.
+
+A BTC price resolver that settles price markets from Mezo's own price feed is written and tested but **not yet deployed**.
+
+The contracts are **not audited** by an independent firm. Internal review notes and an external researcher's report exist, and the fixes from that report are the next-deployment changes above.
+
+## Edge cases
+
+- **Markets that never launched** have nothing to resolve. Resolution reports them as not closed, and they can never pay a winner.
+- **Late transactions revert.** A proposal, challenge or ruling mined after its deadline fails. When less than 10 minutes remain, the app's countdown turns into a warning that a transaction mined after the deadline will revert.
+- **Deficient rules.** If a market's rules don't match MEZONK's structured format, the market page shows *Deficient resolution rules*. Policy: the resolver should propose Invalid unless the raw text decides the market unambiguously, and anyone may challenge any other proposal.
+- **One proposal, one challenge.** A market can't be proposed twice or challenged twice. A challenge sends it straight to the arbitrator.
+- **Claims.** Once final, holders press *Claim payout* (or *Claim refund* on an Invalid market). There is no deadline and no protocol fee.
+
+## Next
+
+<Cards>
+  <Card title="Shares and payouts" href="/docs/how-it-works/shares-and-payouts" description="What each share pays once the outcome is final." />
+  <Card title="Roles" href="/docs/markets/roles" description="Who resolvers and arbitrators are, and how they're appointed." />
+  <Card title="Writing good rules" href="/docs/markets/writing-good-rules" description="Rules that make resolution easy to check." />
+</Cards>

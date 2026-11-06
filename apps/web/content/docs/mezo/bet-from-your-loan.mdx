@@ -1,0 +1,113 @@
+---
+title: Bet from your loan
+description: Borrow exactly what a trade is short from your Mezo loan, and send winnings back to the loan when you claim.
+icon: Repeat
+---
+
+MEZONK connects your Mezo loan to the three places where money moves: the trade ticket, the claim button and your
+portfolio. If a buy needs more MUSD than your wallet holds, the ticket offers to borrow exactly the difference. When
+you win, the claim can repay the loan with the winnings. Your portfolio shows the loan next to your bets, with what
+would happen to it if they win.
+
+Follow the loop from left to right: BTC goes into a Mezo loan, MUSD comes out, it backs a trade, the winnings come
+back as MUSD and pay the loan down, and the BTC is unlocked.
+
+<LoanFlow />
+
+## From the trade ticket
+
+When you're buying and your MUSD balance is below what the ticket needs (cost plus fee, plus anything you're placing
+on the book), a box appears under the ticket.
+
+**If you already have a Mezo loan,** it says *You're … MUSD short. Borrow it from your Mezo loan?* and shows:
+
+- *Ratio*, before and after,
+- *Loan-to-value*, before and after (what you owe divided by your BTC's value, so 50% at a 200% ratio),
+- *One-time fee*.
+
+Press *Borrow … MUSD* and sign once. When it confirms, the MUSD is in your wallet and you place the trade as usual. If
+the new ratio would be under 150%, the box warns you and suggests adding BTC first. If Mezo wouldn't allow it (over
+the loan's limit, under 110%, recovery mode), the box says why and links to *Manage your loan*.
+
+**If you don't have a loan yet,** it says how much BTC a loan for the shortfall would lock at 200%, and links to
+*Open a loan for this trade →*. That opens the *Borrow* page with the amount filled in. After the loan confirms, a
+*Back to your trade* button returns you to the market.
+
+The amount borrowed is the shortfall rounded up to the next cent. A new loan can't be smaller than Mezo's minimum,
+so if the shortfall is smaller, the form fills in the minimum and the rest stays in your wallet.
+
+## From a claim
+
+When a market you hold shares in is final and you have a Mezo loan, the claim button has a checkbox: *Use winnings
+to repay my Mezo loan (… MUSD)*. If you tick it:
+
+1. You sign the claim. The exchange pays your winnings to your wallet.
+2. When that confirms, your wallet asks for a second signature: a `repayMUSD` to Mezo for the smaller of the payout and
+   the most your loan can be repaid while staying open.
+
+If the second step fails or you reject it, the claim still went through and the MUSD is in your wallet. The app says
+so and links to the *Borrow* page to repay later. If your loan is already at Mezo's minimum size, the checkbox is
+replaced by a note: winnings can only pay it off by closing the loan, which you do on the *Borrow* page.
+
+## On your portfolio
+
+*Your Mezo loan* sits above your positions with *BTC locked*, *You owe*, *Ratio* and *Liquidated if BTC falls to*,
+and one line of projection:
+
+- If the best case would cover the loan: *If your open bets win, the … MUSD they pay covers the whole loan: close it
+  and unlock … BTC.*
+- Otherwise: what your debt and ratio would be after repaying the most Mezo allows from it.
+
+It is labelled as a best case: *losing bets pay nothing*. The best case adds, for every open position, the larger of
+your Yes and No shares (each pays 1 MUSD if it wins), plus anything you can already claim.
+
+## How it works exactly
+
+### Borrowing the shortfall
+
+```
+need      = notional + fee + restCost        (the buy as quoted, plus any rest placed on the book)
+shortfall = need − musdBalance
+amount    = shortfall rounded up to 0.01 MUSD
+```
+
+With an open loan the ticket calls `prepareDraw` and then `BorrowerOperations.withdrawMUSD(amount, upper, lower)`
+from your wallet, one signature. It runs the same checks as the *Borrow* tab (capacity, 110%, recovery mode) and uses
+the ratio you saw minus 2% as a floor. Without a loan it links to `/borrow?need=<amount>&return=/markets/<id>`. The
+`return` value is only accepted if it matches `/markets/<number>`, so the link can't send you anywhere else.
+
+Borrowing and buying are two transactions, not one. MEZONK has no contract that touches Mezo loans, so it can't
+borrow on your behalf; your wallet has to call Mezo itself.
+
+### Why repaying from winnings takes two signatures
+
+Mezo's `BorrowerOperations` burns repaid MUSD from the address that calls it. That is true of `repayMUSD`, and also of
+`repayMUSDWithSignature` (in `BorrowerOperationsSignatures`): it checks the borrower's signature but passes
+`msg.sender` as the account to burn from. So a single transaction that claims and repays would need a contract to
+receive your winnings first and then repay from its own balance. MEZONK chose not to add a contract that holds user
+winnings, even briefly, so the claim pays your wallet and your wallet repays.
+
+The second step re-reads your MUSD balance from the chain after the claim and repays
+
+```
+repayAmount = min(claimPayout, maxRepay)      maxRepay = debt − 200 MUSD − minNetDebt
+```
+
+never more than the claim paid.
+
+### The projection
+
+```
+best case = Σ over unfinalized positions of max(yesShares, noShares)  +  claimable now
+repayable = min(best case, maxRepay)
+```
+
+If the best case reaches `closeCost = debt − 200 MUSD`, the card says the loan can be closed. Nothing on the card moves
+money.
+
+## Next
+
+<Cards>
+  <Card title="Manage your loan" href="/docs/mezo/manage-your-loan" description="The exact repay, borrow, withdraw and close limits." />
+  <Card title="Shares and payouts" href="/docs/how-it-works/shares-and-payouts" description="Why each winning share pays exactly 1 MUSD." />
+</Cards>

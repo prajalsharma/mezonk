@@ -15,7 +15,8 @@
     "seed:local": "tsx scripts/seed-local.ts",
     "demo:markets": "tsx scripts/demo-markets.ts",
     "mm": "tsx scripts/market-maker.ts",
-    "test:integration": "vitest run -c vitest.integration.config.ts"
+    "test:integration": "vitest run -c vitest.integration.config.ts",
+    "postinstall": "fumadocs-mdx"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.3.11",
@@ -24,6 +25,9 @@
     "@vercel/blob": "1.1.1",
     "@wagmi/core": "2.22.1",
     "drizzle-orm": "0.45.4",
+    "fumadocs-core": "15.8.5",
+    "fumadocs-mdx": "12.0.3",
+    "fumadocs-ui": "15.8.5",
     "lucide-react": "0.548.0",
     "next": "15.5.28",
     "next-themes": "0.4.6",
@@ -41,6 +45,7 @@
     "@eslint/eslintrc": "^3",
     "@playwright/test": "1.56.1",
     "@tailwindcss/postcss": "^4",
+    "@types/mdx": "^2.0.14",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

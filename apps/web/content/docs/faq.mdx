@@ -1,0 +1,141 @@
+---
+title: FAQ
+description: Straight answers to the questions new traders ask most, about money and safety, trading, borrowing, results and testnet.
+icon: CircleHelp
+---
+
+Short answers first, with links to the full explanation. If your question isn't here, the [quick start](/docs/get-started/quick-start) covers the basics step by step.
+
+## Money and safety
+
+<Accordions type="single">
+<Accordion title="Who pays me when I win?">
+The exchange contract, from MUSD that was locked when your shares were created. Every Yes/No pair is backed by exactly 1 MUSD from the moment it exists, so the money for every winning share is already in the contract. MEZONK doesn't pay winners from its own pocket and never takes the other side of your trade.
+</Accordion>
+
+<Accordion title="Can MEZONK take my MUSD or my BTC?">
+No. Your MUSD sits in the exchange contract, which has no upgrade mechanism and no function that lets anyone move your funds. Your BTC, if you borrow, sits in Mezo's lending contract, not MEZONK's. The owner can pause new markets and trading, and change settings for future markets. The owner can't move your MUSD, change a result, or block claims, refunds or bond withdrawals.
+</Accordion>
+
+<Accordion title="Has the code been audited?">
+No. The contracts have not been audited by an independent firm. There are internal review notes, and an external researcher (KupiaSec) sent a report whose findings were fixed in the code; those fixes are merged and tested but not yet deployed to the live testnet contract. Bugs could lose funds. The source is public at [github.com/prajalsharma/mezonk](https://github.com/prajalsharma/mezonk). See [Trust model](/docs/security/trust-model).
+</Accordion>
+
+<Accordion title="What if the MEZONK website goes down?">
+Your shares and MUSD are in the contract, not on MEZONK's servers. Balances, claimable amounts and refunds are read from and paid by the contract directly, so the money doesn't depend on the site. Prices, quotes and history come partly from MEZONK's servers, so trading through the site needs them.
+</Accordion>
+
+<Accordion title="Do claims expire?">
+No. A claim has no deadline. You can claim a final market's payout or refund whenever you like, and it's free apart from the network fee.
+</Accordion>
+
+<Accordion title="What can I lose?">
+Everything you put into a position, if your side loses. Prices are the crowd's estimate, not a guarantee. If you borrowed to trade, you still owe the loan whether you win or lose, and your BTC can be liquidated if its price falls far enough.
+</Accordion>
+</Accordions>
+
+## Trading
+
+<Accordions type="single">
+<Accordion title="What does the price mean?">
+It's the crowd's estimate of the chance that side wins. Yes at 62¢ means traders think Yes is about 62% likely. The big number on a market page is from the last real trade. A number with **~** is an estimate halfway between the best offers, shown before anyone has traded. With no offers on both sides, there's no number at all.
+</Accordion>
+
+<Accordion title="Why do Yes and No add up to more than 100¢?">
+Because you buy from the cheapest seller on each side, and sellers ask a bit more than buyers bid. The extra is the spread. A Yes and a No share are still worth exactly 1 MUSD together when the market settles.
+</Accordion>
+
+<Accordion title="Why did I get fewer shares than I expected?">
+The book didn't have enough on offer. The ticket buys the cheapest offers first and stops when they run out, and it tells you before you sign: *That's more than is on offer.* The MUSD it couldn't spend stays in your wallet. See [When there isn't enough on offer](/docs/get-started/first-trade#when-there-isnt-enough-on-offer).
+</Accordion>
+
+<Accordion title="What fees are there?">
+Only a trading fee, paid by the taker: the order that fills immediately. Orders that wait on the book pay nothing. The fee is a percentage of what the shares cost, set per market when it's published, and shown on the ticket as *Fee (…%, taker)*. On today's testnet settings it's 1%. Claims, refunds and bond withdrawals have no protocol fee. Network fees on Mezo are paid in BTC and are tiny.
+</Accordion>
+
+<Accordion title="Why does my wallet ask me to approve MUSD every time?">
+The ticket asks your wallet to approve exactly the amount of the trade you're looking at, not an unlimited amount. That way the exchange contract can never take more MUSD than you meant to spend. If a later trade costs more than what's left of your approval, you approve again.
+</Accordion>
+
+<Accordion title="What if I can't sell my shares?">
+You can always hold them to the end and claim. Selling early needs a buyer. If nobody is bidding, the ticket shows *no buyers*; you can place a limit order and wait. If you hold both Yes and No, you can merge each pair back into 1 MUSD without a buyer.
+</Accordion>
+
+<Accordion title="What's the difference between a market order and a limit order?">
+A market order fills now against the best offers, never past your *Worst* price, and cancels whatever can't fill. A limit order fills what it can at your price or better, and the rest waits on the book. You can sign it (free, your funds stay in your wallet) or escrow it on-chain (one transaction, funds locked so it's always executable). Both are under *Advanced: sell, limit orders* on the ticket.
+</Accordion>
+</Accordions>
+
+## Borrowing
+
+<Accordions type="single">
+<Accordion title="Do I have to borrow to use MEZONK?">
+No. If you already hold MUSD, just trade. Borrowing is for people who hold BTC and don't want to sell it.
+</Accordion>
+
+<Accordion title="Who am I borrowing from?">
+Mezo, not MEZONK. The Borrow page sends your transaction to Mezo's own lending contracts from your wallet. Your BTC is locked in Mezo's contract. MEZONK never holds it, never lends, and can't touch the loan.
+</Accordion>
+
+<Accordion title="What's the smallest loan, and what does it cost?">
+Mezo's minimum is 1,800 MUSD of debt, which means you receive about 1,798 MUSD. On top of what you receive you owe a one-time fee, a 200 MUSD refundable deposit (returned when you close the loan), and simple yearly interest. On today's Mezo testnet settings the fee is 0.1% and interest is 1% a year. The Borrow page reads all of these live from Mezo before you sign. See [Get MUSD](/docs/get-started/get-musd).
+</Accordion>
+
+<Accordion title="When does my loan get liquidated?">
+When your collateral ratio (your BTC's value ÷ what you owe) falls below Mezo's 110% minimum, usually because BTC's price dropped. Then the debt is cleared and you lose the locked BTC. The Borrow page shows the BTC price where that happens (*Liquidated if BTC falls to*). It suggests 200% and warns when a loan has little room. Repay MUSD or add BTC to make a loan safer.
+</Accordion>
+
+<Accordion title="When do I have to repay?">
+Whenever you like. There's no due date. Interest keeps adding to what you owe, so the ratio drifts down slowly. You can repay part of it, add or take out BTC, or close the loan on the Borrow page, or use your winnings to repay when you claim.
+</Accordion>
+
+</Accordions>
+
+## Markets and results
+
+<Accordions type="single">
+<Accordion title="Who decides the result?">
+Each market has a resolver who proposes Yes, No or Invalid after it closes, with published evidence and a bond. Anyone else can challenge during the challenge window by posting their own bond, and then the arbitrator rules in public. If nobody challenges, anyone can finalize the proposal when the window ends. The arbitrator is a single address today and is the main point of trust.
+</Accordion>
+
+<Accordion title="What if the answer is unclear, or nobody resolves the market?">
+Unclear questions should resolve Invalid, which pays 0.50 MUSD per share of either side. If the resolver never proposes in time, or the arbitrator never rules in time, anyone can finalize the market as Invalid. Funds can't get stuck.
+
+<Callout type="warn" title="Next deployment">
+Merged but not yet live: anyone may propose a result once half the proposal window has passed, so a missing resolver no longer has to mean Invalid.
+</Callout>
+</Accordion>
+
+<Accordion title="Can the rules change after I trade?">
+No. A market's rules are fingerprinted on-chain when it's published and can never be edited. Read them before you trade: they say what counts as Yes, No and Invalid and which source decides.
+</Accordion>
+
+<Accordion title="What if a market never gets enough seeders?">
+It fails at the seeding deadline. Nobody ever traded it, and every seeder takes back exactly what they locked with the *Refund* button on the market page or in Portfolio.
+</Accordion>
+
+</Accordions>
+
+## Testnet
+
+<Accordions type="single">
+<Accordion title="Is this real money?">
+No. MEZONK runs on Mezo testnet. Test BTC and test MUSD have no cash value. It's the real product, so you can learn it without risking anything. There is no mainnet deployment yet.
+</Accordion>
+
+<Accordion title="How do I get test BTC?">
+From the [Mezo faucet](https://faucet.test.mezo.org). Paste your wallet address and request it. You need a little BTC for network fees even if you already have MUSD.
+</Accordion>
+
+<Accordion title="A transaction failed or seems stuck. What do I do?">
+Read the message under it and press *Try again*. Mezo testnet's public RPC sometimes answers from a node that's behind; if you see *Mezo's BTC price feed didn't answer in time* or a quote that won't load, wait a few seconds and retry. Check that you have some BTC for the network fee and that your wallet is on Mezo Testnet (chain 31611).
+</Accordion>
+</Accordions>
+
+## Next
+
+<Cards>
+  <Card title="Quick start" href="/docs/get-started/quick-start" description="From an empty wallet to your first shares." />
+  <Card title="Your first trade" href="/docs/get-started/first-trade" description="Every line of the trade ticket, with worked numbers." />
+  <Card title="Trust model" href="/docs/security/trust-model" description="What anyone can and can't do with your money." />
+</Cards>

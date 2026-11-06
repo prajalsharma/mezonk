@@ -1,0 +1,179 @@
+---
+title: The order book
+description: How prices, orders and fills work on MEZONK, from a simple buy to the four ways a trade can move shares and MUSD.
+icon: BookOpen
+---
+
+MEZONK matches traders with each other on an **order book**: a list of offers to buy and offers to sell at fixed prices. Nobody sets the price and there is no house on the other side. A trade happens only when one person's order meets another's.
+
+The plain version is the first section. The rest is the exact behaviour of the contract, so you can predict what any order will do before you sign it.
+
+## The plain version
+
+- **Bids** are offers to buy Yes. **Offers** (asks) are offers to sell Yes. Each sits at a price between 1¢ and 99¢.
+- If you trade against what's already on the book, you are the **taker**. You get filled now and pay a small fee.
+- If you leave an order on the book for someone else to hit, you are the **maker**. You pay no fee, but you only trade if someone takes your order.
+- Buying No is the same thing as selling Yes at the opposite price. Buy No at 45¢ and you are offering Yes at 55¢. So there is **one book**, not a Yes book and a No book.
+- The price shown on a market is the **last real trade**. Before the first trade the site shows an estimate, marked with ~, and labels it "estimated chance · no trades yet". With no orders at all, it shows no number.
+
+## Prices and sizes
+
+**Prices are whole cents, 1 to 99**, for the outcome you're trading. There is no 0¢ or 100¢: an outcome that is certain has nothing left to trade.
+
+**Sizes are multiples of 0.01 share.** The contract calls this a lot. With whole-cent prices and 0.01-share lots, every cost and every fee is an exact amount of MUSD. Nothing is rounded, on-chain or in the app, so the number you see before signing is the number that settles.
+
+Example: 12.34 shares at 37¢ costs 12.34 × 0.37 = exactly 4.5658 MUSD.
+
+## One book in Yes-price terms
+
+Every order is placed into a single book measured in Yes cents:
+
+| Your order | Book side | Yes price |
+|---|---|---|
+| Buy Yes at p | Bid | p |
+| Sell Yes at p | Ask | p |
+| Buy No at p | Ask | 100 − p |
+| Sell No at p | Bid | 100 − p |
+
+Why: a No share and a Yes share together are always worth 1 MUSD (see [Shares and payouts](/docs/how-it-works/shares-and-payouts)). Paying 45¢ for No is economically the same as being willing to let Yes go at 55¢. Folding both into one book means a Yes buyer and a No buyer can trade with each other directly, and the book is twice as deep as two separate books would be.
+
+The diagram shows one book with a 60¢ / 40¢ example: the direct fills on the left, and the complement fills (mint and merge) on the right.
+
+<OrderMatching />
+
+## The four kinds of fill
+
+When your order meets a maker's order, one of four things happens. The example uses a maker order at 60¢ for Yes, which is 40¢ for No.
+
+| Maker's order | You (taker) | Kind | What moves |
+|---|---|---|---|
+| Buy Yes at 60¢ | Sell Yes at 60¢ | Direct | Your Yes goes to the maker; the maker's 60¢ goes to you |
+| Buy Yes at 60¢ | Buy No at 40¢ | Mint | Maker's 60¢ + your 40¢ = 1 MUSD is locked; a new Yes goes to the maker and a new No to you |
+| Sell Yes at 60¢ | Buy Yes at 60¢ | Direct | The maker's Yes goes to you; your 60¢ goes to the maker |
+| Sell Yes at 60¢ | Sell No at 40¢ | Merge | The maker's Yes and your No are burned; the 1 MUSD behind them is released, 60¢ to the maker and 40¢ to you |
+
+Mint and merge are why shares can always be bought as long as somebody wants the other side: two buyers on opposite sides create a new pair between them, and two sellers on opposite sides retire one.
+
+### Worked example: a mint
+
+Today's testnet taker fee is 1%; check the live value under [Fees and incentives](/docs/how-it-works/fees-and-incentives).
+
+1. A maker has an escrowed order: *buy 100 Yes at 60¢*. The contract already holds their 60 MUSD.
+2. You want No and are happy to pay up to 40¢. You buy 100 No.
+3. The contract takes 40.00 MUSD from you, plus the fee of 1% on your side of the trade: 0.40 MUSD. You pay 40.40 MUSD.
+4. The maker's 60 MUSD and your 40 MUSD become 100 MUSD of locked collateral. The maker receives 100 Yes and you receive 100 No.
+
+Whichever side wins, the 100 MUSD to pay them is already locked.
+
+### Worked example: a merge
+
+1. A maker has an escrowed order: *sell 50 Yes at 70¢*. The contract holds their 50 Yes.
+2. You hold 50 No and want out. The No equivalent of that offer is 30¢. You sell 50 No.
+3. The maker's 50 Yes and your 50 No are burned, which releases 50 MUSD of collateral.
+4. The maker gets 50 × 0.70 = 35.00 MUSD. You get 50 × 0.30 = 15.00 MUSD minus the 1% fee (0.15), so 14.85 MUSD.
+
+## Two kinds of maker order
+
+A maker can leave an order on the book in two ways. Both appear in the same book and are filled by the same contract call.
+
+| | Signed order | Escrowed (resting) order |
+|---|---|---|
+| How | You sign a message (EIP-712); free, no transaction | One transaction (`placeOrder`) |
+| Your funds | Stay in your wallet until a fill | Locked in the exchange until filled or cancelled |
+| Can it go stale? | Yes: if you move the MUSD or shares, it is skipped | No, it is always executable |
+| Expiry | You pick 1, 7 or 30 days | None; it rests until filled or cancelled |
+| Cancel | *Cancel on-chain*, or raise your nonce to cancel all at once | `cancelOrder` returns the escrow |
+| Counts toward launch | No | Yes, if placed while the market is seeding |
+
+In the ticket, a limit order's leftover is placed one of these two ways: *Sign (no lock)* or *Escrow on-chain*.
+
+*Remove* on a signed order only hides it from MEZONK's book. The signature itself stays valid until it expires, and anyone holding a copy could still fill it. *Cancel on-chain* records the cancellation in the contract and kills it for good.
+
+## Market and limit orders
+
+The trade ticket opens in a simple mode: you enter how much MUSD to spend, press *Buy Yes* or *Buy No*, and the ticket shows the shares you'll get and the average price before you confirm. *Advanced: sell, limit orders* opens the full ticket with *Direction* (Buy or Sell) and *Order type* (Market or Limit).
+
+**Market.** Fill now against the best orders, never past your *Worst* price. The default worst price is the best price on the book plus 3¢ for a buy (minus 3¢ for a sell), and you can change it. Whatever can't fill at that price is not executed. Tick *All or nothing* if you'd rather the trade fail than fill partly.
+
+**Limit.** Anything on the book at your *Limit* price or better fills now. The rest is placed on the book at your price, signed or escrowed. A limit order that would fill nothing simply becomes a resting order.
+
+## How a trade settles: `take()`
+
+The taker settles every trade themselves, in one transaction:
+
+```solidity title="MezonkExchange.sol"
+function take(TakeParams calldata t, Source[] calldata sources) external returns (uint128 filled);
+
+struct TakeParams {
+    uint256 marketId;
+    uint8 outcome;      // what you buy or sell: 0 Yes, 1 No
+    Side side;          // Buy or Sell
+    uint8 limitPrice;   // worst acceptable price in cents for your outcome
+    uint128 quantity;   // max shares
+    uint128 minFill;    // revert if less than this fills (minFill = quantity means all-or-nothing)
+    uint64 deadline;    // chain timestamp after which the call reverts
+}
+```
+
+`sources` is the list of maker orders you want to hit, best first: either a resting order id or a signed order with its signature. MEZONK's server builds this list for you when you ask for a quote, but it holds no keys and can't sign, move funds or change a price. It only suggests. The contract checks everything again.
+
+For each source the contract either **fills**, **skips**, or **reverts the whole trade**:
+
+| Situation | Result |
+|---|---|
+| Order on the other side within your limit, funded | Fill `min(your remaining quantity, maker's remaining)` |
+| Already filled or cancelled, expired, below the maker's minimum nonce, restricted to another taker | Skipped |
+| Signed buy whose maker no longer has the MUSD or allowance; signed sell whose maker no longer has the shares | Skipped (stale) |
+| Price beyond your limit, or an order on the same side as you | Skipped |
+| You are the maker | Whole trade reverts (`SelfTrade`) |
+| Bad signature, wrong market, size not a multiple of 0.01 | Whole trade reverts |
+| Market not live, exchange paused, or past your deadline | Whole trade reverts |
+
+At the end, if nothing filled or less than `minFill` filled, the whole transaction reverts with `InsufficientLiquidity(filled)` and nothing moves. Otherwise, what filled settles and the rest of your quantity is simply not executed. Your MUSD moves once: a buyer pays the total cost plus fee, a seller receives the total proceeds minus fee.
+
+Skipping instead of reverting matters: one stale order in your list can't make your trade fail. Reverting on self-trade and bad signatures matters too: those are never honest mistakes by a maker.
+
+## The taker fee
+
+Only the taker pays. The fee is a percentage of the taker's own notional, at the taker's own price:
+
+- Buying: you pay `shares × price + fee`.
+- Selling: you receive `shares × price − fee`.
+- In a mint or merge, "your price" is the complement of the maker's price (40¢ in the 60¢ example), so the fee is on what you actually pay or receive.
+
+Example at today's 1% testnet fee: buying 250 Yes at 22¢ costs 55.00 MUSD + 0.55 fee = 55.55 MUSD. The fee is set per policy, capped by the contract at 5%, and fixed for the life of each market. Where the fee goes is on [Fees and incentives](/docs/how-it-works/fees-and-incentives).
+
+## Rules that keep the book clean
+
+- **Escrowed orders can't cross the book.** A bid at or above the best ask (or an ask at or below the best bid) reverts with `CrossesBook`. If your price would trade, the ticket takes instead. The order API refuses signed orders that cross for the same reason.
+- **Stale signed orders are skipped, then flagged.** The contract skips them at fill time. MEZONK's quote endpoint re-checks the funding of every signed order before using it, and a background sweep re-checks open signed orders and marks them stale or open again.
+- **Accepted is not traded.** When the server accepts a signed order, it is resting on the book. Nothing has traded until a fill appears on-chain.
+- **Deadlines use chain time.** The app sets `deadline` and signed-order expiry from the latest block's timestamp, not your device clock.
+
+## Prices you see: last trade versus estimate
+
+- **Last trade** is the price of the most recent real fill. It is the only number MEZONK calls a price.
+- **Estimated chance** is shown before any trade: the midpoint between the best bid and best offer, marked with ~ (in the book view, *Middle ~x¢*). It's a hint, not a price anyone paid.
+- **No orders, no number.** If one side is empty and nothing has traded, the market shows no chance rather than inventing one.
+
+## When everyone wants the same side
+
+If everyone wants Yes and nobody offers it, a Yes buy fills only against existing Yes offers: escrowed or signed sells, and No bids (which mint a pair with you). When they run out, the rest of your order isn't filled. The contract never sells shares it doesn't hold, so it can't be left owing anyone.
+
+A contract test walks through this exactly: 1,000 Yes requested at up to 60¢, only 200 on offer at 55¢. Exactly 200 fill for 110 MUSD plus a 1.10 fee, the seeders' escrow completes 200 pairs, the book is empty afterwards, and when Yes wins, the 200 MUSD payout comes entirely from that locked collateral.
+
+## Edge cases
+
+- **Partial fills.** With a market order and *All or nothing* off, you can get less than you asked for. The ticket shows *Fills now* and *Remainder* before you sign.
+- **Price moves between quote and signing.** The contract applies your limit to every fill, so you never pay more than your worst price. If the orders you quoted against are gone, fewer shares fill (or the trade reverts if that's below `minFill`).
+- **Self-trade.** You can't take your own order, from the same wallet. Doing it across two wallets is allowed but always costs you the fee; see why wash trading loses money on [Fees and incentives](/docs/how-it-works/fees-and-incentives).
+- **Pause.** While the exchange is paused, no new orders, takes or splits. Cancelling escrowed orders, merging and claiming still work.
+- **Closed markets.** Trading stops at the close time. Resting orders can be cancelled at any time after close to get their escrow back.
+
+## Next
+
+<Cards>
+  <Card title="Seeding and launch" href="/docs/how-it-works/seeding-and-launch" description="How a new market gets its first orders before anyone trades." />
+  <Card title="Fees and incentives" href="/docs/how-it-works/fees-and-incentives" description="The taker fee and where every part of it goes." />
+  <Card title="Shares and payouts" href="/docs/how-it-works/shares-and-payouts" description="Why every share is fully backed." />
+</Cards>

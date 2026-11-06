@@ -1,0 +1,116 @@
+---
+title: Manage your loan
+description: Repay, borrow more, add BTC, take BTC out or close your Mezo loan from the app, with the exact limits Mezo enforces.
+icon: SlidersHorizontal
+---
+
+Once your wallet has a Mezo loan, the *Borrow* page shows *Your Mezo loan* instead of the open form: *BTC locked*,
+*You owe*, *Ratio* and *Liquidation at*, then five tabs: *Repay*, *Borrow*, *Add BTC*, *Take out* and *Close*. Each
+tab shows the loan after the change before you sign, using the same rules Mezo applies, so a change that Mezo would
+reject is explained instead of failing in your wallet.
+
+## What each tab does
+
+| Tab | What happens | Allowed in recovery mode |
+| --- | --- | --- |
+| *Repay* | Pays back part of the loan from this wallet's MUSD | Yes |
+| *Borrow* | Borrows more MUSD on the same loan | No |
+| *Add BTC* | Locks more BTC, raising the ratio | Yes |
+| *Take out* | Unlocks some BTC, lowering the ratio | No |
+| *Close* | Pays everything back and unlocks all BTC | No |
+
+Recovery mode is when Mezo's whole system is under 150%. Mezo then only accepts changes that make loans safer, so
+the app shows a notice and disables the other tabs' buttons.
+
+## The limits, in plain words
+
+- **You can't repay down to zero and keep the loan open.** Mezo keeps every open loan at or above its minimum size.
+  To pay off the rest, close the loan.
+- **Closing needs less MUSD than *You owe*,** because Mezo's 200 MUSD deposit is burned back instead of being paid
+  by you.
+- **Borrowing more is capped** by the limit Mezo set when the loan opened, and the loan must stay at 110% or more.
+- **Taking BTC out** must keep your loan at 110% or more and the whole system at 150% or more.
+
+## A worked example
+
+A loan that owes 2,202 MUSD (2,000 received, 2 fee, 200 deposit), with Mezo testnet's minimum net debt of 1,800 MUSD
+on 2026-11-06 and no interest accrued yet:
+
+| | |
+| --- | --- |
+| Most you can repay and keep the loan open | 2,202 − 200 − 1,800 = **202 MUSD** |
+| MUSD needed to close | 2,202 − 200 = **2,002 MUSD** |
+
+So with 500 MUSD of winnings you could repay 202 MUSD now, or wait until you have 2,002 MUSD and close. Interest
+accrues on top over time; *You owe* always includes it.
+
+## How it works exactly
+
+All five tabs send one transaction from your wallet to Mezo's `BorrowerOperations`. Before the wallet prompt the app
+re-reads the price, parameters and your loan at the latest block, re-runs the check, finds sorted-list hints and
+estimates gas (see [Borrowing](/docs/mezo/borrowing#right-before-the-wallet-prompt)). Your debt is read with
+`TroveManager.getEntireDebtAndColl(you)`, adding principal, interest and any pending redistribution.
+
+### Repay: `repayMUSD(amount, upperHint, lowerHint)`
+
+```
+maxRepay = debt − MUSD_GAS_COMPENSATION − minNetDebt
+```
+
+- Mezo requires `debt − gasCompensation − amount ≥ minNetDebt`, and the amount can never exceed
+  `debt − gasCompensation`. The app enforces the first, which is the tighter one.
+- Mezo checks your MUSD balance and burns the repaid MUSD from the caller (your wallet). Interest is paid first, then
+  principal.
+- If your loan is already at the minimum size, *maxRepay* is zero and the tab tells you to close instead.
+- *Max* fills the smaller of *maxRepay* and your MUSD balance.
+
+### Borrow more: `withdrawMUSD(amount, upperHint, lowerHint)`
+
+- A fee of `amount × borrowingRate` is added to the debt (none in recovery mode, but the app blocks this tab there).
+- New total debt must stay at or below `getTroveMaxBorrowingCapacity(you)`, fixed when the loan opened as the debt
+  that would put it at 110% at the opening price.
+- The new ratio must be at least `MCR` (110%), and Mezo also requires the system ratio to stay at or above `CCR`.
+- In recovery mode Mezo only allows a debt increase together with added BTC that leaves the loan at 150% or more and
+  higher than before. Borrowing alone always lowers the ratio, so it is blocked.
+- The quick fill *Up to 200%* borrows only as much as keeps the loan at 200%.
+
+### Add BTC: `addColl(upperHint, lowerHint)` payable
+
+BTC goes in as `msg.value`. Always allowed: it can only raise the ratio. The app keeps 0.001 BTC back for gas when
+you tap *Max*.
+
+### Take out BTC: `withdrawColl(amount, upperHint, lowerHint)`
+
+- Blocked in recovery mode (Mezo: `Collateral withdrawal not permitted Recovery Mode`).
+- The loan's new ratio must be at least 110%.
+- The system ratio after the withdrawal must stay at or above 150%:
+  `(systemColl − amount) × price / systemDebt ≥ CCR`. The app reads `getEntireSystemColl` and
+  `getEntireSystemDebt` at the same block as the price to check this.
+- Withdrawing all the BTC isn't possible; close the loan instead.
+- The quick fill *Keep 200%* takes out as much as leaves the loan at 200%.
+
+### Close: `closeTrove()`
+
+```
+closeCost = debt − MUSD_GAS_COMPENSATION
+```
+
+- Your wallet must hold at least `closeCost` MUSD. Mezo burns that from your wallet and burns the 200 MUSD deposit
+  from its gas pool.
+- Blocked in recovery mode.
+- Mezo also rejects a close that would take the system ratio under 150%. The app checks
+  `(systemColl − yourColl) × price / (systemDebt − yourDebt) ≥ CCR` first.
+- All your BTC returns to your wallet in the same transaction. The button reads *Repay … MUSD and close*.
+
+### Price moves between seeing and signing
+
+For *Borrow* and *Take out*, the app passes the ratio you saw minus 2% (relative) as a floor. If the fresh read at
+signing time puts the loan below it, the app stops with "The BTC price moved and this loan's ratio dropped" instead
+of sending.
+
+## Next
+
+<Cards>
+  <Card title="Bet from your loan" href="/docs/mezo/bet-from-your-loan" description="Use the loan from the trade ticket and repay it from winnings." />
+  <Card title="Borrowing" href="/docs/mezo/borrowing" description="Opening a loan: fees, hints, recovery mode and redemptions." />
+</Cards>

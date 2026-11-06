@@ -1,0 +1,119 @@
+---
+title: Architecture
+description: The parts of MEZONK, what each one is allowed to decide, and why the chain is the only authority over money.
+icon: Network
+---
+
+MEZONK is four Solidity contracts on Mezo, a Next.js app with a read-only API, an indexer that copies contract events
+into Postgres, and an optional keeper bot. The rule that shapes everything: **the chain is authoritative and the
+database is a copy.** Anything that decides who owns what, or whether money can move, is read from the contracts. The
+server helps you find markets, build orders and read history, and could vanish without anyone losing access to funds.
+
+## The whole system
+
+Look at which arrows carry signatures. Only your wallet (and the keeper, for its own orders and price settlement)
+sends transactions. The server only reads the chain and stores signed orders that it can't change.
+
+<SystemDiagram />
+
+## The contracts
+
+The exchange deploys the other three in its constructor, so their addresses are fixed and the exchange will only
+accept new markets from its own factory and outcomes from its own resolution contract.
+
+<ContractMap />
+
+| Contract | Holds | Decides |
+| --- | --- | --- |
+| `MezonkExchange` | All trading collateral, escrow for resting buy orders, accrued protocol fees | Shares, orders, fills, graduation, payouts |
+| `MezonkMarketFactory` | Nothing | Creator, curator and resolver lists; checks curator approvals; config for new markets |
+| `MezonkResolution` | Proposal and dispute bonds | Proposals, disputes, arbitration, timeouts; calls `exchange.settle` once per market |
+| `MezonkIncentives` | Rebate and referral reserves, funded only from taker fees | Seeder rebates and referral credit |
+| `MezonkPriceResolver` (not deployed yet) | MUSD for its own proposer bonds | Settles BTC price markets from Mezo's PriceFeed |
+
+Full function and event lists: [Contracts](/docs/developers/contracts).
+
+## Boundaries
+
+### Contracts: custody and every money rule
+
+Pricing, matching, escrow, graduation, resolution and payouts all happen in the contracts. They are not upgradeable;
+an interface change means a new deployment. The owner has no function that moves collateral, escrow, reserves or
+bonds, or that changes an outcome. See [Trust model](/docs/security/trust-model).
+
+### Order flow: signed orders, taker-settled
+
+There are two kinds of maker order, both in one book priced in Yes cents:
+
+- **Resting orders** are escrowed on-chain with `placeOrder`. Seed orders during seeding are always this kind.
+- **Signed orders** are EIP-712 messages that stay in the maker's wallet until filled. The API stores them after the
+  same checks the contract would make (signature, lot size, funding, no crossing).
+
+A taker asks the API for a quote. The quote returns the exact maker orders to hit, and the taker's wallet sends
+`take(params, sources)`. The contract re-checks everything: signatures, expiry, nonces, cancellations, the maker's
+current balance and allowance, the taker's limit price and minimum fill. Unfunded or stale makers are skipped, never
+forced. The server never signs, holds keys or matches two makers against each other. A wrong or stale quote can only
+fill less, never at a worse price than the taker's limit.
+
+### Indexer: a copy, rebuilt from events
+
+The indexer reads logs from the four contracts into a `chain_events` table (unique on chain, transaction and log
+index), then rebuilds each touched market's tables with a pure replay function. It checks block hashes for reorgs and
+compares its results with contract reads every five minutes. See [Indexer](/docs/developers/indexer).
+
+### API: reads, plus writes that never touch funds
+
+Route handlers under `apps/web/src/app/api` serve indexed data and live contract reads. The only writes are signed
+orders (which the contract re-verifies), evidence documents (checked against on-chain hashes), the market suggestion
+and review workflow, profiles, comments and media. Inputs are validated with zod; errors are always
+`{ "error": { "code", "message" } }`. See [Public API](/docs/developers/public-api).
+
+### Governance: the server stores, the chain enforces
+
+Anyone can suggest a market. A curator reviews it and signs an EIP-712 `MarketApproval` in their own wallet over a
+payload the server builds deterministically (metadata hash, creator, resolver, close time, policy, deadline, nonce).
+An approved creator then calls `factory.createMarket`, which verifies the signature and the binding on-chain. The
+server holds no curator key, so a compromised server can't publish a market nobody approved. Creator and curator roles
+are read from the factory, never from the database.
+
+### Client: live reads for anything financial
+
+Stage, balances, claimable amounts, loan state and quotes are read from the contracts in the browser. Indexed data is
+used for lists, charts, history and cost basis. Lifecycle decisions use chain time (the latest block's timestamp),
+never the computer's clock.
+
+### Mezo
+
+MUSD is the only collateral. Borrowing calls Mezo's BorrowerOperations from the user's wallet, and BTC price markets
+will read Mezo's PriceFeed. See [Built on Mezo](/docs/mezo/overview).
+
+## If a part fails
+
+| Part down or wrong | Effect | What still works |
+| --- | --- | --- |
+| Website or API | Can't browse or quote through MEZONK | Every contract function from any wallet or `cast`: cancel, merge, redeem, finalize, claim |
+| Indexer lagging | Lists and history go stale; the UI shows a stale-data notice | Money views, which read the chain live |
+| Database wrong | Wrong history or labels | Nothing financial depends on it |
+| Keeper bot down | Order books thin out; BTC price markets miss their window | Manual proposal path; normal resolution |
+| Mezo testnet's lagging RPC node | Reads look old or fail | The app's RPC client skips lagging answers (`laggingNodeFetch`) |
+
+## Key modules
+
+| Path | Role |
+| --- | --- |
+| `lib/chain/config.ts` | Networks, MUSD addresses, deployment, derived contract addresses, readiness |
+| `lib/orderbook/math.ts` | bigint money math: whole-cent prices, 0.01-share lots |
+| `lib/mezo/borrow.ts` | Mezo loan reads, checks that mirror BorrowerOperations, hints, transaction prep |
+| `lib/market/permissions.ts` | Which UI actions a wallet may take |
+| `lib/auth/capabilities.ts` | Backend capabilities for profiles, comments, media, admin |
+| `server/orderbook.ts` | Signed-order intake, book, quotes, seeding status |
+| `server/indexer/indexer.ts`, `replay.ts` | Log ingestion, reorgs, reconcile; pure per-market replay |
+| `server/governance.ts` | Suggestion and review workflow, approval payloads |
+
+## Next
+
+<Cards>
+  <Card title="Contracts" href="/docs/developers/contracts" description="Addresses, functions, events and deployment facts." />
+  <Card title="Indexer" href="/docs/developers/indexer" description="How events become the API's tables." />
+  <Card title="Trust model" href="/docs/security/trust-model" description="Who can do what, and what nobody can do." />
+</Cards>

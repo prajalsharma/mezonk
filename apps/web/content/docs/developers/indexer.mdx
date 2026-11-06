@@ -1,0 +1,94 @@
+---
+title: Indexer
+description: How contract events become the tables behind the API, how reorgs and RPC limits are handled, and how the copy is checked against the chain.
+icon: Database
+---
+
+The indexer turns MEZONK's contract events into tables the API can search and page through: markets, fills, resting
+orders, positions, proposals and disputes. It never decides anything. If it falls behind or gets something wrong,
+lists and history are affected, but balances, stages and claims in the app are read from the contracts directly.
+
+## The pipeline
+
+Read the diagram left to right: raw logs in fixed-size chunks, stored once each, replayed per market into read
+tables, served by the API. The loop at the bottom is the reorg rewind; the side check is reconciliation.
+
+<IndexerPipeline />
+
+## How it works exactly
+
+### One pass (`runTick`)
+
+Code: `apps/web/src/server/indexer/indexer.ts`. Passes are single-flight: concurrent callers share one run.
+
+1. **Reorg check.** Compare the stored hash of the last indexed block with the chain's current hash for that
+   block. If it changed or the block is gone, delete every stored event from 64 blocks back, mark the affected
+   markets for rebuild, move the cursor back and count `reorgsHandled`.
+2. **Fetch logs.** From the cursor to `head − confirmations` (default 2), at most `INDEXER_MAX_BLOCKS_PER_TICK`
+   (default 50,000) blocks per pass, in chunks of 9,999 blocks. Mezo's public RPC rejects `eth_getLogs` ranges of
+   10,000 blocks or more. Logs come from four addresses: the exchange and the three contracts at its nonces 1 to 3.
+3. **Store.** Decode with the combined ABI, attach block time and hash, and insert into `chain_events`, unique on
+   (chain id, transaction hash, log index). Re-inserting the same log does nothing, so a pass can safely repeat.
+   The cursor and that chunk's last block hash are saved after every chunk.
+4. **Rebuild.** For every market touched, replay all of its events (below) inside one database transaction. If any
+   deployment-wide event arrived (`PolicyAdded`, `PolicyActiveSet`, `ReferrerSet`, `ReferralClaimed`,
+   `SignedOrderCancelled`, `MinNonceRaised`), rebuild policies, the referral ledger and signed-order cancellations.
+5. **Housekeeping.** Mark expired signed orders, assign URL slugs to new markets.
+6. **Reconcile** if the last reconcile was more than five minutes ago.
+
+A failed pass records `lastError` and leaves the cursor where the last good chunk ended.
+
+### Pure replay
+
+`replay.ts` takes every stored event for one market in chain order and returns the market row, taker trades,
+maker-level fills, resting orders, positions with cost basis, proposals and disputes. It does no I/O, so it's
+unit-tested directly and re-running it always gives the same result. The rebuild deletes the market's derived rows
+and inserts the replay's output in one transaction. Parameters that events don't carry (windows, bonds, arbitrator,
+taker fee, seeder count) are read once per rebuild with `getMarket`, `getPolicy` and `graduationCheck`.
+
+All amounts are bigint and prices whole cents. A market's `priceYes` is the last real fill; it stays `null` until
+the first trade.
+
+### Reconcile
+
+For the 25 most recently updated markets, compare the indexed row with live reads:
+
+| Field | Indexed | Chain |
+| --- | --- | --- |
+| collateral | `markets.collateral` | `getMarket(id).collateral` |
+| graduated | `graduated_at` set | `graduatedAt > 0` |
+| finalized | `final_outcome` set | `finalized` |
+| best bid, best ask | `best_bid`, `best_ask` | `bestPrices(id)` |
+
+Mismatches are stored in `reconcileMismatches` and shown by `/api/indexer/status` and `/api/health`. A market page
+also has a refresh action (`POST /api/markets/{id}/refresh`, 6 a minute per IP) that rebuilds and reconciles that
+market.
+
+### Finality and reorgs on Mezo
+
+Mezo uses CometBFT, which finalizes blocks immediately, so reorgs aren't expected. The confirmations and the
+block-hash check are defence in depth, and an integration test exercises the rewind against a real EVM.
+
+### Testnet's lagging node
+
+Mezo testnet's public RPC load-balances over a node that can sit far behind the head. The app's RPC client
+(`lib/chain/laggingNodeFetch.ts`) retries answers that look stale: block numbers more than 50 behind the highest seen,
+"height in the future" errors, missing blocks. Scripts use `scripts/rpc-retry-proxy.mjs` with the same rules.
+
+### Running it
+
+| Where | How |
+| --- | --- |
+| Local | `INDEXER_MODE=embedded` runs it inside the Next.js server against PGlite (single process) |
+| Production, scheduled | `GET /api/cron/index` with `Authorization: Bearer $CRON_SECRET`; also sweeps stale signed orders and expired sessions |
+| Production, worker | `pnpm --filter web indexer` against Postgres (`DATABASE_URL`) |
+
+A full backfill clears the deployment's events and cursor; the next passes re-index from the deploy block
+(16298919 on testnet).
+
+## Next
+
+<Cards>
+  <Card title="Public API" href="/docs/developers/public-api" description="What the indexed tables are served as." />
+  <Card title="Run locally" href="/docs/developers/run-locally" description="Fork Mezo testnet and run the whole stack." />
+</Cards>

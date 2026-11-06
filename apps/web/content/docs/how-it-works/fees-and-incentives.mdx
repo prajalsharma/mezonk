@@ -1,0 +1,133 @@
+---
+title: Fees and incentives
+description: The one trading fee MEZONK charges, exactly where each part of it goes, and how seeder rebates and referral credit are earned, capped and claimed.
+icon: Receipt
+---
+
+MEZONK charges one fee: a small percentage paid by the **taker**, the side of a trade that fills against an order already on the book. Part of that fee goes back to the people who seeded the market, part to whoever referred the taker, and the rest to the protocol. Rewards are paid only out of fees that were actually collected, so there is no token, no emissions and no promised yield.
+
+## The plain version
+
+- **Takers pay a fee** on what they pay or receive. **Makers pay nothing.**
+- Everything else is free apart from Mezo's network fee (paid in BTC, and tiny): placing and cancelling orders, splitting and merging, claiming payouts, refunds and bonds.
+- For a while after a market launches, a share of each fee goes to that market's **seeders**.
+- If someone signed up through your **referral** link, a share of the fees they pay as a taker is credited to you.
+- Rewards come only from real fees. A market nobody trades earns nobody anything.
+
+These are the live values for new markets:
+
+<LiveParams />
+
+Each market keeps the fee and incentive settings of the policy it was published under. A new policy never changes an existing market.
+
+## The taker fee
+
+```text
+fee = taker's notional × takerFeeBps / 10,000
+notional = shares × the taker's price
+```
+
+- Buying: you pay notional + fee.
+- Selling: you receive notional − fee.
+- When a fill mints or merges a pair, the taker's price is the complement of the maker's price, so the fee is always on what you actually pay or receive. See [the order book](/docs/how-it-works/order-book).
+- The contract caps any policy's fee at 5% (`MAX_FEE_BPS = 500`). Today's testnet policies charge 1%.
+
+**Example at 1%:** you buy 400 Yes at 50¢. Notional 200.00 MUSD, fee 2.00 MUSD, total 202.00 MUSD. Later you sell the 400 Yes at 62¢: notional 248.00, fee 2.48, you receive 245.52.
+
+Because prices are whole cents and sizes are multiples of 0.01 share, every fee is an exact amount. Nothing rounds.
+
+## Where the fee goes
+
+On every trade, the exchange splits the fee in the same transaction:
+
+```text
+fee ─┬─ seeder rebates  = fee × rebateShareBps        only during the rebate period, within caps
+     ├─ referral credit = fee × referralShareBps      only if the taker has a referrer who isn't the maker, within caps
+     └─ protocol        = whatever is left
+```
+
+The rebate and referral parts move to the `MezonkIncentives` contract right away. The protocol part stays in the exchange as accrued protocol fees.
+
+**Worked split, today's testnet settings** (1% fee, 20% to seeders, 10% to referrers): the 2.00 MUSD fee from the example above, paid in a market's first 30 days by a taker who has a referrer:
+
+| Part | Share | Amount |
+|---|---|---|
+| Seeder rebates | 20% | 0.40 MUSD |
+| Referral credit | 10% | 0.20 MUSD |
+| Protocol | the rest | 1.40 MUSD |
+
+After the rebate period, or once a cap is reached, the seeder part is 0 and the protocol keeps it. Without a referrer (or if the referrer was the maker of that fill), the referral part stays with the protocol too.
+
+## Seeder rebates
+
+Seeders lock their own MUSD to give a market its first prices (see [Seeding and launch](/docs/how-it-works/seeding-and-launch)). Rebates are a share of the fees that liquidity made possible.
+
+### Who earns, and how much
+
+On the live contract:
+
+- **Weight.** Each seeder's weight is the MUSD they had locked in seed orders that were still open when the market launched. It's fixed at launch. Fills and cancellations after launch don't reduce it, and orders placed after launch don't count.
+- **Entitlement.** `rebates accrued in this market × your weight ÷ total weight`, rounded down, then capped at the per-wallet limit.
+- **Accrual period.** Rebates accrue from launch for the policy's rebate period (30 days on testnet today).
+- **Claiming.** You can claim what you're owed at any time, as often as you like, in Portfolio under *Seeder rebates* (the button shows *Claim* and the amount, or *Nothing yet*). You can never claim the same amount twice.
+- **Deadline.** Claims stay open until the end of the rebate period plus the claim window (90 days on testnet today, so 120 days after launch in total). After that, anyone can sweep the unclaimed remainder, including anything above per-wallet caps, back to protocol fees.
+
+**Worked example.** Two seeders launch a market: A with 45 MUSD locked, B with 45 MUSD. Total weight 90. Over the first 30 days, traders pay fees and 3.00 MUSD accrues for seeders. Each is entitled to 3.00 × 45 ÷ 90 = **1.50 MUSD**.
+
+Claiming early is fine: if A claims on day 10, when 2.00 MUSD has accrued, A gets 1.00. When the period ends at 3.00 accrued, A can claim the remaining 0.50.
+
+<Callout type="warn" title="Next deployment">
+Merged on GitHub and tested, but not yet on chain (commit c8fbaff, from KupiaSec's report): rebate weight will count only seed escrow priced inside the band the launch check used. Continue the example: a third seeder C also placed *buy 4,500 Yes at 1¢*, locking 45 MUSD that will almost certainly never be filled. On the live contract C's weight is 45, the total becomes 135, and A, B and C each get a third. After the change, the counted band is 40¢ to 45¢ on the bid side, C's 1¢ order counts for nothing, and A and B keep half each. Markets on the live contract keep the current rule.
+</Callout>
+
+### Caps
+
+| Cap | What it limits | Testnet today |
+|---|---|---|
+| Per wallet | The most one seeder can claim from one market | 1,000 MUSD |
+| Per market | The most one market can accrue for seeders | 5,000 MUSD |
+| Policy budget | The most all markets on one policy can accrue together, ever | 50,000 MUSD |
+
+When a cap is hit, the excess simply stays with the protocol. Nothing is recorded as owed, so there is never an unfunded promise.
+
+## Referrals
+
+- **Set once.** Open someone's referral link, then in Portfolio a notice reads *You arrived through a referral link*; press *Set as referrer*. It costs you nothing extra. It's an on-chain transaction (`setReferrer`), and you can only do it once, before your first trade as a taker. It can't be changed later.
+- **No loops.** You can't name yourself, and you can't name someone who already named you. Only one level: a referrer's own referrer earns nothing from you.
+- **What it pays.** The policy's referral share of the fee you pay as a taker (10% on testnet today), but only on fills where your referrer wasn't the maker. A referrer trading against their own referral earns nothing from it.
+- **Cap.** Each referrer can earn at most the per-market referral cap from any one market (500 MUSD on testnet today).
+- **Claim.** In Portfolio, under Referrals, press *Claim* (the button shows the amount). Credit doesn't expire.
+- Your own link is under *Copy referral link*.
+
+Referral credit is based only on settled fills and fees actually paid: never on deposits, unfilled orders or raw volume.
+
+## Why wash trading always loses
+
+Wash trading means trading with yourself to farm rewards. The contract makes it unprofitable by construction: a policy can't send more than **80%** of the fee to rebates and referrals combined (`MAX_INCENTIVE_SHARE_BPS = 8000`), enforced when the policy is added. Trading with yourself from one wallet reverts outright.
+
+Example at today's settings: you trade 1,000 MUSD of notional between two wallets you control. The taker pays a 10 MUSD fee. At most 2 MUSD (20%) goes to seeders, of which you'd only get your share of the weight, and at most 1 MUSD (10%) to a referrer, even if that referrer is a third wallet of yours. You lose at least 7 MUSD every time.
+
+## The protocol's share
+
+The protocol part of each fee, plus any swept rebates, accrues in the exchange. The exchange owner can withdraw that amount, and only that amount (`withdrawProtocolFees`). The function can't touch collateral, escrowed orders, rebate or referral reserves, or bonds.
+
+## How it works exactly
+
+- `MezonkExchange._accrueFee` asks `MezonkIncentives.accrue` how much of the fee goes to rebates and referrals, checks that the total isn't more than the fee, adds the rest to `protocolFees`, and transfers exactly the incentive part to the incentives contract.
+- `accrue` applies, in order: the rebate period, then `min(fee × rebateShareBps, per-market cap left, policy budget left)`; then for referrals `min(referralFee × referralShareBps, per-referrer-per-market cap left)`, where `referralFee` is the part of the fee from fills whose maker isn't the referrer.
+- `MezonkIncentives` holds only this money and tracks `rebateReserve` and `referralReserve`. Its MUSD balance equals the two reserves (an asserted invariant), so a rebate can never be paid out of user funds.
+- `rebateClaimable(marketId, seeder)` is a public view that returns exactly what a rebate claim would pay now.
+
+## Honest limits
+
+- Rebates reward liquidity present at launch, not liquidity kept up afterwards. A seeder can cancel after the post-launch lock and keep their weight. A time-weighted design would need per-block accounting, which was deliberately avoided.
+- Referral attribution is per wallet. Someone can always make a new wallet before trading; caps bound what that can cost.
+- Rebates are small by design and depend entirely on volume. The app never shows a projected yield.
+
+## Next
+
+<Cards>
+  <Card title="Seeding and launch" href="/docs/how-it-works/seeding-and-launch" description="How seed weight is created." />
+  <Card title="The order book" href="/docs/how-it-works/order-book" description="Who is the taker in a trade, and what price the fee is on." />
+  <Card title="A market's lifecycle" href="/docs/how-it-works/lifecycle" description="When rebates start and stop in a market's life." />
+</Cards>

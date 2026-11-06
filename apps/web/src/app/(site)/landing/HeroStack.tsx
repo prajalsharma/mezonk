@@ -3,7 +3,7 @@
 import { Check, Lock } from "lucide-react";
 import Link from "next/link";
 import { useRef, type CSSProperties } from "react";
-import { HeroTicket } from "@/app/HomeLive";
+import { HeroTicket } from "@/app/(site)/HomeLive";
 import { useMarkets } from "@/hooks/useMarkets";
 import { deployment } from "@/lib/chain/config";
 

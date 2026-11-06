@@ -1,0 +1,69 @@
+---
+title: Overview
+description: MEZONK is a prediction market on Mezo. You back Yes or No on questions with clear rules, and winners are paid in MUSD from money locked the moment their shares were made. These docs explain each part plainly first, then exactly.
+icon: House
+---
+
+<DocsRoutes />
+
+## What MEZONK is
+
+A prediction market lets people trade on the answer to a question, such as *"Will BTC close above $100,000 on Friday?"*
+Every question has two kinds of share: **Yes** and **No**. When the answer is known, each winning share is worth
+exactly **1 MUSD** and each losing share is worth nothing. Before that, shares trade between people, and the price of
+Yes is the crowd's estimate of the chance that the answer is yes.
+
+MEZONK runs that on [Mezo](https://mezo.org), the bitcoin finance network. Everything is priced and paid in
+**MUSD**, Mezo's bitcoin-backed dollar. If you hold BTC rather than MUSD, you can borrow MUSD against it inside the
+app, trade with it, and pay the loan back from your winnings. Your bitcoin is never sold.
+
+## The idea in one picture
+
+The whole design rests on one rule: a Yes share and a No share are always created together, from exactly 1 MUSD that
+stays locked in the contract until the market ends. Look at where the MUSD sits at each step.
+
+<MoneyFlow />
+
+Because of that rule:
+
+- **Winners are always paid in full.** The money for every winning share was locked before the share existed.
+- **MEZONK never bets against you.** You trade with other people. The contract only holds the money and pays it out.
+- **Nobody can move your MUSD.** The contracts have no upgrade mechanism and no function that lets anyone, including
+  the owner, take collateral. See [Trust model](/docs/security/trust-model).
+
+## How the pieces fit
+
+Your wallet talks straight to the contracts on Mezo. The website and its server help you find markets, build orders
+and read history, but they never hold money and never decide anything. If they went offline, you could still claim
+from the contract directly.
+
+<SystemDiagram />
+
+## What's live today
+
+<Callout title="Testnet only, test money only">
+  MEZONK runs on **Mezo testnet** (chain 31611). Test BTC and test MUSD have no cash value, so this is the place to
+  learn the product without risk. There is no mainnet deployment yet.
+</Callout>
+
+| Part | Status |
+| --- | --- |
+| Order book, seeding and launch, trading, claims | Live on Mezo testnet |
+| Resolution with bonds, challenges and an arbitrator | Live on Mezo testnet |
+| Borrowing MUSD against BTC inside the app, managing the loan | Live in the app (uses Mezo's own contracts) |
+| Bet from your loan, repay from winnings | Live in the app |
+| BTC price markets settled by Mezo's PriceFeed | Built and tested, not deployed yet |
+| Resolution and rebate fixes from the KupiaSec report | Built and tested, not deployed yet |
+| Independent security audit | Not done |
+
+The [contract addresses](/docs/developers/contracts) are read from the app's configuration, so the docs always show
+what the site is actually using.
+
+## Where to start
+
+<Cards>
+  <Card title="Quick start" href="/docs/get-started/quick-start" description="Wallet, test BTC, MUSD and your first trade, in about five minutes." />
+  <Card title="Shares and payouts" href="/docs/how-it-works/shares-and-payouts" description="Why a share pays 1 MUSD, and where that money sits until then." />
+  <Card title="Built on Mezo" href="/docs/mezo/overview" description="Every place MEZONK uses Mezo: MUSD, borrowing and the price feed." />
+  <Card title="Architecture" href="/docs/developers/architecture" description="Contracts, server, indexer and API, and which one is in charge of what." />
+</Cards>

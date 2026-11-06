@@ -1,0 +1,109 @@
+---
+title: Solvency
+description: Why every winning share can always be paid, which invariants guarantee it, how they're tested, and how to check the live contracts yourself.
+icon: Scale
+---
+
+Solvency means the contracts can always pay what they owe. MEZONK gets there with one rule: a Yes share and a No
+share are only ever created together, from exactly 1 MUSD that the exchange keeps until the market ends. Whichever
+side wins, there is exactly 1 MUSD behind each winning share (or 0.5 MUSD behind every share if the market is
+Invalid). There is no house position, no loan to the protocol and no reward paid from anything but fees.
+
+## The invariants
+
+| # | Invariant | Why it holds |
+| --- | --- | --- |
+| 1 | Before a market is final, its Yes supply = its No supply = its collateral | Shares are minted only by `split` or by a fill that pairs two opposite buyers whose prices add to 100¢; burned only by `merge`, a pairing fill, or `redeem` |
+| 2 | After it's final, its collateral = what the remaining shares redeem for | `redeem` pays exactly 1, 0 or 0.5 per share and subtracts that from the market's collateral |
+| 3 | Exchange balance = `totalCollateral + escrowedCollateral + protocolFees` | Every transfer in or out updates exactly one bucket |
+| 4 | Escrow = the sum of open resting buy orders' `remaining × price / 100` | Placing, filling and cancelling each move escrow by the exact cost |
+| 5 | Incentives balance = `rebateReserve + referralReserve` | Rewards are funded only by the fee share the exchange sends inside `take` |
+| 6 | Rebates claimed ≤ rebates accrued, per market | Pro-rata entitlement capped by what accrued, then per wallet |
+| 7 | Resolution balance = `lockedBonds + bondCreditsTotal` (next deployment: `+ slashedBonds`) | Bonds are pulled, credited and withdrawn through one ledger |
+| 8 | Nothing rounds | Prices are whole cents and quantities multiples of 0.01 share, so `q × p / 100` is exact |
+
+Fees are never part of collateral, refundable seed escrow is never revenue, and rebate and referral payouts can never
+exceed what fees funded (rebate plus referral shares are capped at 80% of the fee).
+
+## How they're tested
+
+In `contracts/test/exchange/ExchangeInvariants.t.sol`:
+
+- **Stateful invariant tests** (`ExchangeInvariantTest`): `invariant_bucketsEqualBalance`,
+  `invariant_sharesFullyBacked`, `invariant_escrowMatchesOpenOrders` and `invariant_rebatesWithinAccrued` run after
+  every call of a handler that places, cancels, takes resting and signed orders, splits, merges, transfers, graduates,
+  warps time, resolves, redeems and claims rebates. The file configures 64 runs at depth 200; the `ci` profile in
+  `foundry.toml` raises the default to 256 runs at depth 128.
+- **Random walks** (`ExchangeRandomWalkTest.testFuzz_randomWalk`): 300 seeded random actions per run with every
+  invariant checked every 25 steps and at the end, and assertions that the walk actually reached resting fills,
+  signed fills, placements and splits or merges. 40 runs by default, 200 under `ci`.
+- **Value conservation** (`testFuzz_fillConservesValue`): for any price and size, the two sides of a pairing fill add
+  up to exactly one set, and the fee is exact.
+- **Fork tests** (`contracts/test/fork/`) run a full lifecycle against the real testnet MUSD contract.
+
+Run them with `cd contracts && forge test`, or at CI depth with
+`FOUNDRY_PROFILE=ci forge test --match-contract "ExchangeRandomWalkTest|ExchangeInvariantTest"`.
+
+## Check the live contracts yourself
+
+You need [Foundry's `cast`](https://book.getfoundry.sh). These are read-only calls against Mezo testnet.
+
+```bash
+RPC=https://rpc.test.mezo.org
+MUSD=0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503
+EX=0x4555cfF10200e1007435Cffc683C60683c5C49B9
+RES=0x6Da57dDd874f02E3ad704F75aCC86D0319d3b944
+INC=0xF1a014E4E291EB2690777104D65990efAFC3f06B
+```
+
+### Exchange: balance equals its three buckets
+
+```bash
+cast call $MUSD "balanceOf(address)(uint256)" $EX --rpc-url $RPC
+cast call $EX "totalCollateral()(uint256)"    --rpc-url $RPC
+cast call $EX "escrowedCollateral()(uint256)" --rpc-url $RPC
+cast call $EX "protocolFees()(uint256)"       --rpc-url $RPC
+```
+
+The first number should equal the sum of the other three. It can only be larger if someone sent MUSD to the exchange
+directly, which nothing in MEZONK does. Read all four at the same block (add `--block <n>`) if trades are happening.
+
+### Incentives and resolution
+
+```bash
+cast call $MUSD "balanceOf(address)(uint256)" $INC --rpc-url $RPC
+cast call $INC "rebateReserve()(uint256)"   --rpc-url $RPC
+cast call $INC "referralReserve()(uint256)" --rpc-url $RPC
+
+cast call $MUSD "balanceOf(address)(uint256)" $RES --rpc-url $RPC
+cast call $RES "lockedBonds()(uint256)"      --rpc-url $RPC
+cast call $RES "bondCreditsTotal()(uint256)" --rpc-url $RPC
+```
+
+### One market
+
+```bash
+cast call $EX "marketCount()(uint256)" --rpc-url $RPC
+cast call $EX "stageOf(uint256)(uint8)" 1 --rpc-url $RPC      # 0 seeding, 1 live, 2 failed, 3 closed, 4 final
+cast call $EX "sharesOf(uint256,uint8,address)(uint256)" 1 0 <wallet> --rpc-url $RPC   # Yes shares
+cast call $EX "sharesOf(uint256,uint8,address)(uint256)" 1 1 <wallet> --rpc-url $RPC   # No shares
+```
+
+`getMarket(id)` returns the whole market struct, including `collateral`. The sum of every market's collateral is
+`totalCollateral`. Total share supply isn't stored on-chain (shares are a mapping), so checking invariant 1 for a
+market means summing `Split`, `Fill`, `Merged`, `Redeemed` and `OrderPlaced`/`OrderCancelled` sell escrow from its
+events; the indexer does exactly this and reconciles collateral against `getMarket` every five minutes.
+
+## What solvency doesn't cover
+
+Solvency says the money is there; it doesn't say the result is right. A wrong final outcome pays the wrong side in
+full. That risk sits with resolution and the arbitrator: see [Trust model](/docs/security/trust-model) and
+[Risks](/docs/security/risks). It also assumes MUSD behaves like a standard ERC-20, which MEZONK checks on every
+transfer in.
+
+## Next
+
+<Cards>
+  <Card title="Trust model" href="/docs/security/trust-model" description="Who can do what with the contracts." />
+  <Card title="Audits" href="/docs/security/audits" description="What has and hasn't been reviewed." />
+</Cards>

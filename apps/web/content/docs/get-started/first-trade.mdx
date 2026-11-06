@@ -1,0 +1,163 @@
+---
+title: Your first trade
+description: How to read a market, what every line of the trade ticket means, what your wallet asks you to sign, and what happens when there isn't enough on offer.
+icon: MousePointerClick
+---
+
+A trade on MEZONK is you buying shares from other people's orders. Each share of the side that wins pays exactly 1 MUSD. Each share of the losing side pays nothing. If the market is ruled Invalid, every share of either side pays 0.50 MUSD.
+
+You never trade against MEZONK. The exchange contract only matches you with other people and holds the MUSD that backs every share.
+
+## Read the price first
+
+A share costs between 1¢ and 99¢. The price is the crowd's estimate of the chance that side wins. If Yes trades at 62¢, the people trading think Yes is about 62% likely. It's an estimate, not a promise.
+
+On a market page the big number is the chance of Yes, and the line under it says where it came from:
+
+- *Chance of Yes from the last trade. A price, not a guarantee.* A real trade happened at that price.
+- A number with a **~** in front: *No trades yet, so this is an estimate: halfway between the best offers to buy and sell.*
+- *No trades yet* and no number: there are no offers on both sides, so there's no price. MEZONK never invents one.
+
+Below it are two buttons, *Buy Yes* and *Buy No*, each with the cheapest price you can buy at right now (or *no offers*). The two often add up to a little more than 100¢. The page explains why: *Yes and No add up to 103¢ because you buy from the cheapest seller on each side. The extra 3¢ is the spread between buyers and sellers.*
+
+## What you get for your money
+
+Every Yes/No pair is backed by exactly 1 MUSD held in the contract from the moment the pair exists. A Yes buyer at 60¢ and a No buyer at 40¢ can be matched together: they pay 1 MUSD between them, a new pair is created, and each gets their side. That's why winners are always paid from money that's already there.
+
+Try a price and a stake to see what you'd get back in each outcome:
+
+<PayoutDemo />
+
+## The trade ticket, line by line
+
+The ticket opens in its simple form, titled *Buy*. You choose a side and an amount of MUSD to spend.
+
+<Steps>
+<Step>
+### Choose Yes or No
+
+The two buttons at the top of the ticket show *from 62¢* (the cheapest offer) or *no sellers*. Pick the side you think will win.
+</Step>
+
+<Step>
+### Type an amount
+
+Enter MUSD in *Amount*. Tap *Balance …* to fill in your whole balance. The ticket works out how many shares that buys at the prices on offer, cheapest first, with the fee included.
+</Step>
+
+<Step>
+### Check the summary
+
+- *Shares you get*: how many shares this buys now.
+- *Average price*: what you pay per share on average. If your amount reaches past the cheapest offers, it adds *(up to 42¢)* to show the highest price you'd touch.
+- *You pay*: the total, fee included.
+- *Fee (1%, taker)*: the trading fee for this market.
+- *Pays if Yes wins*: what these shares pay if your side wins. One MUSD per share.
+- *Needs MUSD approval*: how much MUSD the exchange contract needs permission to take. A ✓ means you've already approved enough.
+</Step>
+
+<Step>
+### Approve, then buy
+
+If you haven't approved enough MUSD yet, the button says *Approve 40.40 MUSD*. Your wallet opens a token approval (often labelled "spending cap" or "allow"). It names the MEZONK exchange contract and exactly the amount of this trade, not an unlimited amount. Confirm it and wait for *Confirmed on-chain.*
+
+The button then changes to *Buy Yes* (or *Buy No*). Press it. The ticket shows *Checking the latest quote…* while it re-checks the book, then *Confirm in your wallet…*. Your wallet shows a contract call to the exchange with no BTC value attached; only the network fee is paid in BTC. Confirm it.
+
+You'll see *Submitted. Waiting for confirmation…* and then *Confirmed on-chain.* with a *View transaction* link to the Mezo explorer. A toast says *Buy Yes confirmed*. The trade only happens when the transaction confirms; until then nothing has changed.
+</Step>
+</Steps>
+
+Because the approval is for the exact amount, a later trade that costs more asks you to approve again. That's on purpose: the contract can never take more of your MUSD than the trade you're looking at.
+
+## Worked example
+
+Today's testnet settings (read 2026-11-06; each market keeps the fee it was published with, and the ticket always shows the real one): taker fee 1%.
+
+Yes is offered at 40¢, plenty of it. You type **40.40** in *Amount* and press *Buy Yes*:
+
+| Line | Value |
+| --- | --- |
+| Shares you get | 100 Yes |
+| Average price | 40.00¢ |
+| Fee (1%, taker) | 0.40 MUSD |
+| You pay | 40.40 MUSD |
+| Pays if Yes wins | 100 MUSD |
+
+If Yes wins you claim 100 MUSD: 59.60 MUSD profit. If No wins you get nothing and lose the 40.40. If the market is Invalid you get 50 MUSD.
+
+## When there isn't enough on offer
+
+Order books can be thin, especially on new markets. MEZONK never fills you at a made-up price, so you may get only part of what you asked for.
+
+Say the book offers 30 Yes at 40¢ and 50 Yes at 42¢, and nothing else. You type 40 MUSD:
+
+- The ticket buys the 30 at 40¢ (12.12 MUSD with fee), then the 50 at 42¢ (21.21 MUSD with fee).
+- *Shares you get*: 80 Yes. *Average price*: 41.25¢ (up to 42¢). *You pay*: 33.33 MUSD.
+- A warning appears: *That's more than is on offer. Only 80 Yes shares are offered right now. The rest of your amount stays in your wallet.*
+
+Nothing is lost. The 6.67 MUSD you didn't spend never leaves your wallet. If nobody is selling at all, the button says *No one is selling* and you can't submit.
+
+If someone else's trade takes the offers between your preview and your signature, the transaction may fill less or fail. The ticket re-checks the quote right before your wallet opens, but the book can still move in those seconds. If it fails, you see *Transaction failed.* with a reason and a *Try again* link.
+
+## Advanced: limit orders and selling
+
+Press *Advanced: sell, limit orders* at the top of the ticket. The title changes to *Trade*, and you get two more choices: *Buy* or *Sell*, and *Market* or *Limit*. You type *Shares* instead of an amount, and a price in cents. *Back to simple* returns to the simple ticket.
+
+**Market** fills now against the best offers, never past the price in *Worst*: *The most you'll pay (buy) or least you'll accept (sell) per share, in cents. Nothing fills beyond it.* It starts 3¢ from the best price. Whatever can't fill at that price is cancelled, and the summary shows *Remainder: … not filled, cancelled*. Tick *All or nothing* if you'd rather it fail than fill partly.
+
+**Limit** fills what it can now at your price or better, and the rest waits on the book under *If it doesn't all fill now*:
+
+- *Sign (no lock)*: *Free, no transaction. Your MUSD or shares stay in your wallet; if you move them, the order is skipped.* You choose when it expires: *1 day*, *7 days* or *30 days*.
+- *Escrow on-chain*: *One transaction. The MUSD or shares are locked in the contract until filled or you cancel, so the order is always executable.*
+
+A signed order is an off-chain signature your wallet shows as a typed-data message, not a transaction, so it costs nothing. If the whole order rests (nothing fills now), the button says *Place order*. Afterwards the ticket tells you *… is on the book … It has not traded yet.* Your waiting orders are listed under *Your open orders* on the market page, An escrowed order has a *Cancel* button that returns the locked MUSD or shares. A signed order has two: *Remove* takes it off this book for free, but the signature stays valid until it expires; *Cancel on-chain* is a transaction that makes it permanently unusable.
+
+Selling works the same way from *Sell*; see [Sell and claim](/docs/get-started/sell-and-claim).
+
+## Fees
+
+Only the **taker** pays the trading fee: the order that fills immediately against one already on the book. An order that waits on the book and gets filled later (the maker) pays nothing. When you buy, the fee is added to what you pay; when you sell, it comes off what you receive. Claiming payouts and refunds is free apart from the network fee.
+
+Live values for new markets, read from the contracts:
+
+<LiveParams />
+
+## Short on MUSD? Borrow the difference from the ticket
+
+If the trade costs more MUSD than you have, the button says *Not enough MUSD* and a box appears under the ticket.
+
+**If you don't have a Mezo loan yet**, it says *You're … MUSD short. Borrow it against your BTC.* with how much BTC a loan of that size would lock at a safe 200% ratio (Mezo's smallest loan is about 1,800 MUSD, so the box uses that if your shortfall is smaller). *Open a loan for this trade →* takes you to the Borrow page with the amount filled in. When the loan confirms, press *Back to your trade*.
+
+**If you already have a Mezo loan**, it says *You're … MUSD short. Borrow it from your Mezo loan?* and shows the change before you sign:
+
+- *Ratio*: now → after.
+- *Loan-to-value*: the share of your BTC's value that's borrowed, now → after.
+- *One-time fee*: Mezo's fee on the extra amount.
+
+Press *Borrow … MUSD*. That's one transaction to Mezo's contract, from your wallet. When it says *Borrowed. Your MUSD balance is updated; place the trade above.*, go back to the ticket and buy. If the extra borrowing would leave the loan under 150%, the box warns *That leaves little room before liquidation. Consider adding BTC first.* If Mezo won't allow it (borrowing limit, recovery mode, under 110%), it says why and links to *Manage your loan*.
+
+<Callout type="warn" title="Borrowing to bet is leverage">
+If you borrow to trade and the trade loses, you still owe the loan, and your BTC is still at risk if its price falls. Only borrow what you'd be fine owing. See [Get MUSD](/docs/get-started/get-musd).
+</Callout>
+
+## What can go wrong
+
+| What you see | What it means | What to do |
+| --- | --- | --- |
+| *Connect wallet* / *Switch to Mezo Testnet* in the button | Not connected, or wrong network | Connect, and approve the switch in your wallet |
+| *Enter an amount* | The amount box is empty or zero | Type an amount |
+| *Amount too small* | Your amount doesn't buy even 0.01 shares | Enter more |
+| *No one is selling* | No offers on that side | Wait, try the other side, or use a limit order |
+| *Getting a quote* | The ticket is pricing your order | Wait a moment |
+| *Not enough liquidity at this price* (Advanced) | Nothing is offered within your *Worst* price | Raise your limit, or place a limit order and wait |
+| *Can't fill all of it* (Advanced) | *All or nothing* is on and the book is too thin | Untick it, or trade fewer shares |
+| *Not enough MUSD* | Your balance is short | Lower the amount or use the borrow box |
+| *Trading paused* | The owner has paused new trading | Wait. Claims and refunds still work while paused |
+
+## Next
+
+<Cards>
+  <Card title="Sell and claim" href="/docs/get-started/sell-and-claim" description="Selling early, waiting for the result, and getting paid." />
+  <Card title="Shares and payouts" href="/docs/how-it-works/shares-and-payouts" description="Exactly how shares are created, matched and paid." />
+  <Card title="FAQ" href="/docs/faq" description="Common questions about money, trading and results." />
+</Cards>

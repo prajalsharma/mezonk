@@ -1,0 +1,102 @@
+---
+title: Roles
+description: Every role in MEZONK, how each is granted, exactly what it can and can't do, and the limits on the owner.
+icon: Users
+---
+
+A MEZONK market passes through several hands: someone suggests it, a curator approves it, a creator publishes it, seeders fund it, traders trade it, a resolver proposes the result and an arbitrator settles disputes. Most of these are open to anyone. A few are appointed, and their powers are deliberately narrow: nobody who can publish a market can also approve it, and nobody in the app decides outcomes.
+
+## The short version
+
+- **Open to anyone:** suggesting, seeding, trading, referring, challenging a proposed outcome, finalizing once a deadline passes, and claiming.
+- **Appointed on-chain by the owner:** curators (approve markets), approved creators (publish them), resolvers (propose outcomes). The arbitrator is set in the configuration copied into each new market.
+- **Appointed in MEZONK's database:** administrators, who run the website's moderation and send role changes to the owner for signing. They have no on-chain power.
+- **The owner** sets the rules for future markets and can pause new activity, but can't move your MUSD, change an outcome, or block anyone from getting their money out.
+
+## Every role
+
+| Role | How it's granted | Can | Can't |
+|---|---|---|---|
+| Visitor | Nobody: anyone with a browser | Read markets, rules, evidence, resolution history, suggestions and review decisions | Sign anything |
+| Member | Sign in with a wallet (one free signature) | Suggest markets, comment, upload images, edit a profile | Approve or publish anything |
+| Verified project representative | Claims a project; a curator verifies the public proof | Everything a member can, plus suggest markets about their own project with a visible disclosure | Approve their own market, decide an outcome. Verification is a label, not a protocol power |
+| Seeder | Places a seed order on a seeding market | Fund a market's first orders; share fee rebates after launch | Launch a market alone if the policy needs more seeders; cancel during the lock |
+| Trader | Anyone with MUSD | Buy, sell, place and cancel orders, split, merge, claim | Trade against their own order |
+| Referrer | Named by another wallet before its first trade | Earn a capped share of that wallet's taker fees | Earn on fills where they were the maker; earn from two levels down |
+| Curator | Owner calls `factory.setCurator(wallet, true)` | Review suggestions, sign approvals, void unused approvals, verify project representatives, moderate comments | Publish a market they approved (reverts on-chain); review their own suggestion (refused by the backend); edit a suggestion's content; touch outcomes |
+| Approved creator (publisher) | Owner calls `factory.setCreator(wallet, true)` | Publish a market with a valid, unused curator approval that names them | Publish anything unapproved; change approved rules; publish an approval they signed themselves |
+| Resolver | Owner calls `factory.setResolver(wallet, true)`; a curator assigns one per market | Propose the outcome after close, with evidence and a bond | Challenge proposals; change a proposal; finalize early |
+| Challenger | Anyone except the market's resolver and arbitrator | Challenge a proposal once, with a bond and evidence | Challenge after the window or a second time |
+| Arbitrator | Set in the factory configuration; copied into each market at publication | Rule Yes, No or Invalid on a challenged market before its deadline, with a published rationale | Act on an unchallenged market; act late; change a final outcome |
+| Finalizer | Anyone | Finalize once a deadline condition holds | Finalize early |
+| Administrator | Database role, granted by another administrator in the admin area | Moderate content, suspend accounts, verify projects, read the audit log, queue on-chain role and policy changes for the owner to sign | Grant on-chain roles themselves; review or publish markets; move funds; decide outcomes |
+| Owner | `Ownable2Step` owner of the exchange and the factory | Add or retire policies, set configuration for future markets, grant and revoke curators, creators and resolvers, pause and unpause, withdraw the protocol's fee share | See the next section |
+
+One wallet can hold several roles. The rules that stop conflicts are listed below.
+
+## What the owner can't do
+
+The exchange and the factory each have an owner (the deploy script hands both to the same address). The owner's powers are limited by the code, not by promise:
+
+- **Can't move user money.** Collateral backing shares, MUSD and shares locked in orders, rebate and referral reserves, and bonds are all out of reach. `withdrawProtocolFees` sends only the protocol's accrued fee share.
+- **Can't change an outcome.** Only `MezonkResolution` can settle a market, and the owner has no function there that picks an outcome.
+- **Can't change a published market.** Rules, policy, resolver, arbitrator, windows and bonds are fixed in each market at publication. New configuration and new policies apply to future markets only.
+- **Can't block exits.** Pause stops publishing, new orders, takes, splits and launches. It never stops cancelling orders, merging, refunds, resolution, claims or bond withdrawals.
+- **Can't upgrade the contracts.** There is no upgrade mechanism. A change means a new deployment, and existing markets keep settling on the old one.
+
+What the owner **can** do still matters, and you should know it:
+
+- Appoint the curators and creators, so publication is only as independent as the people the owner picks. An owner who controlled both a curator and a creator wallet could publish any market.
+- Choose the arbitrator for future markets, and the arbitrator decides every challenged market.
+- Pause the exchange. A long pause can make seeding markets fail (seeders are still refunded) and stops trading.
+
+On Mezo testnet today, the owner and the arbitrator are single-key wallets, not multisigs (checked on 6 November 2026). The intended setup before any mainnet use is a multisig for each, held by different people.
+
+## How on-chain roles are granted
+
+Creator, curator and resolver are lists in `MezonkMarketFactory`. The owner changes them with `setCreator`, `setCurator` and `setResolver`, and each change emits an event (`CreatorUpdated`, `CuratorUpdated`, `ResolverUpdated`).
+
+Administrators manage this from the admin area: they pick a wallet and press grant or revoke, which records an operation with the exact transaction data. The owner then signs it from their wallet, or proposes it from a Safe. The app shows it as confirmed only after it finds the successful transaction with the matching event and a fresh contract read shows the new value. There is no second, weaker list in the database for these roles: the chain is the only authority.
+
+Ownership itself moves with `Ownable2Step`: the current owner nominates a new one, who must call `acceptOwnership()` on each contract.
+
+## When a role changes
+
+Roles are checked at the moment they're used, and each market copies what it needs at publication. So:
+
+| Change | Effect on new markets | Effect on markets already published |
+|---|---|---|
+| Curator revoked | Can't approve | Their unused approvals stop working (checked at publication) |
+| Creator revoked | Can't publish | None: a creator has no powers after publishing |
+| Resolver revoked | Can't be assigned | None: the market keeps its resolver, who can still propose |
+| New arbitrator in config | Used for markets published afterwards | None: each market keeps the arbitrator it was published with |
+| Policy retired | Can't be used for new approvals | None: markets keep their policy |
+
+That last column is deliberate: nobody can retarget an open market's resolution by changing a setting.
+
+## Separation rules
+
+| Rule | Where it's enforced |
+|---|---|
+| A curator can't publish a market they approved | Contract (`SelfApproval`) |
+| A curator can't review their own suggestion | Backend |
+| The resolver and arbitrator can't challenge | Contract |
+| The resolver and arbitrator are different wallets | Deploy script, at setup only. The contract doesn't check it afterwards |
+| The first curator differs from the resolver, the arbitrator and the first creator | Deploy script, at setup only |
+| An administrator can't revoke themselves or the last administrator | Backend |
+
+<Callout type="warn" title="Next deployment">
+Merged on GitHub and tested, but not yet on chain: if the resolver hasn't proposed by halfway through the proposal window, **anyone** may propose (posting the same bond), and the wallet that proposed can't also challenge. See [Resolution](/docs/how-it-works/resolution).
+</Callout>
+
+## Backend permissions
+
+The website's own permissions (who can comment, moderate, upload, review in the app) are computed on the server from these facts on every request. A role, wallet or author id sent from the browser is never trusted. Curator and creator come from the chain; administrator and suspension come from the database. A suspended account loses every capability and all its sessions at once. The app never holds a privileged key.
+
+## Next
+
+<Cards>
+  <Card title="Suggest a market" href="/docs/markets/suggest-a-market" description="How curators and creators act on a suggestion." />
+  <Card title="Resolution" href="/docs/how-it-works/resolution" description="What resolvers, challengers and arbitrators do after close." />
+  <Card title="Market policy" href="/docs/markets/market-policy" description="What curators approve and reject." />
+</Cards>

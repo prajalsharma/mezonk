@@ -1,0 +1,202 @@
+---
+title: Contracts
+description: Addresses, key functions, events and deployment facts for every MEZONK contract, and how to confirm them on-chain.
+icon: FileCode
+---
+
+MEZONK's on-chain part is one deployment of `MezonkExchange`, which creates `MezonkResolution`,
+`MezonkMarketFactory` and `MezonkIncentives` in its constructor. All four are Solidity 0.8.24 (via-IR, London EVM,
+OpenZeppelin), live on Mezo testnet since 2026-10-22, and not upgradeable. A fifth, `MezonkPriceResolver`, is merged
+but not deployed. Source: [github.com/prajalsharma/mezonk](https://github.com/prajalsharma/mezonk), `contracts/src`.
+
+## Live addresses
+
+These come from the app's configuration, so they're the contracts this site is using right now.
+
+<Contracts />
+
+The testnet exchange was deployed at block 16298919. Its owner is
+`0x017FF5FB886E90f9e5ADb405D8eFddffC1162dD2`. Nothing is deployed on mainnet.
+
+<Callout type="warn" title="Next deployment">
+  The code on GitHub includes the KupiaSec fixes (commit c8fbaff) to the exchange, resolution and incentives
+  contracts, which are not on testnet yet. Where the tables below differ between the live contracts and the next
+  deployment, it's marked. Because the contracts aren't upgradeable, the fixes need a new exchange deployment.
+</Callout>
+
+## How it works exactly
+
+### Derived addresses at nonces 1 to 3
+
+The exchange constructor runs, in this order:
+
+```solidity title="MezonkExchange.sol"
+resolution = new MezonkResolution(collateral_);   // exchange nonce 1
+factory    = new MezonkMarketFactory(owner_, config_); // nonce 2
+incentives = new MezonkIncentives(collateral_);   // nonce 3
+```
+
+So the other three addresses are the CREATE addresses of the exchange at nonces 1, 2 and 3. The app derives them
+instead of configuring them (`protocolAddresses` in `lib/chain/config.ts`), and each one is also a public immutable on
+the exchange. Check both ways:
+
+```bash
+EX=0x4555cfF10200e1007435Cffc683C60683c5C49B9
+RPC=https://rpc.test.mezo.org
+cast compute-address $EX --nonce 1   # 0x6Da57dDd874f02E3ad704F75aCC86D0319d3b944
+cast compute-address $EX --nonce 2   # 0x3d596A0317AD7159d0E9f4A15D80A62FFC30D689
+cast compute-address $EX --nonce 3   # 0xF1a014E4E291EB2690777104D65990efAFC3f06B
+cast call $EX "resolution()(address)" --rpc-url $RPC
+cast call $EX "factory()(address)" --rpc-url $RPC
+cast call $EX "incentives()(address)" --rpc-url $RPC
+```
+
+Because they're created by the exchange, the exchange accepts `openMarket` only from that factory and `settle` only
+from that resolution contract, and neither can ever be swapped.
+
+### Size and gas
+
+- Deploying the exchange (which creates the other three) uses about 9.05M gas. Mezo blocks allow 10M, so deploy with
+  `--gas-estimate-multiplier 105`; Foundry's default 30% buffer would exceed the block limit. Re-measure after any
+  contract change.
+- `MezonkExchange` must stay under the 24,576-byte runtime and 49,152-byte init code limits. Check with
+  `forge build --sizes`.
+- `MezonkPriceResolver` deploys on its own; the deployment simulated against the live exchange used 1.68M gas.
+
+### Units
+
+- MUSD has 18 decimals. Share quantities also use 18 decimals and must be multiples of `LOT = 1e16` (0.01 share).
+- Prices are whole cents, 1 to 99. Cost of `q` shares at `p` cents is `q × p / 100`, exact at lot granularity, so
+  nothing rounds.
+- Outcomes: `None 0`, `Yes 1`, `No 2`, `Invalid 3`. Share index: `0` Yes, `1` No. Side: `0` Buy, `1` Sell.
+
+## MezonkExchange
+
+Holds all trading collateral. `Ownable2Step`, `Pausable`, `ReentrancyGuard`, EIP-712 domain `("MEZONK Exchange", "1")`.
+
+| Function | Who | Does |
+| --- | --- | --- |
+| `split(marketId, amount)` | anyone, live markets | Lock `amount` MUSD, receive `amount` Yes + `amount` No |
+| `merge(marketId, amount)` | holder, after launch until final | Burn one Yes + one No per MUSD returned |
+| `placeOrder(marketId, outcome, side, price, qty)` | anyone, seeding or live | Escrowed resting order; seeding allows buys only; can't cross the book |
+| `cancelOrder(orderId)` | maker | Refund the unfilled part; seed orders locked for `minRest` after placing and again after launch |
+| `take(params, sources)` | taker, live | Fill against given resting ids and signed orders, best first, within limit and `minFill` |
+| `cancelSignedOrders(orders)`, `raiseMinNonce(n)` | maker | Invalidate signed orders |
+| `transferShares(marketId, outcome, to, amount)` | holder | Move free shares |
+| `graduate(marketId)` | anyone | Move seeding to live if the escrowed book meets the policy |
+| `redeem(marketId)` | holder, final | Burn all your shares; Yes/No pay 1 if they won, Invalid pays 0.5 each |
+| `settle(marketId, outcome)` | resolution contract only | Record the final outcome once |
+| `openMarket(...)` | factory only | Open a market in seeding |
+| `addPolicy`, `setPolicyActive`, `pause`, `unpause`, `withdrawProtocolFees(to)` | owner | Policies for new markets, pause, fee withdrawal |
+
+Key views: `getMarket`, `getPolicy`, `getResting`, `stageOf`, `bestPrices`, `graduationCheck`, `orderHash`,
+`sharesOf(marketId, index, account)`, `depthAt`, `filledOf`, `seedWeight`, `totalCollateral`, `escrowedCollateral`,
+`protocolFees`. Next deployment adds `rebateWeight(marketId, seeder)` and `totalRebateWeight(marketId)`.
+
+Pause blocks `openMarket`, `graduate`, `split`, `placeOrder` and `take`. It never blocks cancelling, merging,
+transferring shares, resolution or redeeming.
+
+| Event | When |
+| --- | --- |
+| `MarketCreated(marketId, creator, resolver, policyId, seedingDeadline, closeTime, metadataHash, metadata)` | Market published |
+| `Graduated(marketId, bestBid, bestAsk, bidDepth, askDepth, seeders)` | Seeding met the policy |
+| `OrderPlaced(orderId, marketId, maker, outcome, side, price, quantity, seed)` | Resting order escrowed |
+| `OrderCancelled(orderId, marketId, maker, remaining)` | Resting order refunded |
+| `Fill(marketId, orderRef, taker, maker, resting, makerOutcome, makerSide, makerPrice, quantity, complement, takerFee)` | One maker filled |
+| `TakeSettled(marketId, taker, outcome, side, filled, notional, fee, rebatePart, referralPart)` | One `take` finished |
+| `Split`, `Merged`, `SharesTransferred`, `Redeemed` | Share movements |
+| `MarketSettled(marketId, outcome)` | Outcome recorded |
+| `SignedOrderCancelled`, `MinNonceRaised` | Signed orders invalidated |
+| `PolicyAdded`, `PolicyActiveSet`, `ProtocolFeesWithdrawn` | Owner actions |
+
+Signed orders use the type
+`Order(address maker,address taker,uint256 marketId,uint8 outcome,uint8 side,uint8 price,uint128 quantity,uint64 expiry,uint256 nonce,uint256 salt)`.
+A non-zero `taker` restricts who may fill it.
+
+## MezonkMarketFactory
+
+Publication authority. `Ownable2Step`, EIP-712 domain `("MEZONK Markets", "2")`.
+
+| Function | Who | Does |
+| --- | --- | --- |
+| `createMarket(params, approval, curator, sig)` | approved creator | Verify the curator's approval and open the market |
+| `cancelApproval(nonce)` | curator or owner | Void an approval before use |
+| `setCreator`, `setCurator`, `setResolver` | owner | Role lists |
+| `setConfig(config)` | owner | Windows, bonds and arbitrator for markets published afterwards |
+| `config()`, `approvalDigest(approval)`, `isCreator`, `isCurator`, `isResolver`, `approvalUsed` | view | |
+
+`createMarket` reverts unless: metadata is 1 to 8,192 bytes, the resolver is allowlisted, the caller is a creator, the
+curator is a curator and isn't the caller, the approval hasn't expired or been used, and the approval's metadata
+hash, creator, resolver, close time and policy all match. Signatures may come from an EOA or an ERC-1271 contract.
+Config bounds: challenge window 1 hour to 30 days, other windows up to 30 days, dispute bond above zero, arbitrator set.
+
+Events: `MarketApprovalUsed(marketId, curator, nonce)`, `MarketApprovalCancelled`, `ConfigUpdated`,
+`ResolverUpdated`, `CreatorUpdated`, `CuratorUpdated`.
+
+## MezonkResolution
+
+Holds bonds only.
+
+| Function | Who (live contract) | Does |
+| --- | --- | --- |
+| `proposeOutcome(marketId, outcome, evidenceHash, uri)` | the market's resolver, before the proposal window ends | Post the proposer bond and propose |
+| `dispute(marketId, evidenceHash, uri)` | anyone except the resolver and arbitrator, inside the challenge window | Post the dispute bond |
+| `arbitrate(marketId, outcome, rationaleHash, uri)` | the market's arbitrator, inside the arbitration window | Rule on a dispute |
+| `finalize(marketId)` | anyone, after a deadline | Undisputed → proposed outcome; no proposal or no ruling → Invalid |
+| `withdrawBond()` | anyone with credit | Withdraw credited bonds |
+| `stageOf(marketId)` | view | `NotClosed`, `AwaitingProposal`, `Proposed`, `Disputed`, `Finalized` |
+
+On the live contract an upheld proposal credits both bonds to the resolver, and an overturned one credits both to the
+disputer. Timeouts refund both.
+
+<Callout type="warn" title="Next deployment">
+  After half the proposal window, anyone may propose with the bond. The proposer is recorded and gets the bonds back.
+  The proposer can't dispute their own proposal. An overturned proposal loses half its bond to the protocol
+  (`slashedBonds`, swept by the exchange owner with `sweepSlashed`), so disputing your own false proposal from a
+  second wallet still costs money.
+</Callout>
+
+Events: `OutcomeProposed(marketId, resolver, outcome, evidenceHash, evidenceURI, challengeDeadline)`,
+`OutcomeDisputed`, `DisputeArbitrated`, `MarketFinalized(marketId, outcome, reason)`, `BondCredited`,
+`BondWithdrawn`; next deployment adds `BondSlashed` and `SlashedSwept`.
+
+## MezonkIncentives
+
+Holds only the rebate and referral share of taker fees the exchange actually collected.
+
+| Function | Who | Does |
+| --- | --- | --- |
+| `accrue(...)` | exchange only, inside `take` | Split a fee into rebate and referral parts within the policy caps |
+| `claimRebate(marketId)` | seeder | Claim a pro-rata share of the market's rebate pool, capped per wallet |
+| `sweepRebates(marketId)` | anyone, after the claim window | Return unclaimed rebates to the exchange as protocol fees |
+| `setReferrer(referrer)` | anyone, once, before their first trade | Link a referrer; no self or two-way referral |
+| `claimReferral()` | referrer | Claim referral credit |
+
+Rebate weight on the live contract is the seeder's seed escrow (`seedWeight`). Next deployment counts only seed escrow
+inside the price band graduation measured.
+
+Events: `ReferrerSet`, `RebateAccrued`, `ReferralAccrued`, `RebateClaimed`, `RebatesSwept`, `ReferralClaimed`.
+
+## MezonkPriceResolver (not deployed)
+
+| Function | Who | Does |
+| --- | --- | --- |
+| `setRule(marketId, strike, direction)` | owner, once, before close | Record the strike and direction |
+| `settle(marketId)` | anyone, inside the capture window | Read Mezo's PriceFeed and propose |
+| `proposeManual(marketId, outcome, evidenceHash, uri)` | owner, after the window | Fallback proposal |
+| `withdrawBonds()` / `sweep(to, amount)` | anyone / owner | Bond housekeeping |
+
+Events: `RuleSet`, `PriceCaptured`, `ManualProposal`, `Swept`. Details: [BTC price markets](/docs/mezo/btc-price-markets).
+
+## ABIs
+
+The app's ABIs are generated from the Foundry build into `apps/web/src/lib/contracts/abi.ts` (`exchangeAbi`,
+`factoryAbi`, `resolutionAbi`, `incentivesAbi`, `priceResolverAbi`). After changing a contract:
+`forge build && node scripts/export-abi.mjs`.
+
+## Next
+
+<Cards>
+  <Card title="Solvency" href="/docs/security/solvency" description="The accounting invariants and how to check them with cast." />
+  <Card title="Public API" href="/docs/developers/public-api" description="Read endpoints for markets, books, quotes and history." />
+</Cards>

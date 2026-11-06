@@ -1,0 +1,278 @@
+---
+title: Public API
+description: Every public GET endpoint, its parameters, the shape of its response, and how errors look.
+icon: Braces
+---
+
+The app's API is a convenience layer for reading MEZONK. Most endpoints serve the indexer's copy of the chain; a few
+read the contracts live. Nothing here can move funds, and nothing here should be treated as the final word on a
+balance or a market's stage: for that, read the contract. All routes live under `/api` on the app's own domain and
+need no key.
+
+## Conventions
+
+- **Amounts** (MUSD, shares, bonds) are strings of integers with 18 decimals, because they don't fit in a JSON number.
+  `"1500000000000000000"` is 1.5.
+- **Prices** in the book and quotes are whole Yes cents (1 to 99). `priceYes` on markets is a 0 to 1 fraction of the
+  last real fill, or `null` if the market has never traded. A book midpoint is indicative, never a trade price.
+- **Times** are ISO 8601 strings, except contract fields such as `seedingDeadline`, which are Unix seconds.
+- **Caching:** most responses send `Cache-Control: public, max-age=0, s-maxage=5, stale-while-revalidate=30` (some
+  use a different `s-maxage`, noted below). Quotes are `no-store`.
+- **Rate limits** are per IP and per server instance, in memory. Quotes: 120 a minute.
+
+### Errors
+
+Every error has the same shape, and never includes a stack trace:
+
+```json
+{ "error": { "code": "bad_request", "message": "Market id must be a positive integer", "issues": { } } }
+```
+
+`issues` appears only for validation errors (zod's flattened errors).
+
+| Status | `code` | Meaning |
+| --- | --- | --- |
+| 400 | `bad_request` | A parameter failed validation |
+| 401 / 403 | `unauthorized` / `forbidden` | Needs a signed-in wallet or a role |
+| 404 | `not_found` | Nothing indexed with that id |
+| 422 | `bad_lot` | Quantity not a positive multiple of 0.01 share |
+| 429 | `rate_limited` | Too many requests from this IP |
+| 503 | `unavailable` | Database or RPC failed: "The data service is temporarily unavailable. On-chain state is unaffected." |
+
+## Markets
+
+### `GET /api/markets`
+
+Indexed markets for the configured exchange, with summaries.
+
+| Param | Values | Default |
+| --- | --- | --- |
+| `q` | text search in question and description, ≤ 120 chars | |
+| `category` | one of the app's categories | |
+| `status` | `seeding`, `open`, `closing` (open, closes within 48 h), `resolving`, `resolved`, `all` | `all` |
+| `sort` | `trending`, `volume`, `liquidity`, `thin`, `newest`, `closing`, `movement` | `newest` |
+| `minLiquidity` | whole MUSD | |
+| `closesWithinHours` | 1 to 8,760 | |
+| `creator` | address | |
+| `limit`, `offset` | 1 to 100; 0 to 10,000 | 24, 0 |
+
+```json
+{
+  "total": 12,
+  "limit": 24,
+  "offset": 0,
+  "items": [{
+    "id": 7,
+    "question": "…",
+    "category": "…",
+    "structured": true,
+    "priceYes": 0.62,
+    "priceYes24hAgo": null,
+    "bestBid": 61, "bestAsk": 63,
+    "liquidity": "…", "openInterest": "…", "lowLiquidity": false,
+    "volume": "…", "volume24h": "…", "traders24h": 3, "tradeCount": 18,
+    "createdAt": "…", "closeTime": "…",
+    "stage": { "stage": "open", "label": "Live", "finalizable": false, "deadline": "…", "deadlineLabel": "Trading closes" },
+    "finalOutcome": null,
+    "trendingScore": 0,
+    "slug": "…",
+    "cover": { "url": "…", "width": 1200, "height": 630 },
+    "feeBps": 100,
+    "crowd": { "yesPeople": 2, "noPeople": 1, "yesStake": "…", "noStake": "…" }
+  }]
+}
+```
+
+Values above show the shape only. `stage.stage` is one of `seeding`, `failed`, `open`, `closed`, `proposed`,
+`disputed`, `resolved`, `invalid`, derived from the indexed row and chain time. `trendingScore` is
+`volume24h × √(1 + traders24h)` for open markets with a trade in the last 24 hours, else 0.
+
+### `GET /api/markets/{id}`
+
+```json
+{ "market": { "marketId": 7, "chainId": 31611, "contract": "0x…", "creator": "0x…", "resolver": "0x…", "arbitrator": "0x…", "metadataRaw": "…", "metadataHash": "0x…", "closeTime": "…", "policyId": 1, "collateral": "…", "…": "…" },
+  "summary": { "…": "same as an item in /api/markets" } }
+```
+
+`market` is the full indexed row, including the market's metadata, resolution windows and bonds snapshotted at
+creation, best escrowed bid and ask, and proposal and dispute state. 404 if not indexed.
+
+### `GET /api/markets/{id}/book`
+
+The aggregated Yes book: escrowed resting orders plus open signed orders that haven't expired. `s-maxage=2`.
+
+```json
+{
+  "bids": [{ "yes": 61, "shares": "…", "resting": "…", "orders": 2 }],
+  "asks": [{ "yes": 63, "shares": "…", "resting": "…", "orders": 1 }],
+  "bestBid": 61, "bestAsk": 63, "spread": 2,
+  "mid": 62,
+  "lastPrice": 62,
+  "bidNotional": "…", "askNotional": "…"
+}
+```
+
+`resting` is the part of `shares` that is escrowed on-chain. `mid` is indicative only. `lastPrice` is the last fill in
+cents, or `null`.
+
+### `GET /api/markets/{id}/quote`
+
+An exact fill preview plus the maker orders to pass to `MezonkExchange.take`, in fill order. Before answering, it
+re-checks each signed maker's balance, allowance or shares on-chain, marks unfunded ones stale and re-quotes (up to
+three rounds).
+
+| Param | Values |
+| --- | --- |
+| `outcome` | `0` Yes, `1` No |
+| `side` | `0` buy, `1` sell |
+| `quantity` | integer string, 18 decimals, multiple of 1e16 |
+| `limit` | worst acceptable price in cents, 1 to 99 |
+| `taker` | optional address |
+
+```json
+{
+  "quote": {
+    "requested": "…", "filled": "…", "unfilled": "…", "notional": "…", "fee": "…",
+    "bestPrice": 62, "worstPrice": 63,
+    "steps": [{ "kind": "resting", "ref": "41", "quantity": "…", "takerPrice": 62, "complement": false }]
+  },
+  "sources": [{
+    "restingId": "41",
+    "order": { "maker": "0x0000…", "taker": "0x0000…", "marketId": "0", "outcome": 0, "side": 0, "price": 0, "quantity": "0", "expiry": "0", "nonce": "0", "salt": "0" },
+    "signature": "0x"
+  }],
+  "feeBps": 100
+}
+```
+
+For a signed maker, `restingId` is `"0"` and `order` and `signature` are filled in. The contract re-validates
+everything, so a stale quote fails safely: it fills less, never at a worse price than `limit`.
+
+### `GET /api/markets/{id}/seeding`
+
+The on-chain graduation check and the market's policy, read live from the exchange (`getMarket`, `graduationCheck`,
+`getPolicy`). `s-maxage=2`.
+
+```json
+{
+  "policyId": 1, "seedingDeadline": 1793900000, "graduatedAt": 0,
+  "check": { "bestBid": 45, "bestAsk": 55, "bidDepth": "…", "askDepth": "…", "seeders": 2,
+             "spreadOk": true, "depthOk": false, "seedersOk": true, "open": true, "ready": false },
+  "policy": { "minBidDepth": "…", "minAskDepth": "…", "minSeederNotional": "…", "minSeeders": 2, "maxSpread": 10,
+              "band": 5, "seedingPeriod": 604800, "minRest": 3600, "takerFeeBps": 100, "rebateShareBps": 2000,
+              "referralShareBps": 1000, "rebatePeriod": 2592000, "claimWindow": 7776000,
+              "rebateCapPerMarket": "…", "rebateCapPerWallet": "…", "rebateBudget": "…", "referralCapPerMarket": "…" }
+}
+```
+
+### `GET /api/markets/{id}/fills`
+
+Confirmed on-chain fills, newest first, up to 100: `{ "fills": [ … ] }`. Each row is one maker filled in one `take`
+(from the `Fill` event): maker, taker, Yes price in cents, quantity, fee, block and transaction.
+
+### `GET /api/markets/{id}/history`
+
+One point per confirmed fill, oldest first, at its Yes price. No opening point and no interpolation.
+
+```json
+{ "points": [{ "t": "2026-10-30T12:00:00.000Z", "p": 0.62, "tx": "0x…" }] }
+```
+
+### `GET /api/markets/{id}/activity`
+
+Raw indexed events for one market. Params: `limit` (1 to 100, default 30), `before` (event id, for paging).
+
+```json
+{ "events": [{ "id": 812, "eventName": "Fill", "marketId": 7, "actor": "0x…", "args": { }, "blockNumber": "16400000", "blockTime": "…", "txHash": "0x…", "question": "…" }] }
+```
+
+`MarketCreated` events have their bulky metadata stripped to `{ "creator": "0x…" }`.
+
+### `GET /api/markets/{id}/comments`
+
+Comments on a market. Param `before` (cursor). Not cached.
+
+## Activity, wallets and orders
+
+| Endpoint | Params | Returns |
+| --- | --- | --- |
+| `GET /api/activity` | `limit` (1 to 100, default 40), `before` | `{ events }` across all markets, same shape as above |
+| `GET /api/activity/{address}` | same | `{ events }` where the wallet is the actor |
+| `GET /api/portfolio/{address}` | | `{ positions: [...], created: [...] }` |
+| `GET /api/orders` | `maker` (required), `market` | `{ signed: [...], resting: [...] }`, up to 200 each, newest first |
+
+A portfolio position carries `marketId`, `question`, `category`, `priceYes`, `feeBps`, `closeTime`, `stage`,
+`finalOutcome`, `yesShares`, `noShares`, `yesCost`, `noCost`, `realizedPnl`, `feesPaid`, `redeemed`,
+`redeemedPayout` and `isCreator`. It's for display and cost basis; what you can claim is read from the contract.
+
+## Resolution and evidence
+
+### `GET /api/resolution/{marketId}`
+
+```json
+{
+  "stage": { "…": "…" }, "structured": true,
+  "resolver": "0x…", "arbitrator": "0x…", "creator": "0x…",
+  "proposerBond": "…", "disputeBond": "…",
+  "challengeWindow": 3600, "proposalWindow": 259200, "arbitrationWindow": 604800,
+  "closeTime": "…", "finalOutcome": null, "finalizeReason": null, "finalizedAt": null,
+  "proposals": [], "disputes": [], "timeline": [],
+  "documents": { "0x…": { "status": "verified", "raw": "…", "doc": { } } },
+  "communityEvidence": [],
+  "indexer": { "…": "same as /api/indexer/status" }
+}
+```
+
+Each evidence document referenced by an on-chain hash is re-hashed on every request. `status` is `verified` when
+`keccak256(raw)` equals the hash, `mismatch` when it doesn't, and `missing` when nothing is stored.
+
+### `GET /api/evidence-documents/{hash}`
+
+`{ "hash", "raw", "doc", "verified" }` for a 32-byte hex hash. `s-maxage=3600`.
+
+## Protocol and health
+
+| Endpoint | Returns |
+| --- | --- |
+| `GET /api/policies` | `{ policies: [{ policyId, params, active, addedAt, txHash }] }` from `PolicyAdded` and `PolicyActiveSet` |
+| `GET /api/resolvers` | `{ resolvers: [{ address }] }` currently allowlisted, replayed from `ResolverUpdated` |
+| `GET /api/indexer/status` | `{ chainId, contract, status }` |
+| `GET /api/health` | `{ ok, chain, rpc, db, indexer }`; HTTP 503 when unhealthy |
+
+Indexer status:
+
+```json
+{ "lastBlock": "…", "headBlock": "…", "lagBlocks": 3, "lastRunAt": "…", "lastSuccessAt": "…",
+  "lastError": null, "lastErrorAt": null, "reorgsHandled": 0, "lastReconcileAt": "…",
+  "reconcileMismatches": [], "stale": false }
+```
+
+`stale` is true when the last successful run is more than 120 seconds old. `/api/health` is healthy only when the RPC
+answers, the database answers, the deployment is configured and the indexer isn't stale. Its `chain` object reports
+`chainId`, `name`, `localFork`, `contract`, `musd`, `ready`, `reason` and `message`.
+
+## Governance and profiles (public reads)
+
+| Endpoint | Params | Returns |
+| --- | --- | --- |
+| `GET /api/proposals` | `status` (comma list), `author`, `limit`, `offset` | Public market suggestions |
+| `GET /api/proposals/{id}` | | One suggestion, as visible to the caller |
+| `GET /api/projects` | | Verified projects |
+| `GET /api/audit` | `type` (`proposal` or `project`), `id` | Public audit trail; internal notes never exposed |
+| `GET /api/profiles/{handle}` | handle or address | Public profile |
+| `GET /api/media/{id}` | | A WebP image, served with `content-security-policy: default-src 'none'; sandbox` |
+| `GET /api/docs-search` | Fumadocs search query | Search over these docs |
+
+### Not public
+
+These need a signed-in wallet session or a role, and aren't part of the public API: `/api/me`, `/api/profile`,
+`/api/profile/check`, `/api/auth/*`, `/api/admin/*`, `/api/curate/reports`, `/api/proposals/{id}/approval`
+(curators only), and the `queue`, `mine` and `publish` views of `/api/proposals`. `GET /api/cron/index` runs one
+indexer pass and requires `Authorization: Bearer $CRON_SECRET`.
+
+## Next
+
+<Cards>
+  <Card title="Indexer" href="/docs/developers/indexer" description="Where these tables come from, and how fresh they are." />
+  <Card title="Contracts" href="/docs/developers/contracts" description="Read the source of truth directly." />
+</Cards>

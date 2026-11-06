@@ -1,0 +1,88 @@
+---
+title: A market's lifecycle
+description: One market from suggestion to payout, every stage in one place, with who acts at each step, what's at stake, and how each stage can end.
+icon: Route
+---
+
+Every MEZONK market goes through the same stages: someone suggests it, a curator approves it, an approved creator publishes it, seeders fund its first orders, people trade it, trading closes, the outcome is proposed and possibly challenged, and finally holders claim. This page puts the whole journey on one screen. Each stage links to the page with the full detail.
+
+## The whole journey
+
+The diagram shows the main path along the top and the exits underneath: a market that isn't seeded in time fails and refunds everyone, and a market whose resolver or arbitrator misses a deadline ends Invalid.
+
+<MarketLifecycle />
+
+In words:
+
+1. **Suggested.** Anyone writes a question, its rules, a source and a close time. Off-chain, free.
+2. **Approved.** A curator reviews it against the policy and signs an approval with their wallet. Off-chain signature, free.
+3. **Published (seeding).** An approved creator puts it on-chain with the curator's signature. The rules are fixed forever from this moment. Nobody can trade yet.
+4. **Live.** Once seed orders meet the launch rules, anyone launches it and trading opens. If the seeding deadline passes first, it fails and every seeder is refunded.
+5. **Closed.** Trading stops at the close time. Closing decides nothing.
+6. **Proposed.** The resolver proposes Yes, No or Invalid with evidence and a bond.
+7. **Challenged (sometimes).** Anyone can challenge within the challenge window, and the arbitrator rules.
+8. **Final.** Winning shares pay 1 MUSD, Invalid pays 0.50 per share. Claims never expire.
+
+## Stage by stage
+
+| Stage | What can happen | Who acts | What's at stake |
+|---|---|---|---|
+| Suggested (draft, submitted, under review, changes requested) | Write, edit, submit, withdraw; claim for review, ask for changes, reject | Author; curators | Nothing. No money, nothing on-chain |
+| Approved | Publish within the approval's deadline (at most 14 days); a curator or the owner can void the approval | Approved creator named in the approval | Nothing yet. The approval binds the exact rules, creator, resolver, close time and policy |
+| Seeding | Place escrowed buy orders; cancel them after the lock; launch once the checks pass | Seeders; anyone can launch | Seeders' locked MUSD, fully refundable if the market fails |
+| Failed | Refunds only | Seeders | Nothing lost but network fees. No winners, no losers |
+| Live | Trade, place and cancel orders, split, merge; seeder rebates accrue | Traders and makers | Every open position. Seed orders can now fill |
+| Closed | No trading. Merge, cancel resting orders, transfer shares; the resolver proposes | Resolver | Positions wait for the outcome |
+| Proposed | Challenge during the window; finalize after it | Anyone except the resolver and arbitrator challenges; anyone finalizes | The proposer bond |
+| Challenged | Arbitrator rules with a rationale; if it doesn't in time, anyone finalizes as Invalid | Arbitrator; anyone after the deadline | Both bonds, and the outcome |
+| Final | Claim payouts; withdraw bonds; seeders claim rebates within the claim window | Share holders, bond holders, seeders | Nothing further. Payout claims have no deadline |
+
+Details: [suggesting](/docs/markets/suggest-a-market), [seeding](/docs/how-it-works/seeding-and-launch), [trading](/docs/how-it-works/order-book), [resolution](/docs/how-it-works/resolution), [payouts](/docs/how-it-works/shares-and-payouts).
+
+## A worked timeline
+
+Today's testnet settings for new markets (check the live values on [Fees and incentives](/docs/how-it-works/fees-and-incentives)): seeding up to 1 hour, at least 1 hour live after the seeding deadline, a 3-day proposal window, a 1-hour challenge window, a 7-day arbitration window.
+
+A market about an event on Friday is approved on Monday and closes at Friday 12:00 UTC.
+
+| When (UTC) | What happens |
+|---|---|
+| Monday 09:00 | The creator publishes. Seeding runs until 10:00 |
+| Monday 09:35 | Seed orders meet the launch rules. Someone presses *Launch market*. Trading opens |
+| Monday to Friday | People trade. Seeder rebates accrue for 30 days from launch |
+| Friday 12:00 | Trading closes |
+| Friday 13:00 | The resolver proposes an outcome. The challenge window runs to 14:00 |
+| Friday 14:00 | Nobody challenged. Anyone presses *Finalize*. Holders claim |
+
+If the resolver had stayed silent, anyone could have finalized as Invalid from Monday 12:00, three days after close. If someone had challenged and the arbitrator stayed silent, Invalid would have been available at most 3 days + 1 hour + 7 days after close. Those are the longest any market can wait.
+
+## How the contract knows the stage
+
+The exchange doesn't store a status field that could drift out of sync. It derives the stage from timestamps and two flags every time it's asked:
+
+```solidity title="MezonkExchange.sol"
+function _stage(Market storage m) internal view returns (Stage) {
+    if (m.finalized) return Stage.Finalized;
+    if (m.graduatedAt == 0) return block.timestamp > m.seedingDeadline ? Stage.Failed : Stage.Seeding;
+    if (block.timestamp >= m.closeTime) return Stage.Closed;
+    return Stage.Live;
+}
+```
+
+Inside the Closed stage, `MezonkResolution` adds its own sub-stages: awaiting a proposal, proposed, challenged, finalized. The app reads these from the chain and compares deadlines with the latest block's time, never your device clock, so a wrong clock can't show you a wrong stage.
+
+Suggested and approved live only in MEZONK's backend: they are a review workflow. The backend can't make a market tradable. Only a curator's signature plus an approved creator's transaction can publish, and only funded seed orders can launch.
+
+## What the owner can and can't do at each stage
+
+The owner can pause the exchange. Pausing blocks publishing, new orders, takes, splits and launches. It never blocks cancelling orders, merging, refunds, resolution, finalization, claims or bond withdrawals, so nobody can be trapped. A pause doesn't extend a seeding deadline, so a market can fail during a long pause; its seeders are still refunded.
+
+The owner can't change a market's rules, policy, resolver, arbitrator, windows or bonds once it's published, can't move user funds, and can't choose an outcome. See [Roles](/docs/markets/roles).
+
+## Next
+
+<Cards>
+  <Card title="Suggest a market" href="/docs/markets/suggest-a-market" description="Start at the beginning: write a question for review." />
+  <Card title="Seeding and launch" href="/docs/how-it-works/seeding-and-launch" description="The launch rules in detail." />
+  <Card title="Resolution" href="/docs/how-it-works/resolution" description="Proposals, challenges, rulings and bonds." />
+</Cards>

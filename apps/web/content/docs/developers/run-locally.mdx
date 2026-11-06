@@ -1,0 +1,133 @@
+---
+title: Run locally
+description: Fork Mezo testnet with real MUSD, deploy MEZONK to the fork, run the app and indexer, and run every test suite.
+icon: Terminal
+---
+
+The local setup is a fork of Mezo testnet, not a mock chain. MUSD is the real testnet MUSD bytecode, the exchange is
+deployed with the real deploy script, and test wallets are funded with MUSD by writing the fork's storage. Nothing
+touches the public network, and the app needs no keys: the dev chain uses anvil's public test accounts.
+
+## What you need
+
+- Node.js and pnpm 10 (the repo pins `pnpm@10.20.0`)
+- [Foundry](https://book.getfoundry.sh) (`forge`, `cast`, `anvil`)
+- The repo: `git clone https://github.com/prajalsharma/mezonk && cd mezonk && pnpm install`
+
+## Start the stack
+
+<Steps>
+<Step>
+### Start the dev chain
+
+```bash
+./scripts/dev-chain.sh
+```
+
+This starts a retrying RPC proxy in front of `https://rpc.test.mezo.org` (it skips the lagging node), forks testnet a
+couple of blocks behind the head with anvil on port 8545 and chain id 31611, deploys `MezonkExchange` with a short
+local policy (2-hour seeding, 1-hour minimum live time, 60-second seed lock, 50-share depth), funds the anvil
+accounts with MUSD, and writes `apps/web/.env.local`. Leave it running; Ctrl-C stops everything.
+</Step>
+<Step>
+### Build and start the app
+
+```bash
+pnpm --filter web build && pnpm --filter web start
+```
+
+For development use `pnpm dev` instead. The generated env sets `INDEXER_MODE=embedded`, so the indexer runs inside
+the Next.js server against an embedded PGlite database, with zero confirmations and a 2-second interval.
+</Step>
+<Step>
+### Seed markets
+
+```bash
+pnpm --filter web seed:local
+```
+
+Creates eight markets in every state (failed, live, closed, proposed, disputed, resolved, invalid, seeding) using
+only real transactions and the real order API: curator approvals, seed orders, graduation, escrowed and signed fills,
+resolution.
+</Step>
+</Steps>
+
+### Roles on the dev chain
+
+| Role | Anvil account |
+| --- | --- |
+| Owner and deployer | `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266` |
+| Resolver | `0x70997970C51812dc3A010C7d01b50e0d17dc79C8` |
+| Arbitrator | `0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC` |
+| Creator | `0x90F79bf6EB2c4f870365E785982E1f101E93b906` |
+| Curator | `0x14dC79964da2C08b23698B3D3cc7Ca32193d9955` |
+
+These keys are public. Never use them anywhere but a local fork.
+
+### Borrowing on the fork
+
+Mezo's BTC price oracle is a chain precompile that a fork can't run, so every MUSD loan call would revert. The script
+replaces the code at `0x7b7c…0015` with a stand-in that always reports a fresh $82,000
+(`contracts/test/mocks/MockMezoOracle.sol`), so the *Borrow* page works locally. Loan numbers on the fork are
+therefore not real prices.
+
+### Explorer links
+
+Local transactions don't exist on the public explorer, so the app shows hashes as plain text on a fork.
+
+## Tests
+
+| Suite | Command |
+| --- | --- |
+| Contracts | `cd contracts && forge test` |
+| Contracts at CI depth (invariants, random walks) | `FOUNDRY_PROFILE=ci forge test --match-contract "ExchangeRandomWalkTest\|ExchangeInvariantTest"` |
+| Fork against real testnet MUSD | `MEZO_TESTNET_RPC_URL=https://rpc.test.mezo.org forge test --match-path 'test/fork/*'` |
+| Web type check, lint, unit | `cd apps/web && pnpm typecheck && pnpm lint && pnpm test` |
+| Web integration (real anvil EVM) | `pnpm test:integration` |
+| End-to-end (Playwright) | with the dev chain, built app and seed running: `pnpm --filter web test:e2e` |
+
+Fuzz runs are 1,000 by default and 5,000 under the `ci` profile; invariant runs are 128 × depth 64 by default and
+256 × depth 128 under `ci`.
+
+### After changing things
+
+| Changed | Run |
+| --- | --- |
+| A contract's ABI | `forge build && node scripts/export-abi.mjs` |
+| Contract code | `forge build --sizes` (exchange under 24,576 bytes runtime, 49,152 init) and re-measure deploy gas |
+| The database schema | `pnpm --filter web db:generate` |
+
+## The market-maker bot and keeper
+
+`apps/web/scripts/market-maker.ts` keeps a small ladder of the bot wallet's own resting buy orders on live markets so
+testers have something to trade against, and (with `MM_PRICE_RESOLVER` set) settles BTC price markets. It never
+cancels, never crosses the book and never escrows more than `MM_BUDGET_MUSD`. To see what it would do without
+signing anything:
+
+```bash
+MM_DRY=1 MM_ONCE=1 MM_ADDRESS=0x… pnpm --filter web mm
+```
+
+## Deploying to testnet
+
+Deployment uses a Foundry keystore, never a raw key in an env file, and mainnet needs `ALLOW_MAINNET=true` plus
+`NEXT_PUBLIC_ENABLE_MAINNET=true`.
+
+```bash
+cd contracts
+cast wallet import deployer --interactive
+OWNER=0x… ARBITRATOR=0x… RESOLVER=0x… CURATOR=0x… CREATOR=0x… \
+  forge script script/DeployExchange.s.sol --rpc-url mezo_testnet --broadcast \
+  --gas-estimate-multiplier 105 --account deployer
+```
+
+The owner then calls `acceptOwnership()` on the exchange and the factory. Testnet's lagging node can confuse forge,
+so point `MEZO_TESTNET_RPC_URL` at `node scripts/rpc-retry-proxy.mjs` (port 8600) and take the deploy block from the
+broadcast receipt.
+
+## Next
+
+<Cards>
+  <Card title="Architecture" href="/docs/developers/architecture" description="What each part is allowed to decide." />
+  <Card title="Solvency" href="/docs/security/solvency" description="The invariants the tests check." />
+</Cards>

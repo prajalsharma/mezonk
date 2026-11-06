@@ -1,0 +1,96 @@
+---
+title: Audits
+description: MEZONK has not been audited by an independent firm. This page lists the reviews that have happened, what they found and where each fix stands.
+icon: ClipboardCheck
+---
+
+**MEZONK has not been audited by an independent security firm.** Passing tests and internal reviews are not an
+audit. The contracts run on Mezo testnet with test money only, and they should not go to mainnet before an external
+review of the contracts and their economics.
+
+What has happened so far: an internal, tool-assisted review of the first (AMM) version of the contracts, and a report
+from an external security researcher, KupiaSec, on the current order-book contracts. Every finding below has a fix
+in the code. Some fixes are live on testnet; the rest are merged on GitHub and wait for the next deployment.
+
+## Status at a glance
+
+| Finding | Source | Status |
+| --- | --- | --- |
+| A curator couldn't cancel an approval it had signed | Internal review | Fixed, live (`cancelApproval` on the factory) |
+| The arbitrator could challenge a proposal and then rule on its own challenge | Internal review | Fixed, live (the arbitrator can't dispute) |
+| A resolver could challenge its own wrong proposal from a second wallet and keep its bond | Internal review | Fixed in commit c8fbaff, not deployed |
+| A silent resolver could force Invalid (0.5 per share) by never proposing | Internal review | Fixed in commit c8fbaff, not deployed |
+| A view function reverted after liquidity was withdrawn | Internal review | Applies only to the retired AMM; the order book has no such function |
+| Far-off seed orders could dilute seeders' rebates | KupiaSec | Fixed in commit c8fbaff, not deployed |
+
+<Callout type="warn" title="Next deployment">
+  Commit c8fbaff changes three contracts: rebate weight comes only from seed escrow inside the graduation band; anyone
+  may propose after half the proposal window; an overturned proposal loses half its bond to the protocol; the
+  proposer can't dispute their own proposal. The contracts aren't upgradeable, so these need a new exchange
+  deployment. Until then, the live testnet contracts behave as before.
+</Callout>
+
+## How it works exactly
+
+### Internal review, 2026-10-20
+
+`docs/AUDIT_2026-10-20.md` in the repo. An AI-assisted Solidity review (three passes) of the v1 AMM contract
+`MezonkMarkets` at commit 4226d80, before the order book existed. It reported five findings and a list of leads.
+The resolution logic it reviewed carried over to `MezonkResolution`, so findings 2 to 4 apply to the current
+contracts too:
+
+1. **Curator can't cancel an approval.** The factory's `cancelApproval(nonce)` lets a curator or the owner void an
+   unused approval.
+2. **Arbitrator disputes and rules.** `dispute` rejects the market's resolver and arbitrator.
+3. **Self-dispute from a second wallet.** In c8fbaff, an overturned proposal loses half the proposer bond
+   (`slashedBonds`), so a resolver disputing its own wrong proposal from another wallet loses money. The proposer
+   address is also barred from disputing.
+4. **Silent resolver.** In c8fbaff, the resolver has the first half of the proposal window to itself; after that
+   anyone may propose with the same bond.
+5. **`priceYes` divide by zero.** AMM only.
+
+Several leads remain design limits rather than bugs, and are listed honestly on [Risks](/docs/security/risks): a
+single arbitrator, fixed bonds that don't scale with market size, role separation enforced only by the deploy script,
+no way to replace the arbitrator on existing markets.
+
+### KupiaSec report
+
+An external researcher reported that seeder rebates were split by all escrow placed during seeding, including orders
+priced far from the market (for example Yes at 1¢) that take no real fill risk. A large far-off order, cancelled
+after the lock, could dilute honest seeders' rebates. The fix in c8fbaff tracks seed escrow per price level, fixes
+the band that graduation measured at the moment of graduation, and counts only escrow inside it
+(`rebateWeight`, `totalRebateWeight`). The same commit also carries fixes 3 and 4 above.
+
+Tests for these fixes are in `contracts/test/exchange/AuditFixes.t.sol`: far-off seed escrow earns no rebate weight,
+cancelling after launch keeps only in-band weight, no weight before graduation, anyone proposes after half the
+window, the proposer can't dispute its own proposal, and a self-dispute from a second wallet loses money.
+
+### Tests in the repo
+
+Counted from the test files (functions named `test…`, `testFuzz…` or `invariant…`):
+
+| Area | Files | Tests |
+| --- | --- | --- |
+| Order-book exchange | `test/exchange/Exchange.t.sol` | 52 |
+| Invariants, random walks, fuzz | `test/exchange/ExchangeInvariants.t.sol` | 7 |
+| BTC price resolver | `test/exchange/PriceResolver.t.sol` | 12 |
+| Audit fixes | `test/exchange/AuditFixes.t.sol` | 6 |
+| Fork against real testnet MUSD | `test/fork/ExchangeTestnetFork.t.sol` | 1 |
+| Retired v1 AMM (kept for reference) | `MezonkMarkets`, `Resolution`, `Governance`, `FPMMMath`, invariants, fork | 79 |
+
+That's 78 for the current contracts and 157 in all. Invariant and fuzz tests run many sequences each: see
+[Solvency](/docs/security/solvency).
+
+### What an independent audit should cover
+
+- `MezonkExchange`, `MezonkMarketFactory`, `MezonkResolution`, `MezonkIncentives` and `MezonkPriceResolver` as of
+  the next deployment.
+- The economics: seeding and graduation, rebate and referral incentives, bond sizes against market size.
+- The arbitrator's role and the path to a multisig or decentralized arbitration.
+
+## Next
+
+<Cards>
+  <Card title="Risks" href="/docs/security/risks" description="What can still go wrong, including accepted design limits." />
+  <Card title="Trust model" href="/docs/security/trust-model" description="Who can do what with the contracts." />
+</Cards>

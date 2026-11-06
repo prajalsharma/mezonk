@@ -1,0 +1,79 @@
+---
+title: Market policy
+description: Which markets MEZONK allows, which it doesn't, what "resolvable" means, the rules on insider information, and exactly where each rule is enforced.
+icon: ShieldCheck
+---
+
+MEZONK only lists markets that a stranger could settle the same way from public information, and that don't reward harm. This page is the policy curators apply when they review a suggestion. It also says, for each rule, whether it's enforced by code (and which code) or by people, because those are different kinds of guarantee.
+
+## Allowed
+
+- Yes/no questions about public, checkable facts: a price or figure on a named source at a stated time, a scheduled event's official result, a public announcement by a named party, an on-chain fact.
+- Markets about a project, including suggestions from that project's own team, as long as the relationship is disclosed. Those markets carry a visible "Proposed by the project measured" label.
+- Questions where Invalid is a real possibility, as long as the rules say exactly when it applies.
+
+## Not allowed
+
+- **Violence, death or harm to people.** No markets on whether someone is killed, hurt or attacked, or on terrorist attacks. These create an incentive to cause the harm.
+- **Private individuals.** Markets about people who aren't public figures acting in a public role.
+- **Rewarding illegal acts.** No market whose Yes (or No) would pay someone for breaking the law.
+- **Unresolvable questions.** No public source, no fixed time, or wording a reasonable person could read two ways. "Will X be successful?" is out; "Will X's token trade above 1.00 USD on Coinbase at 00:00 UTC on 1 March?" is in.
+- **Duplicates** of an open market or a suggestion already in review.
+- **Undisclosed conflicts.** A suggestion from someone with a stake in the outcome that doesn't say so.
+
+## Resolvable means three things
+
+1. **One answer.** At the evaluation time, the rules give exactly one of Yes, No or Invalid. Yes and No together cover every possibility except the stated Invalid cases.
+2. **A public source.** A named primary source anyone can read, with a link. If it might go missing or be revised, the rules say what happens then (a fallback source, or which version counts).
+3. **A fixed time, with a time zone.** Trading closes at or before the moment the event is evaluated. MEZONK uses UTC throughout.
+
+If a market turns out to be ambiguous anyway, the policy is that it resolves **Invalid**, which pays 0.50 MUSD per share.
+
+## Insider information and manipulation
+
+- **Don't trade on non-public information you have a duty to protect,** such as confidential information from your employer or a project you work with.
+- **Don't create or seed markets on outcomes you control.** A team that can decide whether its own announcement happens shouldn't be betting on it without disclosure, and curators may reject such markets outright.
+- **Disclose stakes.** If you or a sponsor has a stake in the outcome, the suggestion form requires you to describe it, and it's shown publicly on the market.
+
+These rules can't be fully enforced by code. Nothing on-chain can know what you know. They're enforced by review, disclosure and, where a market is compromised, by resolution.
+
+## Access
+
+You are responsible for whether using prediction markets is legal where you live. MEZONK runs on Mezo testnet today, with test MUSD that has no cash value. There is no mainnet deployment.
+
+## Where each rule is enforced
+
+| Rule | Enforced by | How |
+|---|---|---|
+| Only reviewed markets can be published | Contract | `createMarket` reverts without a valid, unused, unexpired curator signature over the exact rules |
+| The approver isn't the publisher | Contract | `SelfApproval` revert |
+| Rules can't change after publication | Contract | The rules' hash is stored at publication; the full text is in the `MarketCreated` event |
+| Close time leaves room to seed and trade | Contract | Close must be at least the minimum live time after the seeding deadline, and at most the maximum duration away |
+| No violence, death or harm | App (server side) | Automated check blocks submission when the question, context or Yes/No rules match harm terms; curators check too |
+| No vague wording | App (server side) | "soon", "significant", "a lot", "major", "popular", "successful", "big" and "moon" in the question or Yes/No rules block submission |
+| Question ends in "?", Yes ≠ No, trading closes before evaluation | App (server side) | Blocking checks on submission |
+| Structured rules (Yes, No, Invalid, source, time) | App | The form requires each field with minimum lengths and an https source link |
+| No private individuals, nothing illegal, resolvable, appropriate source | Curators | Required review checklist; reasons are public |
+| Duplicates | App and curators | Word-overlap check warns the author; curators reject |
+| Conflicts disclosed | App (server side) and curators | A sponsored suggestion with no disclosure can't be submitted; reviewers reject undisclosed conflicts |
+| Ambiguous markets resolve Invalid | Resolution | Resolver policy, challenge and arbitration |
+
+"App (server side)" means the check runs on MEZONK's server when you submit, not just in your browser. It still isn't on-chain: the contract itself never reads a market's rules.
+
+## Markets with deficient rules
+
+Every market published through MEZONK uses its structured rules format. If a market's rules don't match that format (for example, if one were published another way), the market page shows *Deficient resolution rules*. Policy for those: the resolver should propose Invalid unless the raw text decides the market unambiguously, and anyone may challenge any other proposal. Rules are never added after publication.
+
+## If a bad market gets through
+
+- **Resolution is the correction.** A market whose rules turn out to be broken should resolve Invalid. Anyone can challenge a proposal that ignores that.
+- **The owner can pause trading protocol-wide.** There is no per-market kill switch, deliberately: a switch that can stop one market can also be used to trap one market's traders.
+- **Curators have no say after publication.** Disputes about a live market's outcome go through challenge and arbitration, not review.
+
+## Next
+
+<Cards>
+  <Card title="Writing good rules" href="/docs/markets/writing-good-rules" description="Turn a good question into rules that pass review." />
+  <Card title="Suggest a market" href="/docs/markets/suggest-a-market" description="The suggestion form and the review process." />
+  <Card title="Resolution" href="/docs/how-it-works/resolution" description="How Invalid is reached when rules fail." />
+</Cards>

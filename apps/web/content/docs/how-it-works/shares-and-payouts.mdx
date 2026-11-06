@@ -1,0 +1,127 @@
+---
+title: Shares and payouts
+description: What a Yes or No share is, where the money that pays winners comes from, and exactly what each share pays when a market ends.
+icon: Coins
+---
+
+Every MEZONK market is a yes/no question. You take a side by holding **shares**: a Yes share pays 1 MUSD if the answer is Yes, a No share pays 1 MUSD if the answer is No. MUSD is Mezo's bitcoin-backed dollar, so a winning share is worth about one dollar.
+
+This page explains why that payout is guaranteed by money already sitting in the contract, how shares are created and destroyed, and what happens in the less common endings.
+
+## The short version
+
+- A share costs between 1¢ and 99¢. The price is roughly the crowd's estimate of the chance: Yes at 70¢ means people think Yes is about 70% likely.
+- When the market ends, each winning share pays **1 MUSD** and each losing share pays **0**.
+- If the question can't be answered fairly, the market ends **Invalid** and every share, Yes or No, pays **0.50 MUSD**.
+- Winners are paid from MUSD that was locked when the shares were made. MEZONK never pays winners from its own pocket and never takes the other side of your trade.
+
+## Why winners are always paid
+
+A Yes share and a No share are always created together, as a pair, and the pair is backed by exactly **1 MUSD** locked in the exchange contract. Exactly one of the two will be worth 1 MUSD at the end (or each worth 0.50 if Invalid), so the 1 MUSD in the contract always covers the pair. Nobody has to "find" the money to pay you later: it was put aside the moment your share existed.
+
+The diagram shows the three ways money moves between MUSD and shares. Watch the locked MUSD in the middle: it only grows when a pair is created and only shrinks when a pair is destroyed or paid out.
+
+<MoneyFlow />
+
+A pair of one Yes and one No is called a **complete set**. Three operations work on complete sets:
+
+| Operation | What you give | What you get | When |
+|---|---|---|---|
+| Split | 1 MUSD | 1 Yes + 1 No | While the market is live |
+| Merge | 1 Yes + 1 No | 1 MUSD | From launch until the outcome is final |
+| Redeem | Your shares | 1 MUSD per winning share, 0.50 per share if Invalid | After the outcome is final |
+
+You rarely call split or merge by hand. Most shares are created inside trades: when someone wants to buy Yes at 60¢ and someone else wants to buy No at 40¢, the contract takes 60¢ from one and 40¢ from the other, locks the 1 MUSD, and mints one Yes for the first buyer and one No for the second. The [order book page](/docs/how-it-works/order-book) shows every way a trade can create or destroy a set.
+
+## What a share pays
+
+| Final outcome | Each Yes share pays | Each No share pays |
+|---|---|---|
+| Yes | 1 MUSD | 0 |
+| No | 0 | 1 MUSD |
+| Invalid | 0.50 MUSD | 0.50 MUSD |
+
+Try it: pick a Yes price and a stake, and see how many shares you get and what they pay in each ending.
+
+<PayoutDemo />
+
+### Worked example
+
+These numbers assume today's 1% testnet taker fee (see [Fees and incentives](/docs/how-it-works/fees-and-incentives) for the live value).
+
+You buy **100 Yes at 40¢**. You pay 100 × 0.40 = 40.00 MUSD for the shares, plus a 1% fee on that, 0.40 MUSD. Total: **40.40 MUSD**.
+
+| Ending | You receive | Profit or loss |
+|---|---|---|
+| Yes | 100 MUSD | +59.60 MUSD |
+| No | 0 | −40.40 MUSD |
+| Invalid | 50 MUSD | +9.60 MUSD |
+
+Now the other side. Someone buys **100 No at 60¢** (the same market, seen from No). They pay 60.00 + 0.60 fee = 60.60 MUSD. If No wins they get 100 MUSD (+39.40). If Yes wins, nothing (−60.60). If Invalid, 50 MUSD (−10.60).
+
+Notice that Invalid is not "everyone gets their money back". It returns half the set's value to each side, so a share bought below 50¢ gains and a share bought above 50¢ loses. Price that in when a market's rules look shaky.
+
+### Selling before the end
+
+You don't have to wait. If the crowd comes round to your view, sell. Continuing the example: Yes climbs and someone is bidding 65¢. You sell your 100 Yes and receive 65.00 MUSD minus a 1% fee (0.65), so **64.35 MUSD**. Your profit is 64.35 − 40.40 = **23.95 MUSD**, and you no longer have any exposure to the result.
+
+Selling needs a buyer. If nobody is bidding, the trade ticket says so before you sign. You can always hold to the end and claim instead.
+
+## Why Invalid pays 0.50
+
+Some questions can't be answered fairly: the source disappears, the event is cancelled, or the rules turn out to be ambiguous. The contract still holds exactly 1 MUSD per complete set and has to give it back somehow. Splitting it evenly, 0.50 to each share, is the only split that doesn't favour either side. It also means anyone holding equal amounts of Yes and No (a fully hedged position) gets back exactly what the sets are worth, whatever happens.
+
+Markets end Invalid in four ways: the resolver proposes Invalid and nobody overturns it, the arbitrator rules Invalid, nobody proposes an outcome in time, or the arbitrator doesn't rule in time. See [Resolution](/docs/how-it-works/resolution).
+
+## How it works exactly
+
+### Units
+
+- Shares have 18 decimals, like MUSD, and every amount is a whole number of **lots** of 0.01 share (`LOT = 1e16`).
+- Prices are whole cents from 1 to 99.
+- Cost is `quantity × price / 100`. Because quantity is a multiple of 0.01 and price is a whole number of cents, this is always an exact integer in MUSD's smallest unit. Nothing rounds, on-chain or in the app. Example: 12.34 shares at 37¢ cost exactly 4.5658 MUSD.
+
+### The functions
+
+All of these live in `MezonkExchange`. Share balances are an internal ledger (`sharesOf[marketId][0 = Yes, 1 = No][account]`), not separate tokens.
+
+```solidity title="MezonkExchange.sol"
+function split(uint256 marketId, uint256 amount) external;   // Live only; blocked while paused
+function merge(uint256 marketId, uint256 amount) external;   // after launch, until final; works while paused
+function transferShares(uint256 marketId, uint8 outcome, address to, uint256 amount) external;
+function redeem(uint256 marketId) external returns (uint256 payout); // final only
+```
+
+- **split** pulls `amount` MUSD and credits `amount` Yes and `amount` No. Only in the Live stage, and not while the exchange is paused.
+- **merge** burns `amount` of each side and sends `amount` MUSD. Allowed any time after launch until the outcome is final, including after trading closes and while paused, so you can always unwind a hedged position.
+- **transferShares** moves free shares to another address. Not affected by pause.
+- **redeem** burns all of your free Yes and No shares in that market in one call and sends the payout. It zeroes your balances before transferring, so it can't pay twice (a second call reverts with `NothingToClaim`). There is no claim deadline and no protocol fee.
+
+The payout calculation is three lines:
+
+```solidity title="MezonkExchange.sol"
+if (outcome == Outcome.Yes) return y;
+if (outcome == Outcome.No) return n;
+if (outcome == Outcome.Invalid) return (y + n) / 2; // exact: both are multiples of LOT
+```
+
+### Invariants
+
+- Before a market is final, its Yes supply equals its No supply equals its locked collateral (`market.collateral`).
+- The exchange's MUSD balance always equals `totalCollateral + escrowedCollateral + protocolFees`: collateral backing shares, MUSD locked in resting buy orders, and the protocol's accrued fee share. Nothing else sits there. Bonds sit in `MezonkResolution` and rebate or referral money in `MezonkIncentives`.
+- These are fuzzed and asserted as invariants in the contract test suite. That is testing, not an audit: the contracts have **not been audited** by an independent firm.
+
+## Edge cases
+
+- **Shares in a sell order aren't redeemed.** A resting (escrowed) sell order holds its shares inside the exchange. Cancel it first (always allowed once trading has closed), then redeem.
+- **A market that never launched has no shares.** Nothing trades during seeding, so a failed market has no winners or losers. Seeders take their deposits back; see [Seeding and launch](/docs/how-it-works/seeding-and-launch).
+- **Holding both sides.** If you hold Yes and No in the same market, merge pairs for MUSD at any time, or just redeem at the end: equal amounts of each pay 1 MUSD per pair in every ending.
+- **The website is down.** Your balance and claim live in the contract. You can call `redeem` directly from any wallet or block explorer.
+
+## Next
+
+<Cards>
+  <Card title="The order book" href="/docs/how-it-works/order-book" description="How trades are matched and how a trade can mint or merge sets." />
+  <Card title="Resolution" href="/docs/how-it-works/resolution" description="How the final outcome is decided, challenged and made final." />
+  <Card title="A market's lifecycle" href="/docs/how-it-works/lifecycle" description="Every stage from suggestion to payout on one page." />
+</Cards>

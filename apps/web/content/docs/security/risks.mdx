@@ -1,0 +1,90 @@
+---
+title: Risks
+description: An honest list of what can go wrong with MEZONK today, from wrong results to Mezo loans, and what limits each risk.
+icon: TriangleAlert
+---
+
+MEZONK runs on Mezo testnet with test money only. This page lists what can still go wrong, including the things the
+design accepts on purpose. If you build on MEZONK or would one day put real money in it, read this first.
+
+## The main ones
+
+- **It isn't independently audited.** Internal reviews and an external researcher's report have been addressed, but no
+  audit firm has reviewed these contracts or their economics. See [Audits](/docs/security/audits).
+- **One arbitrator decides challenged results.** If that key rules wrongly, the wrong side is paid in full.
+- **You can lose what you put in.** A share on the losing side pays nothing.
+- **A Mezo loan can be liquidated.** If BTC falls far enough, you lose the BTC you locked.
+
+## Resolution
+
+| Risk | What limits it | What's left |
+| --- | --- | --- |
+| A resolver proposes a wrong result | Anyone can challenge with a bond during the challenge window; the arbitrator rules | Needs at least one attentive, funded challenger in time |
+| The arbitrator rules wrongly or is captured | Rationale hash is public; deadline-bounded; snapshotted per market | Centralized. One address, not a multisig or a court |
+| A resolver stays silent to force Invalid (0.5 per share) on the live contract | Nothing on the live contract | Fixed in the next deployment: anyone may propose after half the window |
+| A resolver challenges its own wrong proposal from a second wallet on the live contract | The arbitrator can still rule correctly | Fixed in the next deployment: an overturned proposal loses half its bond |
+| Someone challenges a correct result just to delay payouts | They lose their bond if the arbitrator rules | Payouts can wait up to the arbitration window |
+| The arbitrator misses its window | Market settles Invalid, both bonds refunded | Holders of the right side get 0.5 instead of 1 |
+| Bonds are fixed, not scaled to market size | Curator review of who resolves which market | On a large market a 25 MUSD bond (today's testnet setting) is small next to what a wrong result could pay |
+| A market's answer becomes known before trading closes | Curators review close times against the event | Not enforceable on-chain for arbitrary events |
+| Evidence links change after they're posted | The document hash is committed on-chain and re-checked | External web pages can change; archived links are better |
+
+## Owner and keys
+
+- **The owner is one key on testnet,** not a multisig. It can pause new activity, add or retire policies, change the
+  arbitrator and windows for future markets, and allowlist resolvers. It can't touch user funds or outcomes.
+- **The owner can give one wallet several roles.** The deploy script refuses resolver = arbitrator, but the role
+  setters don't re-check, so separation after deployment depends on the owner.
+- **A lost arbitrator key can't be replaced on existing markets,** because each market snapshots its arbitrator.
+  Disputes on those markets would time out to Invalid.
+- **Pausing during seeding** can make a market miss its deadline. It then fails and every seeder can cancel for a
+  full refund, so money isn't lost, but the market doesn't launch.
+
+## Trading
+
+- **Signed orders can go stale.** A maker can spend the MUSD or shares behind a signed order. The contract skips such
+  orders instead of failing the whole trade, and the API re-checks funding before quoting, so the effect is a smaller
+  fill, never a worse price than your limit.
+- **Seeder rebates reward launch liquidity,** not liquidity over time. On the live contract, seed orders far from the
+  price also count toward rebate weight; the next deployment counts only escrow inside the graduation band (reported
+  by KupiaSec).
+- **Wallets aren't people.** The seeding policy's "distinct seeders" counts funded wallets, and one person can control
+  several.
+- **API rate limits are per server instance** and in memory. Production needs a shared limiter in front.
+
+## Mezo loans
+
+- **Liquidation:** under 110%, anyone can liquidate your loan on Mezo and you lose the locked BTC.
+- **Recovery mode:** if Mezo's whole system falls under 150%, you can't borrow more, take BTC out or close until it
+  recovers. You can still repay and add BTC.
+- **Redemptions:** someone can swap MUSD for BTC from the lowest-ratio loans first. You keep the dollar value but hold
+  less BTC.
+- **Repaying from winnings takes a second signature.** If you skip it or it fails, the winnings stay in your wallet
+  and the loan is unchanged.
+- **Mezo's own contracts and price feed** are outside MEZONK's control. MEZONK verifies their addresses and reads
+  their parameters live, but doesn't audit them.
+
+## BTC price markets (not deployed yet)
+
+- **No price history.** Mezo's oracle only answers the latest price. If nobody settles within the capture window,
+  the result must be proposed by hand.
+- **"At close" means "just after close".** The reading is the first fresh price after close, usually within a minute
+  or two, not the price at the exact second.
+- **The resolver's owner** records the rule and handles the manual fallback, and can sweep the MUSD the resolver
+  uses for bonds.
+
+## Operations
+
+- **Deploy gas margin:** the exchange deployment uses about 9.05M of Mezo's 10M block gas. Growing the contract
+  could make it undeployable in one transaction.
+- **Testnet RPC:** one node behind Mezo testnet's public endpoint lags far behind. The app and scripts work around
+  it; other tools may see stale data.
+- **The indexer is a copy.** If it's behind or wrong, lists and history are, too. Money views read the chain.
+- **Legal review** of operating a prediction market is on the list of steps before mainnet. None is recorded yet.
+
+## Next
+
+<Cards>
+  <Card title="Trust model" href="/docs/security/trust-model" description="Exactly what each role can and can't do." />
+  <Card title="Audits" href="/docs/security/audits" description="Reviews so far and what was fixed." />
+</Cards>

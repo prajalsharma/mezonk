@@ -1,0 +1,127 @@
+---
+title: Built on Mezo
+description: Every place MEZONK touches Mezo, which Mezo contract it calls, and why each one matters for MUSD.
+icon: Bitcoin
+---
+
+MEZONK is a prediction market that only makes sense on Mezo. Every market is priced and paid in MUSD, Mezo's
+bitcoin-backed dollar. If you hold BTC instead of MUSD, the app opens a Mezo loan for you from your own wallet, and
+BTC price markets are designed to settle from the same BTC price Mezo uses for its own loans. This page lists every
+one of those touchpoints in one place.
+
+## The short version
+
+- **MUSD is the only money.** You pay for shares in MUSD, winners are paid in MUSD, bonds and fees are in MUSD. There
+  is no other token and no MEZONK token.
+- **You can borrow MUSD inside the app.** Lock BTC, get MUSD, trade. The loan is a normal Mezo loan, signed by your
+  wallet against Mezo's contracts. MEZONK never holds your BTC or your loan.
+- **The trade ticket can borrow for you.** If a trade is short on MUSD, it offers to borrow exactly the difference
+  from your Mezo loan, and the claim screen can send winnings back to the loan.
+- **BTC price markets read Mezo's PriceFeed.** A market like "BTC at or above $100,000 when trading closes" settles
+  from the price Mezo uses for loans and liquidations. This part is built and tested but not deployed yet.
+
+The picture below shows where Mezo sits. Look at the right-hand side: MUSD, Mezo's borrowing contracts and the
+PriceFeed are all called directly by your wallet or by MEZONK's contracts, never through MEZONK's server.
+
+<SystemDiagram />
+
+## Why it matters for MUSD
+
+A prediction market is a place where people want to hold dollars for days or weeks: to back a side, to seed a new
+market's order book, or to post a bond on a result. On MEZONK every one of those dollars is MUSD. Each MUSD in a
+market was either bought or borrowed against BTC on Mezo, so activity on MEZONK turns directly into MUSD demand and,
+through in-app borrowing, into new Mezo loans.
+
+The loop the app is built around:
+
+1. You hold BTC and want to back a side without selling it.
+2. You open a Mezo loan from the app. Mezo mints MUSD to your wallet; your BTC stays locked in Mezo's contracts.
+3. You trade with that MUSD. It sits in MEZONK's exchange as collateral for your shares.
+4. You win, claim MUSD, and repay the loan from the winnings. Your BTC unlocks.
+
+See [Bet from your loan](/docs/mezo/bet-from-your-loan) for the exact flow.
+
+## How it works exactly
+
+### Touchpoint 1: MUSD as the only collateral
+
+| | Testnet (31611) | Mainnet (31612) |
+| --- | --- | --- |
+| MUSD | `0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503` | `0xdD468A1DDc392dcdbEf6db6e34E89AA338F9F186` |
+
+- The exchange takes the collateral token in its constructor and stores it as `immutable collateralToken`. It can
+  never be changed. The deploy script refuses to deploy unless the address has code, 18 decimals and the symbol
+  `MUSD`.
+- Addresses live in two places only: `contracts/src/MezoAddresses.sol` and `apps/web/src/lib/chain/config.ts`. The
+  app never resolves a token by its symbol.
+- Every `transferFrom` into a MEZONK contract checks the balance before and after. If the amount received differs
+  from the amount asked for, the call reverts with `UnsupportedToken`. MUSD is a standard ERC-20, so this never
+  triggers, but it means a fee-on-transfer token could not be swapped in.
+- One Yes share plus one No share is always backed by exactly 1 MUSD held by the exchange. See
+  [Solvency](/docs/security/solvency) for how to check that yourself.
+
+### Touchpoint 2: borrowing through BorrowerOperations
+
+The app calls Mezo's MUSD borrowing contracts ([mezo-org/musd](https://github.com/mezo-org/musd), a Liquity-v1-style
+design) straight from your wallet. The addresses come from mezo-org/musd's deployment files and were checked on-chain
+on 2026-10-22: every contract has code, they reference each other, and `MUSD.mintList(BorrowerOperations)` is true.
+
+| Contract | Testnet | Mainnet |
+| --- | --- | --- |
+| BorrowerOperations | `0xCdF7028ceAB81fA0C6971208e83fa7872994beE5` | `0x44b1bac67dDA612a41a58AAf779143B181dEe031` |
+| TroveManager | `0xE47c80e8c23f6B4A1aE41c34837a0599D5D16bb0` | `0x94AfB503dBca74aC3E4929BACEeDfCe19B93c193` |
+| SortedTroves | `0x722E4D24FD6Ff8b0AC679450F3D91294607268fA` | `0x8C5DB4C62BF29c1C4564390d10c20a47E0b2749f` |
+| HintHelpers | `0x4e4cBA3779d56386ED43631b4dCD6d8EacEcBCF6` | `0xD267b3bE2514375A075fd03C3D9CBa6b95317DC3` |
+| PriceFeed | `0x86bCF0841622a5dAC14A313a15f96A95421b9366` | `0xc5aC5A8892230E0A3e1c473881A2de7353fFcA88` |
+| InterestRateManager | `0xD4D6c36A592A2c5e86035A6bca1d57747a567f37` | `0x4a453700d157717Fe02fB62E7700ED7845048285` |
+
+Writes the app sends to `BorrowerOperations`, always with `msg.sender` = your wallet:
+
+| Function | Used for |
+| --- | --- |
+| `openTrove(debt, upperHint, lowerHint)` payable | Open a loan; BTC is `msg.value` |
+| `withdrawMUSD(amount, upperHint, lowerHint)` | Borrow more, including the trade-ticket shortfall |
+| `repayMUSD(amount, upperHint, lowerHint)` | Repay part, including repaying from winnings |
+| `addColl(upperHint, lowerHint)` payable | Add BTC |
+| `withdrawColl(amount, upperHint, lowerHint)` | Take BTC out |
+| `closeTrove()` | Repay everything and unlock all BTC |
+
+Reads, all taken at one block number so price, mode and fees agree with each other (`readBorrowParams` in
+`apps/web/src/lib/mezo/borrow.ts`):
+
+| Contract | Reads |
+| --- | --- |
+| PriceFeed | `fetchPrice()` |
+| BorrowerOperations | `minNetDebt()`, `borrowingRate()`, `MUSD_GAS_COMPENSATION()`, `MCR()`, `CCR()` |
+| InterestRateManager | `interestRate()` |
+| TroveManager | `checkRecoveryMode(price)`, `getEntireSystemColl()`, `getEntireSystemDebt()`, `getTroveStatus(addr)`, `getEntireDebtAndColl(addr)`, `getTroveMaxBorrowingCapacity(addr)` |
+| SortedTroves, HintHelpers | `getSize()`, `getApproxHint(...)`, `findInsertPosition(...)` for gas hints |
+
+Details: [Borrowing](/docs/mezo/borrowing) and [Manage your loan](/docs/mezo/manage-your-loan).
+
+### Touchpoint 3: PriceFeed settlement for BTC markets
+
+`MezonkPriceResolver` reads `PriceFeed.fetchPrice()` and the oracle's `latestRoundData()` right after a market
+closes, compares the price with a strike recorded before close, and proposes Yes or No through MEZONK's normal
+resolution process, with an evidence hash of the exact reading. The proposal can still be challenged. Details and
+limits: [BTC price markets](/docs/mezo/btc-price-markets).
+
+<Callout type="warn" title="Next deployment">
+  `MezonkPriceResolver` is merged on GitHub and tested against the real exchange and resolution contracts, but it is
+  not deployed on testnet yet. No live market settles from the PriceFeed today.
+</Callout>
+
+### What MEZONK does not do with Mezo
+
+- It never custodies BTC and never holds or manages anyone's loan. There is no MEZONK contract that calls
+  BorrowerOperations.
+- It does not use the MEZO token for anything.
+- It does not route MUSD through any other protocol.
+
+## Next
+
+<Cards>
+  <Card title="Borrowing" href="/docs/mezo/borrowing" description="Open a Mezo loan from the app: functions, hints, fees and every check." />
+  <Card title="Bet from your loan" href="/docs/mezo/bet-from-your-loan" description="Borrow the exact shortfall from a trade and repay from winnings." />
+  <Card title="Architecture" href="/docs/developers/architecture" description="How the contracts, app, indexer and Mezo fit together." />
+</Cards>

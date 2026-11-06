@@ -1,0 +1,118 @@
+---
+title: Quick start
+description: From an empty wallet to holding Yes or No shares on Mezo testnet in about five minutes, with test money only.
+icon: Rocket
+---
+
+MEZONK is a prediction market on Mezo. You back Yes or No on a question with clear rules, pay in MUSD (Mezo's bitcoin-backed dollar), and get paid in MUSD if you're right. Every share on the winning side pays exactly 1 MUSD.
+
+MEZONK runs on **Mezo testnet** today. Test BTC and test MUSD have no cash value, so this is the real product with nothing to lose. There is no mainnet deployment yet.
+
+<Callout type="info" title="The short version">
+Wallet → add Mezo testnet → free test BTC from the faucet → MUSD (borrow it against your BTC, or bring your own) → pick a market → *Buy Yes* or *Buy No*. Each step below links to a longer guide if you get stuck.
+</Callout>
+
+## Before you start
+
+You need a browser wallet that works with Ethereum-style networks. The *Connect wallet* button lists browser extensions it finds (MetaMask, Rabby, OKX and others), plus Rabby and Coinbase Wallet by name. If you already use one of these, use it.
+
+You don't need an account, email or sign-up. MEZONK reads everything about you from your wallet address on the chain.
+
+## Five steps
+
+<Steps>
+<Step>
+### Connect and add Mezo testnet
+
+Press *Connect wallet* in the top bar and pick your wallet. If your wallet is on another network, the button changes to *Switch to Mezo Testnet*. Press it, and your wallet asks two things in a row:
+
+1. **Add a network?** It shows the details below. Check them and approve.
+2. **Switch network?** Approve.
+
+If your wallet can't add it automatically, add it by hand with these values:
+
+| Setting | Value |
+| --- | --- |
+| Network name | Mezo Testnet |
+| Chain ID | 31611 |
+| RPC URL | https://rpc.test.mezo.org |
+| Currency symbol | BTC |
+| Block explorer | https://explorer.test.mezo.org |
+
+BTC is Mezo's native currency, the way ETH is on Ethereum. That's why your wallet shows a BTC balance on Mezo.
+</Step>
+
+<Step>
+### Get free test BTC
+
+Open the [Mezo faucet](https://faucet.test.mezo.org), paste your wallet address and request test BTC. It arrives in your wallet on Mezo testnet within a minute or so.
+
+You need BTC for two things:
+
+- **Network fees.** Every transaction on Mezo is paid in BTC. Fees are tiny, but a wallet with zero BTC can't do anything, not even approve a token.
+- **Collateral**, if you plan to borrow MUSD against it in the next step.
+</Step>
+
+<Step>
+### Get MUSD
+
+Every trade and payout on MEZONK is in MUSD. You have three options:
+
+- **You already hold MUSD on Mezo testnet.** Skip this step.
+- **Borrow MUSD against your BTC in MEZONK.** Open [Borrow MUSD](/borrow). Your BTC is locked in Mezo's own lending contract, not sold and not sent to MEZONK. Mezo's smallest loan is about 1,800 MUSD, so you need roughly 0.05 BTC or more, depending on the BTC price.
+- **Borrow on Mezo's own testnet app** at [testnet.mezo.org](https://testnet.mezo.org), then come back.
+
+This is the step with the most to understand. [Get MUSD](/docs/get-started/get-musd) walks through every field on the borrow page, the fees, and how to avoid liquidation.
+
+Here is the full round trip a borrowed position makes, from BTC to a trade and back:
+
+<LoanFlow />
+</Step>
+
+<Step>
+### Pick a market
+
+Go to [Markets](/markets). Each card shows a question, its current chance of Yes, and when it closes. Open one and read its rules before you trade: they say exactly what counts as Yes, No and Invalid, and which source decides it. The rules are fixed on-chain when the market is published and can never be edited.
+
+Only markets that are live can be traded. A market that is still seeding (collecting starting orders) shows a seeding panel instead of a trade ticket.
+</Step>
+
+<Step>
+### Back a side
+
+On the market page, press *Buy Yes* or *Buy No*, type an amount of MUSD in *Amount*, and check the summary: *Shares you get*, *You pay*, the fee, and what it *Pays if Yes wins*.
+
+The first time, the button says *Approve 40.40 MUSD* (or whatever your amount is). That's your wallet giving the exchange contract permission to take exactly that much MUSD. Confirm it, wait a few seconds, then press *Buy Yes* and confirm the trade in your wallet. When the ticket shows *Confirmed on-chain.*, you own the shares.
+
+[Your first trade](/docs/get-started/first-trade) explains every line of the ticket, what happens on a thin order book, and how prices work.
+</Step>
+</Steps>
+
+## After you trade
+
+- Your shares, their cost and any claims are in [Portfolio](/portfolio).
+- You can sell before the market closes if someone is buying, possibly at a profit.
+- When the result is final, you press *Claim payout* and the contract sends your MUSD. There is no deadline.
+- If you borrowed, repay the loan whenever you like from the Borrow page. There's no due date.
+
+[Sell and claim](/docs/get-started/sell-and-claim) covers all of this.
+
+## If something goes wrong
+
+| What you see | What it means | What to do |
+| --- | --- | --- |
+| *Switch to Mezo Testnet* won't go away | Your wallet is on another network | Approve the network switch in your wallet, or add the network by hand with the table above |
+| Your wallet says "insufficient funds" | No BTC for the network fee | Get test BTC from the faucet |
+| The ticket says *Not enough MUSD* | Your MUSD balance is lower than the trade | Lower the amount, or use the borrow box that appears under the ticket |
+| The ticket says *No one is selling* | Nobody is offering that side right now | Try the other side, wait, or place a limit order (see [Your first trade](/docs/get-started/first-trade)) |
+| A transaction shows *Transaction failed.* | It was rejected or reverted | Read the message under it and press *Try again* |
+
+Still stuck? The [FAQ](/docs/faq) answers the common questions.
+
+## Next
+
+<Cards>
+  <Card title="Get MUSD" href="/docs/get-started/get-musd" description="Borrow MUSD against BTC, step by step, and keep the loan safe." />
+  <Card title="Your first trade" href="/docs/get-started/first-trade" description="Every line of the trade ticket, with worked numbers." />
+  <Card title="Sell and claim" href="/docs/get-started/sell-and-claim" description="Selling early, waiting for the result, and getting paid." />
+</Cards>

@@ -1,0 +1,155 @@
+---
+title: Get MUSD
+description: Three ways to get the MUSD you trade with, and a field-by-field walk through borrowing it against your BTC without selling.
+icon: Coins
+---
+
+MUSD is Mezo's bitcoin-backed dollar. Every MEZONK trade, payout, refund and bond is in MUSD. MEZONK accepts only the official MUSD contract for the network it runs on (on Mezo testnet, `0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503`); it's fixed in the contract and never looked up by name.
+
+If you hold BTC but no MUSD, you don't have to sell your bitcoin. You can lock it with Mezo and borrow MUSD against it, then pay the loan back whenever you like and get the BTC back.
+
+## Pick your route
+
+| You have | Do this |
+| --- | --- |
+| MUSD on Mezo already | Nothing. Go to [Your first trade](/docs/get-started/first-trade). |
+| BTC on Mezo | Borrow MUSD in MEZONK at [/borrow](/borrow) (below). |
+| BTC, and you prefer Mezo's own app | Borrow on [testnet.mezo.org](https://testnet.mezo.org), then come back. |
+
+On testnet, BTC is free from the [Mezo faucet](https://faucet.test.mezo.org). If you connect a wallet that already holds at least 1 MUSD, the borrow page says *You already have … MUSD* and points you to the markets: you only need a loan if you want more.
+
+## What a Mezo loan is
+
+Think of it as leaving your BTC in a locker at Mezo and getting a dollar loan against it. The BTC is still yours. You owe the MUSD you received plus a small one-time fee and a refundable deposit, and simple interest adds to that over time. There is no repayment date.
+
+The one rule that matters: the value of your locked BTC must stay above **110%** of what you owe. That percentage is your **collateral ratio** (BTC value ÷ debt). If BTC's price falls far enough that your ratio drops below 110%, Mezo can **liquidate** the loan: the debt is cancelled and you lose the locked BTC. So you borrow less than you could, and keep a buffer.
+
+<Callout type="info" title="Who you're borrowing from">
+The loan is with Mezo's own lending contracts, signed from your wallet. Your BTC goes into Mezo's contract, not to MEZONK. MEZONK never holds your bitcoin, never lends, and can't touch your loan. The borrow page is a front end for Mezo's contracts, with the same checks Mezo runs.
+</Callout>
+
+## Borrow on the Borrow page, step by step
+
+Open [Borrow MUSD](/borrow) and connect your wallet. While it loads you see *Getting Mezo's loan terms…*: the page is reading the BTC price, fees and limits from Mezo at one block so they all match.
+
+<Steps>
+<Step>
+### Enter the BTC to lock
+
+Type an amount in *BTC to lock*, or press *Max* next to your balance. *Max* keeps 0.001 BTC back for network fees, because you'll need some BTC to sign the next transactions.
+
+The line under the heading tells you the floor: *Minimum loan … MUSD, so you'll need roughly … BTC or more.* Mezo's minimum is 1,800 MUSD of debt counting the one-time fee, so the smallest amount you can receive is just under that (about 1,798 MUSD today).
+</Step>
+
+<Step>
+### Choose how much buffer
+
+*How much buffer?* has three presets. Each one fills in *MUSD you receive* so the loan lands at that ratio:
+
+| Preset | Ratio | BTC can fall about this much before liquidation |
+| --- | --- | --- |
+| Careful | 250% | 56% |
+| Balanced | 200% | 45% |
+| Bold | 160% | 31% |
+
+Balanced is selected by default, and 200% is what the app suggests. You can also type your own number in *MUSD you receive*; the preset then clears.
+</Step>
+
+<Step>
+### Read the summary
+
+Before you sign, the box shows everything, read live from Mezo:
+
+- *Collateral ratio*, with a bar marked at *110% min* and *150%*. The label under it says *Comfortable* (150% or more), *Tight* (130% to 150%) or *Risky* (under 130%).
+- *Liquidated if BTC falls to*: the BTC price at which this loan would hit 110%.
+- *You lock* and *You receive*.
+- *One-time fee*: a percentage of what you borrow, added to your debt.
+- *Refundable deposit*: 200 MUSD, added to your debt and given back when you close the loan.
+- *Total you owe*: what you receive + fee + deposit.
+- *Interest*: a yearly rate, simple interest.
+
+Under 130%, a warning appears: *Very little room. A small drop in BTC could get this loan liquidated.*
+</Step>
+
+<Step>
+### Tick the box and sign
+
+Tick *I understand this is a loan from Mezo, not MEZONK, and that my BTC can be liquidated if BTC falls to about $…*. Until you do, the button says *Tick the box to continue*.
+
+Press *Borrow … MUSD*. The page re-reads the price at the latest block and re-runs Mezo's checks, then your wallet opens **one** transaction: a call to Mezo's BorrowerOperations contract that **sends your BTC** as the transaction value. Your wallet will show the BTC amount leaving your wallet. That's the collateral going into Mezo's contract. Confirm it.
+
+When it confirms you see *… MUSD is in your wallet* and a *Find a market* button. If you came from a trade that was short on MUSD, the button is *Back to your trade* instead.
+</Step>
+</Steps>
+
+## Worked example
+
+Today's Mezo testnet settings (read on 2026-11-06; the page always reads them live): one-time fee 0.1%, interest 1% a year, minimum debt 1,800 MUSD, refundable deposit 200 MUSD, minimum ratio 110%. Suppose BTC is $75,000 (the page uses Mezo's live price feed instead).
+
+You want 2,000 MUSD at the Balanced 200%:
+
+| Line | Amount |
+| --- | --- |
+| You receive | 2,000 MUSD |
+| One-time fee (0.1%) | 2 MUSD |
+| Refundable deposit | 200 MUSD |
+| Total you owe | 2,202 MUSD |
+| BTC to lock at 200% | 2,202 × 2 ÷ 75,000 ≈ 0.0587 BTC |
+| Liquidated if BTC falls to | $75,000 × 110% ÷ 200% = $41,250 |
+
+So BTC can fall 45% before this loan can be liquidated. Interest adds about 22 MUSD a year to the 2,202 you owe, which slowly lowers the ratio, so check it from time to time.
+
+## Try the ratio yourself
+
+Drag the slider to see how much room each ratio leaves. The drop that reaches 110% depends only on the ratio, not on the BTC price.
+
+<RatioDemo />
+
+## Liquidation, in one paragraph
+
+If BTC's price falls until your loan's ratio is under 110%, anyone can liquidate it on Mezo. Your debt is cleared, and the BTC you locked goes to cover it. You keep the MUSD you borrowed, but you lose the BTC, which is worth more than the debt at that point. That's the real cost. Nothing on MEZONK can stop a liquidation, and MEZONK doesn't warn you by email or message: the only warnings are the ratio shown on the Borrow page and on the loan card in [Portfolio](/portfolio). To make a loan safer, repay some MUSD or add BTC (both below).
+
+## Redemptions, in one paragraph
+
+Anyone holding MUSD can swap it with Mezo for BTC, taken from the loans with the lowest ratios first. If a redemption hits your loan, your debt goes down by the same dollar value as the BTC taken, so you don't lose money on paper, but you'd hold less BTC than you locked. A higher ratio makes it less likely.
+
+## Managing an open loan
+
+Mezo allows one loan per wallet. Once you have one, the Borrow page shows *Your Mezo loan* instead: *BTC locked*, *You owe*, *Ratio*, *Liquidation at*, the ratio bar, and five tabs. Each tab previews the loan after the change before you sign.
+
+- **Repay.** Pays MUSD from your wallet into the loan. Interest is paid first, then the principal. Mezo keeps every open loan at its minimum size, so you can repay down to that and no further; to pay off the rest, use *Close*. *Max* fills in the most you can repay.
+- **Borrow.** Borrows more on the same loan. There's a shortcut *Up to 200%: …*. Mezo also caps total debt at a *Borrowing limit* set when the loan opened.
+- **Add BTC.** Locks more BTC. This only ever makes the loan safer.
+- **Take out.** Unlocks some BTC. The shortcut *Keep 200%: …* fills in the most you can take while staying at 200%.
+- **Close.** *Repay … MUSD and close* pays everything you owe except the 200 MUSD deposit, which Mezo cancels itself, and returns all your BTC. You need that much MUSD in your wallet.
+
+Worked example, continuing from above: you owe 2,202 MUSD. The most you can *Repay* and keep the loan open is 2,202 − 200 − 1,800 = **202 MUSD**. To pay off the rest you *Close*, which needs 2,202 − 200 = **2,002 MUSD** in your wallet and returns your 0.0587 BTC.
+
+## What can go wrong, and what to do
+
+| Message | What it means | What to do |
+| --- | --- | --- |
+| *Not enough BTC* | Your BTC balance is lower than what you're locking plus a little for fees | Lock less, or get more BTC (faucet on testnet) |
+| *Minimum is … MUSD* | Below Mezo's smallest loan | Borrow at least that much |
+| *Lock more BTC or borrow less* / *That's below Mezo's 110% minimum.* | The ratio would be under 110% | Lock more BTC or lower the MUSD |
+| *The BTC price moved and this loan's ratio dropped. Review the new numbers and try again.* | The price changed between your preview and signing, and the ratio fell more than 2% | Check the new numbers and sign again |
+| *Mezo's BTC price feed didn't answer in time. Try again in a moment.* | Mezo testnet has a node that sometimes lags | Wait a few seconds and retry |
+| *Couldn't reach Mezo's price feed* | Mezo's network didn't answer | Press *Try again*, or borrow on Mezo's site |
+| *Mezo is in recovery mode* | Mezo's whole system is under 150% | Only repaying and adding BTC work until it recovers; new loans need 150% or more |
+| *This wallet already has a Mezo loan. Borrow more on it instead.* | One loan per wallet | Use the *Borrow* tab on your existing loan |
+
+## Borrowing on Mezo's own app
+
+You can also open the loan at [testnet.mezo.org](https://testnet.mezo.org). MEZONK talks to the lending contracts Mezo publishes for testnet, so a loan opened there shows up on MEZONK's Borrow page and in Portfolio, and the other way round. Use whichever you prefer.
+
+## Borrowed more than you'll trade?
+
+The Borrow page lists other things MUSD can do on Mezo: a savings vault, swaps and pools, or paying down the loan. Those links point to Mezo mainnet apps, not testnet.
+
+## Next
+
+<Cards>
+  <Card title="Your first trade" href="/docs/get-started/first-trade" description="Spend your MUSD on Yes or No, line by line." />
+  <Card title="Built on Mezo" href="/docs/mezo/overview" description="MUSD, Mezo's lending contracts and price feed in more detail." />
+  <Card title="Sell and claim" href="/docs/get-started/sell-and-claim" description="Including using winnings to repay your loan." />
+</Cards>

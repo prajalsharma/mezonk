@@ -1,0 +1,95 @@
+---
+title: Trust model
+description: What the owner, arbitrator, curators, creators, resolvers and the MEZONK server can and cannot do, checked against the contract code.
+icon: ShieldCheck
+---
+
+MEZONK's contracts are not upgradeable, and none of them has a function that lets anyone take the MUSD that backs
+shares, sits in order escrow, funds rebates or is posted as a bond. What people with special roles can do is limited
+to settings for future markets, pausing new activity, and (for the arbitrator) ruling on challenged results. The
+biggest single point of trust is the arbitrator. MEZONK is **not independently audited**; see
+[Audits](/docs/security/audits).
+
+## Who can do what
+
+| Role | Can | Cannot |
+| --- | --- | --- |
+| Exchange owner | Add graduation and fee policies for new markets; retire a policy for new markets; pause and unpause; withdraw accrued protocol fees | Move collateral, escrow, rebate or referral reserves, or bonds; change any outcome; change an existing market's policy; block exits |
+| Factory owner (same key today) | Add or remove creators, curators and resolvers; set windows, bonds and arbitrator for markets published afterwards; void an unused approval | Change those settings for markets already published; publish a market without a curator's signature |
+| Arbitrator | Rule on a challenged result within the arbitration window, choosing Yes, No or Invalid, with a rationale hash | Act on unchallenged markets; challenge a result; rule after the window (it then settles Invalid with bonds refunded) |
+| Curator | Sign an approval for one exact market (rules hash, creator, resolver, close time, policy); void an approval | Publish the market they approved; make a market tradable (only funded seed orders can); touch funds or outcomes |
+| Creator | Publish a market a curator approved | Publish without an approval, change its rules, or reuse an approval |
+| Resolver | Propose a result with a bond after close | Finalize without the challenge window passing; challenge its own proposal from the same address |
+| Anyone | Trade; challenge a proposal with a bond; finalize after a deadline; graduate a market that meets its policy | |
+| MEZONK server | Store signed orders and suggestions; serve indexed data | Sign for anyone, hold keys, invent fills or prices, authorize anything financial |
+
+The exchange and factory both use `Ownable2Step`: a new owner must accept before control moves. On testnet the owner
+is a single key (`0x017FF5FB886E90f9e5ADb405D8eFddffC1162dD2`, an EOA), not a multisig.
+
+## What pausing does
+
+`pause()` stops new risk: publishing markets, graduation, splits, placing orders and taking. It never stops
+cancelling orders, merging, transferring shares, proposing, challenging, arbitrating, finalizing, redeeming or
+claiming rebates and bonds. A paused exchange can't trap money, but it can make a market in seeding miss its
+deadline (it then fails and every seeder can cancel for a full refund) or stop trading on a live market until
+unpaused.
+
+## How it works exactly
+
+### The owner has no path to user funds
+
+Every MUSD the exchange holds is in exactly one bucket: `totalCollateral` (backs shares), `escrowedCollateral`
+(open resting buy orders) or `protocolFees`. The only owner function that sends MUSD is
+`withdrawProtocolFees(to)`, which sends `protocolFees` and nothing else. The incentives contract has no owner. The
+resolution contract has no owner; on the next deployment the exchange owner can sweep only `slashedBonds`. Fuzzed
+invariants check that the buckets always equal the token balances: see [Solvency](/docs/security/solvency).
+
+### Outcomes come from one place
+
+`MezonkExchange.settle` reverts unless `msg.sender` is the resolution contract the exchange created, and only once,
+only for a market that graduated and closed. The resolution contract finalizes in exactly four ways: an undisputed
+proposal after the challenge window, an arbitrator ruling, no proposal by the end of the proposal window (Invalid), or
+no ruling by the end of the arbitration window (Invalid, both bonds refunded).
+
+| Situation (live contract) | Who gets the bonds |
+| --- | --- |
+| Undisputed | Resolver gets its bond back |
+| Disputed, arbitrator agrees with the proposal | Resolver gets both bonds |
+| Disputed, arbitrator overturns it | Disputer gets both bonds |
+| Arbitrator misses the window | Both refunded; market settles Invalid |
+
+### Per-market snapshots
+
+When a market is published, the factory's current config (windows, bonds, arbitrator) and the chosen policy (fees,
+seeding rules, incentive caps) are copied into it. A later `setConfig` or `addPolicy` only affects new markets. The
+flip side: the owner can't replace the arbitrator on markets that already exist, even if that key is lost.
+
+### Separation checks
+
+- On-chain: the curator can't be the publisher (`SelfApproval`); the resolver and arbitrator can't dispute.
+- The deploy script refuses an arbitrator equal to the resolver. The role setters themselves don't re-check this, so
+  keeping roles apart after deployment is an owner responsibility.
+- An approval nonce can be used once; approvals expire at their `deadline`.
+
+### What changes in the next deployment
+
+<Callout type="warn" title="Next deployment">
+  From commit c8fbaff, not on testnet yet: after half the proposal window anyone can propose, so a silent resolver
+  can't force Invalid; the proposer, whoever it is, can't dispute their own proposal; an overturned proposal loses half
+  its bond to the protocol, so disputing your own false proposal from a second wallet costs money. Seeder rebates count
+  only seed escrow inside the graduation band.
+</Callout>
+
+### Off-chain roles
+
+Administrators (a database role) manage accounts, comments, media and the review queue, and prepare owner
+transactions for the owner to sign. They can't sign on-chain actions, change roles on-chain, or touch funds. The
+server reads creator and curator roles from the factory on every privileged request; a database role can never grant
+an on-chain power.
+
+## Next
+
+<Cards>
+  <Card title="Solvency" href="/docs/security/solvency" description="The invariants, the tests and how to check them yourself." />
+  <Card title="Risks" href="/docs/security/risks" description="What can still go wrong." />
+</Cards>

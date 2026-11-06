@@ -1,0 +1,166 @@
+---
+title: Borrowing
+description: How the app opens a Mezo loan from your wallet, what it costs, and every check Mezo runs before it says yes.
+icon: Landmark
+---
+
+If you hold BTC but no MUSD, you can borrow MUSD against your BTC on the *Borrow* page without leaving MEZONK. It is
+a loan from Mezo's own contracts, not from MEZONK: your wallet sends the BTC to Mezo, Mezo mints MUSD to your wallet,
+and your BTC stays locked there until you repay. MEZONK never holds the BTC or the loan.
+
+## The plain version
+
+- **You lock BTC and receive MUSD.** Mezo calls a loan a *trove*. One wallet can have one open loan.
+- **Your BTC is not sold.** If BTC goes up, it is still your BTC once you repay.
+- **There's a one-time fee and a small yearly interest rate,** both set by Mezo and shown live on the form. There is
+  no due date.
+- **Mezo adds a refundable 200 MUSD deposit to what you owe.** You get it back when you close the loan.
+- **Keep a buffer.** Your *collateral ratio* is the value of your BTC divided by what you owe. If it falls below
+  110% because BTC dropped, Mezo can liquidate the loan and you lose the locked BTC. The app suggests 200%.
+
+Drag the slider to see how far BTC can fall before a loan at a given ratio reaches 110%.
+
+<RatioDemo />
+
+## Open a loan
+
+<Steps>
+<Step>
+### Enter the BTC to lock
+
+On the *Borrow* page, type an amount under *BTC to lock*, or tap *Max*. *Max* keeps 0.001 BTC back for network
+fees, because gas on Mezo is paid in BTC.
+</Step>
+<Step>
+### Pick a buffer
+
+*How much buffer?* offers *Careful* (250%), *Balanced* (200%) and *Bold* (160%). Picking one fills in the largest
+amount of MUSD you can receive at that ratio. You can also type the amount under *MUSD you receive* yourself.
+</Step>
+<Step>
+### Check the summary
+
+The summary shows *You lock*, *You receive*, *One-time fee*, *Refundable deposit*, *Total you owe*, *Interest*, the
+ratio meter with the 110% line, and *Liquidated if BTC falls to*. A warning appears if the ratio is under 130%.
+</Step>
+<Step>
+### Confirm and sign
+
+Tick the box that says you understand the loan comes from Mezo, not MEZONK, then press *Borrow … MUSD*. Your wallet
+signs one transaction. When it confirms, the MUSD is in your wallet.
+</Step>
+</Steps>
+
+## A worked example
+
+This uses the parameters Mezo testnet reported on 2026-11-06 (fee 0.1%, deposit 200 MUSD, minimum net debt 1,800
+MUSD, 1% interest a year) and assumes BTC at $80,000 to keep the arithmetic round. The form always reads the real
+values at the moment you sign.
+
+| | |
+| --- | --- |
+| You receive | 2,000 MUSD |
+| One-time fee (0.1%) | 2 MUSD |
+| Refundable deposit | 200 MUSD |
+| Total you owe | 2,202 MUSD |
+| BTC to lock for 200% | 2,202 × 2 ÷ 80,000 = 0.05505 BTC |
+| Liquidated if BTC falls to | 2,202 × 1.10 ÷ 0.05505 = $44,000 |
+
+The smallest loan is set by the minimum net debt. Mezo counts the amount you receive plus the fee, so with a 0.1% fee
+the smallest amount you can receive is 1,800 ÷ 1.001, about 1,798.21 MUSD. The form shows this as *Minimum loan*.
+
+## How it works exactly
+
+### The call
+
+```solidity title="BorrowerOperations (mezo-org/musd)"
+function openTrove(uint256 _debtAmount, address _upperHint, address _lowerHint) external payable;
+```
+
+`msg.value` is the BTC to lock (18 decimals, BTC is Mezo's native asset). `_debtAmount` is the MUSD you receive. The
+call is sent from your wallet directly to BorrowerOperations; no MEZONK contract is involved.
+
+### What Mezo adds to the debt
+
+```
+fee          = debtAmount × borrowingRate / 1e18      (0 in recovery mode)
+netDebt      = debtAmount + fee                        must be ≥ minNetDebt
+compositeDebt = netDebt + MUSD_GAS_COMPENSATION        (200 MUSD)
+ICR          = BTC × price / compositeDebt
+```
+
+The 200 MUSD gas compensation is minted to Mezo's gas pool, not to you. It pays whoever liquidates the loan if that
+ever happens, and is burned back when you close the loan, which is why closing costs 200 MUSD less than the debt shown.
+
+### The checks, in the order the app runs them
+
+The app mirrors BorrowerOperations in `checkOpen` (`apps/web/src/lib/mezo/borrow.ts`), so it can explain a revert
+before you sign:
+
+| Check | Normal mode | Recovery mode |
+| --- | --- | --- |
+| Net debt (amount + fee) ≥ `minNetDebt` | yes | yes (fee is 0) |
+| Ratio of the new loan | ≥ `MCR` (110%) | ≥ `CCR` (150%) |
+| System ratio after opening | ≥ `CCR` (checked by Mezo) | not applicable |
+| Wallet has no active loan | yes | yes |
+
+Mezo also records a *max borrowing capacity* when the loan opens: the debt that would put this loan at 110% at the
+opening price. Later borrowing on the same loan can never exceed it, even if BTC rises.
+
+### Right before the wallet prompt
+
+The numbers on screen can be up to 30 seconds old, so `prepareOpen` repeats the work at the latest block:
+
+1. Reads price, fee, minimums, MCR, CCR, interest rate, system collateral and debt at one block number, then
+   `checkRecoveryMode(price)` at the same block.
+2. Re-runs `checkOpen`. If the loan now fails a check, it stops with the reason.
+3. If BTC moved and the ratio fell more than 2% (relative) below what you saw, it stops and asks you to review.
+4. Finds hints (below), then estimates gas and sends it explicitly with a 25% margin, so the wallet does not
+   estimate against a lagging node.
+
+### Hints
+
+Mezo keeps loans in a list sorted by nominal ratio (`NICR = BTC × 1e20 / principal`, no price). Inserting a loan in
+the right place is cheaper if you pass its neighbours. The app computes the new loan's NICR, calls
+`HintHelpers.getApproxHint(NICR, trials, seed)` with `trials = max(15, 15 × √listSize)`, then
+`SortedTroves.findInsertPosition(NICR, hint, hint)`. A stale hint only costs gas, because Mezo re-checks it. If the
+lookup fails, the app sends zero hints and Mezo walks the list itself.
+
+### Recovery mode
+
+Mezo is in recovery mode when the whole system's ratio (TCR) is under 150%. In that mode Mezo only allows changes
+that make loans safer. For opening a loan, that means:
+
+- no borrowing fee,
+- the new loan must be at 150% or more, not 110%.
+
+The app reads `checkRecoveryMode` every time and shows a notice when it's on.
+
+### Liquidation and redemption
+
+- **Liquidation:** if your loan's ratio falls below 110%, anyone can liquidate it on Mezo. The loan is closed and the
+  locked BTC goes to cover the debt.
+- **Redemption:** anyone can hand Mezo MUSD and take BTC at face value from the loans with the lowest ratios first.
+  Your debt drops by the same dollar value, so you lose nothing in dollars, but you end up holding less BTC. A higher
+  ratio makes it less likely to be your loan.
+
+### Errors you might see
+
+The app turns Mezo's revert strings into plain messages (`explainBorrowRevert`):
+
+| Mezo says | The app says |
+| --- | --- |
+| `PriceFeed: Oracle is stale.` | Mezo's BTC price feed didn't answer in time. Try again in a moment. |
+| `ICR < MCR`, `TCR < CCR` | The BTC price moved and this loan would be under Mezo's minimum ratio. |
+| `net debt must be greater than minimum` | That's under Mezo's minimum loan size. |
+| `Trove is active` | This wallet already has a Mezo loan. Borrow more on it instead. |
+
+The stale-oracle case is usually Mezo testnet's public RPC: it load-balances over a node that can lag far behind,
+and reads served by it see a price older than 60 seconds. The app retries those reads automatically.
+
+## Next
+
+<Cards>
+  <Card title="Manage your loan" href="/docs/mezo/manage-your-loan" description="Repay, add or take out BTC, and close, with Mezo's exact limits." />
+  <Card title="Bet from your loan" href="/docs/mezo/bet-from-your-loan" description="Borrow the shortfall from a trade and repay from winnings." />
+</Cards>

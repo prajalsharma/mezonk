@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { createMDX } from "fumadocs-mdx/next";
 
 const nextConfig: NextConfig = {
   // Database drivers load native/WASM assets at runtime; keep them out of the server bundle.
@@ -34,4 +35,7 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Compiles content/docs (MDX) for the /docs pages.
+const withMDX = createMDX();
+
+export default withMDX(nextConfig);

@@ -1,0 +1,144 @@
+---
+title: Seeding and launch
+description: How a new market collects real, funded orders before trading opens, the exact rules the contract checks to launch it, and what seeders earn and risk.
+icon: Sprout
+---
+
+A newly published market has an empty order book, and an empty book is useless: the first trader would find nothing to buy. So every MEZONK market starts in a **seeding** stage. People who want to back it (seeders) place real buy orders with their own MUSD, locked in the contract. Once there are enough orders, close enough together, from enough wallets, anyone can launch the market and trading opens with prices already on the book.
+
+If that doesn't happen before the seeding deadline, the market never opens and every seeder takes back exactly what they locked.
+
+## The plain version
+
+- A **seed order** is a normal buy order: "buy 100 Yes at 45¢" or "buy 100 No at 45¢". Its MUSD is locked in the contract the moment you place it.
+- Buying No at 45¢ is the same as offering Yes at 55¢, so seed orders on both sides form a book with a bid and an offer.
+- The contract itself checks whether the book is good enough to launch. No person decides, and MEZONK's server can't fake it: only MUSD locked on-chain counts.
+- If the market launches, seed orders become ordinary orders. If a trader fills yours, you now hold that side and win or lose like anyone else.
+- If it doesn't launch in time, you get a full refund. Nobody traded, so nobody won or lost.
+- Seeders share part of the trading fees for a while after launch. That depends on trading actually happening and isn't guaranteed.
+
+## When a market can launch
+
+The contract checks five things, all from its own escrowed book, in the same transaction that launches the market:
+
+| Check | Rule | Why it exists |
+|---|---|---|
+| Both sides | At least one bid and one offer for Yes | A one-sided book has no price; the first trader on the other side would get nothing |
+| Spread | Best offer − best bid ≤ the policy's maximum | A wide gap means traders pay far from fair value on their first trade |
+| Depth | Enough shares bid within the band below the best bid, and enough offered within the band above the best offer | One tiny order at a good price would otherwise pass the spread check while offering almost nothing to trade |
+| Seeders | Enough distinct wallets, each with at least a minimum amount locked | Makes it harder for one person to launch a market alone; see the Sybil note below |
+| Time | The seeding deadline hasn't passed | Gives every market a clear end: launch or refund |
+
+The exact numbers come from the market's **policy**, a numbered, immutable set of launch, fee and incentive settings chosen when the curator approves the market. These are the live values for new markets:
+
+<LiveParams />
+
+Each market keeps the policy it was published under, even if the owner adds a new one later.
+
+### How depth is counted
+
+Depth is counted in **shares**, not MUSD, at every price level from the best price out to the band. With a 5¢ band and a best bid of 45¢, the levels counted are 40¢ through 45¢ (six levels). A bid at 39¢ doesn't count toward depth, though it still sits on the book.
+
+On the offer side, remember that offers are No bids: a No bid at 45¢ is a Yes offer at 55¢. With a best offer of 55¢ and a 5¢ band, offers from 55¢ to 60¢ count, which are No bids from 45¢ down to 40¢.
+
+### How seeders are counted
+
+A wallet counts as a seeder once the total MUSD it has locked in seed orders on this market, across both sides, reaches the policy's minimum. If it cancels below that minimum during seeding, it stops counting.
+
+## Worked examples
+
+These use the two policies on Mezo testnet as read from the contract on 6 November 2026. New approvals use the newest active policy, so check the live values above before relying on them.
+
+### Policy 2 (newest): one seeder can launch
+
+Policy 2 asks for 20 shares bid within 5¢ of the best bid, 20 offered within 5¢ of the best offer, a spread of at most 10¢, and one seeder with at least 10 MUSD locked. Seeding lasts 1 hour.
+
+- One wallet places *buy 20 Yes at 45¢*: locks 20 × 0.45 = **9.00 MUSD**.
+- The same wallet places *buy 20 No at 50¢*, which is an offer of Yes at 50¢: locks 20 × 0.50 = **10.00 MUSD**.
+- Spread: 50 − 45 = 5¢. Bid depth 20, offer depth 20. The wallet has 19 MUSD locked, so it counts as a seeder.
+- The market can launch with **19 MUSD** in total.
+
+### Policy 1: two seeders, more depth
+
+Policy 1 asks for 100 shares on each side within 5¢, a spread of at most 10¢, and two seeders with at least 10 MUSD each. Seeding lasts 7 days.
+
+- Wallet A: *buy 100 Yes at 45¢*, locks **45 MUSD**.
+- Wallet B: *buy 100 No at 45¢* (an offer of Yes at 55¢), locks **45 MUSD**.
+- Spread: 55 − 45 = 10¢, exactly the limit. Two seeders. The market can launch with **90 MUSD** in total.
+
+### Three ways that same book fails under policy 1
+
+- **Too wide.** Wallet A bids Yes at 40¢ instead. Spread 55 − 40 = 15¢, over the 10¢ limit.
+- **Depth in the wrong place.** Wallet A splits its order: 60 Yes at 45¢ and 60 at 38¢. Only 40¢ to 45¢ counts, so bid depth is 60, short of 100.
+- **Too small to count.** Wallet B locks only 9 MUSD (20 No at 45¢). Its shares still count toward depth, but B isn't a seeder, so the market has one seeder, not two.
+
+## Launching
+
+On a seeding market, the panel headed *Seeding: not trading yet* lists each check with its current value. When they all pass, a *Launch market* button appears. **Anyone** can press it. The contract runs the same checks again in that transaction (`graduate`), so a launch can't happen on stale numbers.
+
+Launch is one-time. If seeders are filled or cancel later and the book thins, the market stays live and the app labels it "Low liquidity". It never returns to seeding.
+
+A market can launch as soon as the checks pass. It doesn't wait for the deadline.
+
+## Seed order locks
+
+A seed order can't be cancelled for a set time (`minRest`, 1 hour in both testnet policies today):
+
+1. after you place it, and
+2. again after the market launches.
+
+Why: without the first lock, someone could place orders, launch, and cancel in the same minute, leaving traders with an empty book that only looked deep. Without the second, the liquidity counted at launch could vanish the moment trading opens. The locks make the counted orders really executable when the market opens.
+
+Locks never apply once the seeding deadline has passed without a launch, or once trading has closed.
+
+Under a policy whose seeding period is as short as its lock (policy 2: both 1 hour), a seed order in practice can't be cancelled during seeding at all. Commit only what you're happy to leave in place until launch or refund.
+
+## If the market doesn't launch
+
+After the seeding deadline, a market that hasn't launched is **Failed**, permanently. The panel reads *This market didn't launch*, and each of your orders shows *Refund*. A refund returns exactly `remaining shares × price`, with no fee, and works directly against the contract (`cancelOrder`) even if MEZONK's website is down. A second refund call reverts, so nothing can be claimed twice. A failed market can never be resolved and never pays a winner.
+
+## What seeders earn
+
+For a period after launch, part of every taker fee on the market is set aside for its seeders. Today's testnet policies send 20% of the 1% taker fee to seeders for 30 days after launch, split by seed weight, capped per wallet and per market, and claimable for 90 days after that. The full rules and a worked example are on [Fees and incentives](/docs/how-it-works/fees-and-incentives).
+
+On the live contract, your **seed weight** is the MUSD you had locked in seed orders that were still open at the moment of launch. It is fixed at launch: later fills or cancellations don't reduce it, and orders placed after launch don't add to it.
+
+<Callout type="warn" title="Next deployment">
+Merged on GitHub and tested, but not yet on chain: seed weight for rebates will count only seed orders priced inside the band the launch check used (for example, bids from 40¢ to 45¢ when the best bid is 45¢ and the band is 5¢). An order far from the market, such as a Yes bid at 1¢, takes almost no risk of being filled, so it will no longer dilute the seeders who put real depth near the price. Launch rules themselves don't change. This came from an external researcher's report (KupiaSec) and is fixed in commit c8fbaff.
+</Callout>
+
+## What seeders risk
+
+- **Being filled at the wrong time.** A seed order is a real offer. If news moves the odds, traders will hit your order at your old price. Example: you bid 100 Yes at 45¢. News makes No nearly certain, traders sell you 100 Yes at 45¢, and you now hold 100 Yes likely worth nothing: a 45 MUSD loss. Fee rebates won't come close to covering that.
+- **Locked money.** Your MUSD is locked until launch plus the lock period, or until the deadline if the market fails.
+- **No trading, no rebate.** Rebates come only from fees traders actually pay. A quiet market pays seeders nothing.
+- **Smart-contract risk.** The contracts are not audited by an independent firm.
+
+## How it works exactly
+
+- `placeOrder(marketId, outcome, Buy, price, quantity)` during seeding escrows `quantity × price` MUSD and records it as a seed order. Only buy orders are accepted during seeding (sells, splits, signed orders and takes all revert), and the order may not cross the book.
+- The exchange keeps depth per Yes price level and a 99-bit map of which levels are non-empty, so finding the best prices and summing a band is a bounded loop of at most 99 steps, not a loop over orders.
+- `graduationCheck(marketId)` is a public view that returns the same numbers `graduate` uses: best bid and offer, depth on each side, seeder count, and which checks pass. The app's panel reads this view.
+- `graduate(marketId)` is permissionless, reverts with `GraduationUnmet` if any check fails, and reverts while the exchange is paused.
+- Stage is derived, not stored: a market with no launch time is Seeding until `block.timestamp` passes `seedingDeadline`, then Failed.
+
+```solidity title="MezonkExchange.sol"
+g.spreadOk = g.bestBid != 0 && g.bestAsk != 0 && g.bestAsk > g.bestBid && g.bestAsk - g.bestBid <= p.maxSpread;
+g.depthOk  = g.bidDepth >= p.minBidDepth && g.askDepth >= p.minAskDepth;
+g.seedersOk = g.seeders >= p.minSeeders;
+```
+
+## Edge cases and limits
+
+- **Distinct wallets aren't distinct people.** The per-seeder minimum makes Sybil seeding cost real, locked money, and one-sided or crossed books can't pass, but someone with enough MUSD can be several seeders.
+- **Pausing during seeding.** While the exchange is paused, no seed orders can be placed and no market can launch. The seeding deadline is not extended, so a long pause can make a market fail. Refunds still work.
+- **Close time.** A market's close time must be at least the minimum live time after its seeding deadline (1 hour on testnet today) and at most the maximum duration after publication (365 days today). The contract refuses to publish otherwise.
+- **Who can seed.** Anyone, including the creator. The curator approves the question but puts no money in.
+
+## Next
+
+<Cards>
+  <Card title="Fees and incentives" href="/docs/how-it-works/fees-and-incentives" description="How seeder rebates are funded, split, capped and claimed." />
+  <Card title="The order book" href="/docs/how-it-works/order-book" description="What happens to seed orders once the market is live." />
+  <Card title="A market's lifecycle" href="/docs/how-it-works/lifecycle" description="Seeding in the context of the whole market." />
+</Cards>

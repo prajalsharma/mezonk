@@ -1,0 +1,165 @@
+---
+title: BTC price markets
+description: How "BTC above or below $X" markets will settle from Mezo's own PriceFeed, what the contract checks, and what happens when it can't.
+icon: LineChart
+---
+
+<Callout type="warn" title="Next deployment">
+  Everything on this page describes `MezonkPriceResolver`, which is merged on GitHub and tested against the real
+  exchange and resolution contracts, but not deployed on testnet yet. Until it is, no market settles from the
+  PriceFeed, and markets about BTC's price are resolved like any other market.
+</Callout>
+
+Some questions have an answer that's already on Mezo. "Will BTC be at or above $100,000 when trading closes?" can be
+answered by reading the BTC price Mezo itself uses for loans and liquidations. `MezonkPriceResolver` does exactly
+that: a few minutes after close it reads Mezo's PriceFeed, compares the price with the market's strike, and proposes
+Yes or No with a record of the exact reading. It's still an ordinary proposal, so anyone can challenge it.
+
+## The plain version
+
+- **The rule is fixed before close.** Strike price and direction ("at or above" or "below") are recorded on-chain
+  once, before trading closes, and can't change.
+- **The price is read just after close.** A keeper bot reads Mezo's price within the capture window (15 minutes by
+  default). Anyone can do this; it doesn't need permission.
+- **The reading is public.** The market page shows the price read, the result, when the oracle updated, and the block
+  and oracle round, under *Settled by Mezo's BTC price feed*.
+- **It can still be challenged.** The reading becomes a normal proposal with a bond. If you think it's wrong, you
+  challenge it like any other.
+
+Follow the path below: close, the keeper's `settle()` inside the window, the PriceFeed read, then the usual proposal,
+challenge window and final result.
+
+<PriceResolverFlow />
+
+## How it works exactly
+
+### Mezo's PriceFeed, as verified on 2026-11-04
+
+- Testnet PriceFeed `0x86bCF0841622a5dAC14A313a15f96A95421b9366`, mainnet `0xc5aC5A8892230E0A3e1c473881A2de7353fFcA88`.
+- `fetchPrice()` returns USD per BTC with 18 decimals. It reverts `PriceFeed: Oracle is stale.` if the oracle's
+  last update is more than 60 seconds old (`MAX_PRICE_DELAY = 60` in mezo-org/musd `PriceFeed.sol`).
+- `oracle()` on testnet is `0x7b7c000000000000000000000000000000000015`, a chain precompile.
+- The oracle supports `latestRoundData()` only. `getRoundData()` is not supported ("method not found"), so there is
+  **no price history**. A price can only be read at the time it describes. This is why settlement has a short window
+  and needs a keeper.
+- Foundry can't execute the precompile locally, so nothing at deploy time calls the feed, and the local dev chain
+  replaces the oracle with a fixed stand-in.
+
+### Recording the rule
+
+```solidity title="MezonkPriceResolver.sol"
+function setRule(uint256 marketId, uint128 strike, Direction direction) external onlyOwner;
+```
+
+- Owner only, once per market (`RuleAlreadySet`), strictly before `closeTime` (`WindowClosed`).
+- Only for markets whose resolver is this contract (`NotThisResolver`). The curator assigns the resolver when
+  approving the market, and the factory owner must have allowlisted it with `setResolver`.
+- `strike` is USD per BTC with 18 decimals and can't be zero. `Above` means Yes if `price ≥ strike`. `Below` means Yes
+  if `price < strike`. A price exactly at the strike counts as *above*.
+- Emits `RuleSet(marketId, strike, direction)`. The market's question text must say the same thing.
+
+### Settling
+
+```solidity title="MezonkPriceResolver.sol"
+function settle(uint256 marketId) external returns (Outcome);
+```
+
+Anyone may call it. In order, it:
+
+1. Requires a rule (`NoRule`), `block.timestamp ≥ closeTime` (`TooEarly`) and
+   `block.timestamp ≤ closeTime + captureWindow` (`WindowClosed`).
+2. Calls `priceFeed.fetchPrice()`, which reverts if the oracle is stale.
+3. Reads `roundId` and `updatedAt` from the oracle's `latestRoundData()` and requires `updatedAt ≥ closeTime`
+   (`PriceBeforeClose`). A price from before close can never settle the market.
+4. Compares with the strike, stores a `Reading` (price, round, update time, read time, block, outcome) and emits
+   `PriceCaptured`.
+5. Approves the market's proposer bond to `MezonkResolution` and calls
+   `proposeOutcome(marketId, outcome, evidenceHash, "mezo:PriceFeed.fetchPrice")`. The bond comes from MUSD the
+   resolver contract holds, not from the caller.
+
+`captureWindow` is set at deployment, between 60 seconds and 1 day; the deploy script defaults to 900 seconds. A
+second `settle` on the same market reverts, because the resolution contract accepts only one proposal.
+
+What "the price at close" means here: the first reading taken after close whose oracle update is also after close.
+With the 60-second staleness rule, it describes BTC at some moment between close and the end of the window, usually
+within a minute or two of close.
+
+### The evidence hash
+
+```solidity
+keccak256(abi.encode(
+  block.chainid, address(priceFeed), marketId, strike, direction,
+  price, roundId, updatedAt, block.number
+))
+```
+
+Every input is public: the rule from `RuleSet` or `rules(marketId)`, the reading from `PriceCaptured` or
+`readings(marketId)`, the chain id and feed from the contract. Anyone can recompute it and compare it with the
+`evidenceHash` in `OutcomeProposed`.
+
+To check a reading against Mezo yourself, query the PriceFeed at the block in the reading:
+
+```bash
+cast call 0x86bCF0841622a5dAC14A313a15f96A95421b9366 "fetchPrice()(uint256)" \
+  --block <blockNumber> --rpc-url https://rpc.test.mezo.org
+```
+
+This needs an archive node for old blocks; the public RPC may not serve them.
+
+### When the keeper misses the window
+
+The keeper is the market-maker bot (`apps/web/scripts/market-maker.ts` with `MM_PRICE_RESOLVER` set). Each pass it
+finds markets that name the resolver, have closed, have a rule, are inside the window and are still awaiting a
+proposal, and calls `settle`. A stale oracle or a lagging node just means it tries again on the next pass.
+
+If nobody settles inside the window (keeper down, oracle stale the whole time, resolver out of MUSD for the bond):
+
+```solidity
+function proposeManual(uint256 marketId, Outcome outcome, bytes32 evidenceHash, string calldata evidenceURI)
+    external onlyOwner;
+```
+
+Owner only, and only after the window (`WindowOpen` before). It emits `ManualProposal` and goes through the same bond,
+challenge window and arbitration as any proposal. If nobody proposes at all before the market's proposal window ends,
+the market settles Invalid, as every market does: each share, Yes or No, pays 0.5 MUSD.
+
+<Callout type="warn" title="Next deployment">
+  With the resolution fixes from commit c8fbaff, anyone may also propose directly once half the proposal window has
+  passed, so a missed window doesn't depend on the owner. On the live resolution contract only the market's resolver
+  can propose.
+</Callout>
+
+### Still disputable
+
+The resolver posts the same bond as any proposer, and the proposal has the normal challenge window. The arbitrator has
+the final say on a challenged proposal. The current values:
+
+<LiveParams />
+
+### Other functions
+
+| Function | Who | Does |
+| --- | --- | --- |
+| `withdrawBonds()` | anyone | Pulls bonds the resolution contract credited back to the resolver |
+| `sweep(to, amount)` | owner | Moves MUSD out of the resolver |
+| `rules(id)`, `readings(id)`, `captureWindow()` | view | What the market page reads |
+
+The resolver needs only `getMarket`, `resolution` and `collateralToken` from the exchange, so it works with the
+exchange already deployed; no new exchange is needed. Its deployment was simulated against the live exchange at
+1.68M gas. Tests: `contracts/test/exchange/PriceResolver.t.sol`, 12 tests against the real exchange and resolution
+contracts with a mock oracle.
+
+### What you trust
+
+- **Mezo's PriceFeed** for the price. MEZONK adds no other source.
+- **The resolver's owner** to record the right rule before close (it's public and can't change afterwards) and to
+  propose by hand if the window is missed. The owner can also `sweep` the resolver's MUSD, which would make `settle`
+  fail for lack of a bond and push a market to the manual path. Either way the proposal is challengeable.
+- **A keeper** to call `settle` in time. Anyone can be that keeper.
+
+## Next
+
+<Cards>
+  <Card title="Resolution" href="/docs/how-it-works/resolution" description="Proposals, challenges, the arbitrator and timeouts." />
+  <Card title="Contracts" href="/docs/developers/contracts" description="Every MEZONK contract's functions, events and addresses." />
+</Cards>

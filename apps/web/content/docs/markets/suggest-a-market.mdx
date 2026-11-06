@@ -1,0 +1,189 @@
+---
+title: Suggest a market
+description: How anyone can propose a market, what each step of the form asks for, what reviewers check, and how an approved suggestion becomes a live market.
+icon: Lightbulb
+---
+
+Any wallet can suggest a market on MEZONK. You write a yes/no question with rules a stranger could check, a curator reviews it, and if it's approved, an approved creator publishes it on-chain. Seeders then fund its first orders and it goes live. Suggesting is free: it's a wallet signature to sign in, not a transaction.
+
+Markets are reviewed because an ambiguous or manipulable question is the main way a prediction market hurts its users. Once published, a market's rules can never be edited, so the review is the last chance to get them right.
+
+## From suggestion to live market
+
+The diagram shows the four hand-offs. Note where the contract steps in: only the last step is on-chain, and it checks the curator's signature itself.
+
+<GovernanceFlow />
+
+1. **You suggest.** Fill in the form at *Suggest a market* and press *Submit for review*. Your suggestion appears in the public review queue.
+2. **A curator reviews.** They pick it up, check it against a fixed checklist, and either approve, ask for changes, or reject. Every decision comes with a reason you can read on your suggestion's page.
+3. **The curator signs.** Approval is an EIP-712 signature from the curator's wallet over the exact rules, the publisher, the resolver, the close time and the launch policy.
+4. **An approved creator publishes.** The publisher named in the approval presses *Publish market* on the suggestion page. The contract checks the signature and opens the market in seeding.
+
+After that, the market needs seed orders before anyone can trade. See [Seeding and launch](/docs/how-it-works/seeding-and-launch).
+
+## The form, step by step
+
+The form has eight steps. Your draft is saved in this browser as you go, and on the server once you sign in.
+
+<Steps>
+<Step>
+### Question
+
+- *Question*: a yes/no question of 15 to 160 characters, ending in "?", with a date. Example from the form: "Will Mezo mainnet TVL exceed $500M on 31 Mar 2027 (UTC)?"
+- *Category*: Crypto, DeFi, Bitcoin, Technology, Economics, Sports or Other.
+- *One-line summary (optional)*: up to 280 characters, shown under the question. Not part of the rules.
+- *Context (optional)*: up to 1,200 characters of background. This **is** part of the on-chain rules.
+- *Cover image (optional)*: shown at the top of the market page.
+</Step>
+<Step>
+### Outcome
+
+- *Outcome type*: Yes / No is the only type today.
+- *Related project (optional)*: link the market to a registered project. If you represent it, say so under Disclosures.
+</Step>
+<Step>
+### Resolution rules
+
+- *Resolves Yes if*, *Resolves No if*, *Invalid if*: 20 to 600 characters each. Name the exact figure, threshold, date and time zone.
+- *Conflicting, late or revised data*: what counts if sources disagree or a figure is revised. It starts with a sensible default you can edit.
+
+[Writing good rules](/docs/markets/writing-good-rules) has examples of rules that pass and rules that don't.
+</Step>
+<Step>
+### Sources
+
+- *Primary source* and *Source link*: a name and an https:// link.
+- *Fallback source and rule (optional)*: used only if the primary source is unavailable. It's appended to the ambiguity rule, so it becomes part of the on-chain rules.
+- *Context images (optional, up to 6)* and *Supporting references (optional)*: they help traders, but only the written rules decide the outcome.
+</Step>
+<Step>
+### Timing
+
+- *Event evaluated at (UTC)*: the moment the source is checked.
+- *Trading closes at (UTC)*: at or before the evaluation time, and at least an hour from now. *Same as evaluation* fills it in.
+- *Expected launch window (optional)* and *Liquidity (optional)*: help reviewers and seeders plan. Not binding.
+</Step>
+<Step>
+### Disclosures
+
+- Tick the box if the market is proposed or sponsored by the project it measures, or if you have a stake in its outcome. Then describe the relationship (at least 10 characters). It's shown publicly, and reviewers reject undisclosed conflicts.
+- *Why is this market useful?*: at least 20 characters. Helps reviewers prioritise.
+</Step>
+<Step>
+### Review
+
+Sign in (one free signature, no transaction). The server saves your draft and runs automated checks:
+
+- **Must fix** (blocking): the question doesn't end in "?"; vague words in the question or Yes/No rules ("soon", "significant", "a lot", "major", "popular", "successful", "big", "moon"); identical Yes and No rules; anything about violence, death or harm to people; trading closing after the evaluation time.
+- **Worth a second look** (warning): no number or date in the question or Yes rule.
+- **Similar questions already exist**: open markets or suggestions with overlapping wording. Reviewers reject duplicates.
+
+You also see *How it will appear*. Note: there are no opening odds. The first prices come from real seed orders.
+
+Tick the three confirmations under *Before you submit*.
+</Step>
+<Step>
+### Submit
+
+*Submit for review* puts it in the public queue. The server re-runs the checks and refuses to submit if anything blocking remains.
+</Step>
+</Steps>
+
+## After you submit
+
+Your suggestion's page shows its status, the review history, and an audit trail. The statuses you'll see:
+
+| Status | Meaning | What you can do |
+|---|---|---|
+| Submitted | In the queue, waiting for a curator | Withdraw |
+| Under review | A curator has picked it up | Withdraw |
+| Changes requested | The curator explained what to fix | *Edit and resubmit* (it becomes a new version), or withdraw |
+| Rejected | Not approvable as written; the reason is public | Write a new suggestion that fixes the reason |
+| Approved | A curator signed it | Wait for the publisher |
+| Live market | Published on-chain | *Open the market* |
+| Withdrawn | You withdrew it | Nothing |
+
+Reasons for rejections and change requests must be at least 10 characters and are shown to you. Curators can also keep internal notes, which are never shown publicly.
+
+### What the curator checks
+
+Approval requires every item on this checklist:
+
+- The question has one objectively checkable answer.
+- The primary source is public and appropriate.
+- Deadline and time zone are explicit.
+- Invalid conditions are defined.
+- Not a duplicate of an open market.
+- Within the [market policy](/docs/markets/market-policy) (no harm, no private individuals).
+- Conflicts of interest are disclosed where relevant.
+
+Before approving, the curator assigns the market's **resolver** (from the on-chain list of approved resolvers) and its **publisher** (an approved creator, who can't be the curator). By default the publisher is the author. If you aren't an approved creator, the curator names one who is; you keep authorship on the suggestion page.
+
+### What the approval binds
+
+The curator signs this structure, and the contract checks every field when the market is published:
+
+```solidity title="IMezonkExchange.sol"
+struct MarketApproval {
+    bytes32 metadataHash; // keccak256 of the exact rules JSON
+    address creator;      // the publisher
+    address resolver;
+    uint64 closeTime;
+    uint32 policyId;      // launch, fee and incentive settings
+    uint64 deadline;      // last moment it can be published
+    bytes32 nonce;        // one approval publishes one market
+}
+```
+
+- The **policy** is the newest active one on-chain at the moment of approval.
+- The **deadline** is at most 14 days after approval, and early enough that the market still has time to seed and then trade for the minimum live time before its close. If your close time is too soon for that, the curator can't approve and will ask for a later one.
+- The **nonce** is derived from the suggestion and its version, so a resubmitted version needs a fresh approval.
+
+Changing a single character of the rules changes the hash and invalidates the approval.
+
+## Publishing
+
+The publisher opens the suggestion page and presses *Publish market*. The panel shows the policy the curator signed, the seeding period, when it launches, the taker fee, when the approval expires, and the cost (gas only). The publisher doesn't have to put up any money.
+
+The contract (`MezonkMarketFactory.createMarket`) refuses to publish unless:
+
+1. the caller is an approved creator (`NotApprovedCreator`);
+2. the signer is an approved curator (`NotCurator`) and isn't the caller (`SelfApproval`);
+3. the approval hasn't expired (`ApprovalExpired`) and hasn't been used or voided (`ApprovalUsed`);
+4. the rules hash, creator, resolver, close time and policy all match the approval (`ApprovalMismatch`);
+5. the signature is valid for that curator, including smart-contract wallets via ERC-1271 (`BadApprovalSignature`);
+6. the resolver is approved, the rules are 1 to 8,192 bytes, the policy is active, the exchange isn't paused, and the close time leaves room for seeding plus the minimum live time.
+
+When it succeeds, the full rules JSON is emitted in the `MarketCreated` event and its hash is stored in the market. Anyone can check that the rules shown in the app are the ones committed at publication.
+
+## If you're an approved creator
+
+You can suggest markets like anyone else, but review still applies: a **different** curator must approve your suggestion before you can publish it. The contract enforces this (`SelfApproval`). Once approved, you'll find *Publish market* on the suggestion page.
+
+## Edge cases
+
+- **The approval expires.** If nobody publishes before the deadline, the panel says the approval has expired. Ask for a fresh review.
+- **A curator changes their mind.** Before publication, any curator or the owner can void an approval on-chain (`cancelApproval`).
+- **A curator is removed.** Their unused approvals stop working, because the contract checks the curator list at publication.
+- **Rate limits.** The server limits how many new suggestions can be created in an hour.
+- **The backend is down.** Nothing new can be reviewed, but nothing on-chain is affected. The backend holds no curator keys, so it can never approve or publish a market on its own.
+
+<Accordions type="single">
+  <Accordion title="Do I need MUSD to suggest a market?">
+    No. Suggesting needs a wallet and one free sign-in signature. Seeding is separate and optional for you.
+  </Accordion>
+  <Accordion title="Can I edit the rules after the market is live?">
+    No. Rules are hashed into the contract at publication and can never change. If the rules turn out to be broken, the market should resolve Invalid.
+  </Accordion>
+  <Accordion title="Who decides the outcome of my market?">
+    Not you, and not the curator. The resolver assigned at approval proposes it after close, anyone can challenge, and the arbitrator rules on challenges. See Resolution.
+  </Accordion>
+</Accordions>
+
+## Next
+
+<Cards>
+  <Card title="Writing good rules" href="/docs/markets/writing-good-rules" description="Questions and rules that pass review and resolve cleanly." />
+  <Card title="Market policy" href="/docs/markets/market-policy" description="What markets are allowed and where that's enforced." />
+  <Card title="Roles" href="/docs/markets/roles" description="Curators, creators, resolvers and what each can do." />
+</Cards>

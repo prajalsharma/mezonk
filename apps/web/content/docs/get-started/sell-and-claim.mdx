@@ -1,0 +1,155 @@
+---
+title: Sell and claim
+description: Track your positions in Portfolio, sell before the market closes, follow the result, claim your MUSD, and use winnings to repay a Mezo loan.
+icon: HandCoins
+---
+
+Once you hold shares there are two ways out. You can **sell early** to someone who wants them, at whatever price they'll pay. Or you can **hold to the end** and claim from the contract when the result is final: 1 MUSD per winning share, 0.50 MUSD per share of either side if the market is Invalid, nothing for losing shares.
+
+Claims have no deadline, and the contract never pays you less than the rules say.
+
+## Your Portfolio
+
+[Portfolio](/portfolio) shows every market your connected wallet holds shares in. Share balances and claimable amounts are read live from the contract. Cost basis, profit and history come from MEZONK's index of on-chain events, so if the index is down you see *Indexed history unavailable*, and live balances and claims still work.
+
+The four numbers at the top:
+
+- *Claimable now*: the total you can claim right now across all final markets. Read from the contract.
+- *Open cost basis*: what you paid, fees included, for shares still held in markets that aren't final yet.
+- *Realized P&L*: profit or loss on shares you've already sold or claimed.
+- *Fees paid · won / lost*: total trading fees, and how many markets you won and lost.
+
+Each position row has a status:
+
+| Status | Meaning |
+| --- | --- |
+| *Open position* | The market is still trading |
+| *Awaiting resolution* | Trading closed; the result isn't final yet |
+| *Payout claimable* | Final, and you hold winning shares |
+| *Refund claimable* | Final as Invalid; you get 0.50 per share |
+| *Claim submitted* | Your claim transaction is waiting to confirm |
+| *Claimed* / *Refund claimed* | Done |
+| *Lost · nothing to claim* | Your shares were on the losing side |
+
+Use the filters (*Claimable*, *Awaiting resolution*, *Lost* and so on) or *Filter by market* to find one.
+
+There's no single "sell value" for a position. What you could get depends on the buy orders on that market's book right now, so Portfolio doesn't pretend to know it.
+
+### If you have a Mezo loan
+
+If your wallet has an open Mezo loan, Portfolio shows *Your Mezo loan* next to your bets: *BTC locked*, *You owe*, *Ratio*, and *Liquidated if BTC falls to*, plus a *Manage loan* button. Under that it projects what your bets could do for the loan, for example *If your open bets win: debt goes from 2,202 to 2,100 MUSD, and the ratio to …*, or that winnings would cover the whole loan. It's labelled *Best case; losing bets pay nothing*. It's a projection; nothing on the card moves money.
+
+## Sell early
+
+You can sell while the market is live, as long as someone is buying.
+
+<Steps>
+<Step>
+### Open the ticket in Advanced
+
+On the market page, press *Advanced: sell, limit orders*, then *Sell*. Pick the side you hold (Yes or No). The side buttons now show *to 55¢*, the best price a buyer is paying, or *no buyers*.
+</Step>
+
+<Step>
+### Enter shares and a price
+
+Tap *Held …* above *Shares* to fill in everything you hold, or type fewer. With *Market*, *Worst* is the least you'll accept per share: nothing sells below it. With *Limit*, whatever buyers pay at your price or better sells now, and the rest waits on the book.
+</Step>
+
+<Step>
+### Check and confirm
+
+The summary shows *Fills now: … of … shares*, the *Average price*, *You receive* (after the fee) and the fee. Press *Sell Yes* and confirm in your wallet. Selling doesn't need an approval: your shares are already held by the exchange contract in your name.
+</Step>
+</Steps>
+
+**Worked example** (today's testnet settings, taker fee 1%): you bought 100 Yes at 40¢ for 40.40 MUSD. The crowd comes round and buyers now pay 55¢. You sell all 100 at market:
+
+| Line | Value |
+| --- | --- |
+| Fills now | 100 of 100 shares |
+| Average price | 55.00¢ |
+| Fee (1%, taker) | 0.55 MUSD |
+| You receive | 54.45 MUSD |
+
+That's 14.05 MUSD profit without waiting for the result. If you post a limit order at 55¢ instead and a buyer fills it later, you're the maker and pay no fee.
+
+If the button says *You hold 40 Yes*, you're trying to sell more than you have. Shares locked in an escrowed sell order don't count until you cancel that order.
+
+### Hold both sides? Merge them
+
+If you end up with both Yes and No in the same market, you can turn each pair back into 1 MUSD. Under *Your position* on the market page, open *Split or merge complete sets*, choose *Merge*, enter the amount and confirm. There's no trading fee and you don't need a buyer. Merging works until the market is final.
+
+## Wait for the result
+
+When the close time passes, trading stops. Closing decides nothing. Then:
+
+1. The market's **resolver** proposes Yes, No or Invalid, with a published evidence document whose fingerprint is stored on-chain, and posts a bond.
+2. During the **challenge window**, anyone else can challenge with their own bond and evidence. If someone does, the **arbitrator** rules, in public.
+3. If nobody challenges, anyone can **finalize** the proposal once the window ends.
+4. If the resolver never proposes in time, or the arbitrator never rules in time, anyone can finalize the market as **Invalid**. Your MUSD can't get stuck.
+
+You can follow every step in the *Resolution* section of the market page, with each evidence document checked against its on-chain fingerprint. From Portfolio, *Follow resolution* takes you there. The windows are read live:
+
+<LiveParams />
+
+<Callout type="warn" title="Next deployment">
+Fixes from an external researcher's report (KupiaSec) are merged and tested in the code but not yet on the live testnet contract. After the next deployment, anyone may propose a result once half the proposal window has passed, a proposal that's overturned loses half its bond to the protocol, and a proposer can't dispute their own proposal. Today's live contract works as described above.
+</Callout>
+
+## Claim
+
+When the market is final, the market page's *Resolution* section and your Portfolio row show *Claim payout · … MUSD* (or *Claim refund · … MUSD* for an Invalid market).
+
+Press it. A review window opens before your wallet does:
+
+- *Final outcome*, *Yes shares burned*, *No shares burned*.
+- *Rate*: *1 MUSD per Yes share*, or *0.5 MUSD per share, either side* for Invalid.
+- *Protocol fee*: *None. Claims are fee-free.*
+- *You receive*, *Amount source* (*Contract read, live*), *Sent to* (your address).
+- *Network fee (estimate)*: a small amount of BTC.
+- *Claim deadline*: *None*.
+
+Press *Sign* and confirm in your wallet. One claim covers both sides you hold in that market: all your Yes and No shares are burned and the payout is sent in the same transaction. The button changes to *Claimed*.
+
+### Payouts for each result
+
+You hold 100 Yes and 20 No in one market:
+
+| Final result | You receive |
+| --- | --- |
+| Yes | 100 MUSD (100 Yes × 1) |
+| No | 20 MUSD (20 No × 1) |
+| Invalid | 60 MUSD (120 shares × 0.50) |
+
+Invalid is for questions that can't be answered fairly under their rules, or where the resolver or arbitrator missed their deadline. Paying 0.50 per share on both sides splits the 1 MUSD behind every pair evenly.
+
+### Use winnings to repay your Mezo loan
+
+If your wallet has an open Mezo loan, a checkbox appears under *Claim payout*: *Use winnings to repay my Mezo loan (… MUSD). Your wallet asks for a second signature after the claim.* The review window then adds *Then repays: … MUSD of your Mezo loan (second signature)*.
+
+It's two transactions because Mezo takes repaid MUSD from whoever sends the repayment, so your own wallet has to send it after the payout arrives. First the claim, then a *Repay loan from winnings* transaction to Mezo's contract.
+
+The repayment is the smaller of your payout and the most you can repay while keeping the loan open. Mezo keeps every open loan at its minimum size, so if your loan is already there, the checkbox is replaced by *Your Mezo loan is at its minimum size, so winnings can't pay part of it.* with a link to close it on the Borrow page.
+
+If the claim confirms but the repayment fails, you see *The claim went through; only the repayment didn't.* Your MUSD is in your wallet, and you can repay from the [Borrow page](/borrow) at any time.
+
+## Refunds when a market never launches
+
+New markets start with **seeding**: people place funded buy orders on both sides so there are prices on day one. If not enough arrive before the seeding deadline, the market fails, nobody ever trades it, and every seeder takes back exactly what they locked.
+
+If you seeded a market that failed, its page shows *Get your deposit back* with a *Refund …* button for each of your orders. Portfolio lists the same orders under *Orders, refunds and rewards*. Refunds go straight from the contract to you, and like claims they work while trading is paused.
+
+As a trader who never seeded, you have nothing to refund: you can't buy shares in a market until it's live.
+
+## Withdraw bonds
+
+If you posted a bond to propose or challenge a result, any bond returned or won collects in one balance. *Withdraw bonds* appears on the market page and in Portfolio and covers all markets at once.
+
+## Next
+
+<Cards>
+  <Card title="FAQ" href="/docs/faq" description="Common questions about money, trading, borrowing and results." />
+  <Card title="Get MUSD" href="/docs/get-started/get-musd" description="Repaying, adding BTC and closing your Mezo loan." />
+  <Card title="Trust model" href="/docs/security/trust-model" description="What anyone can and can't do with your money." />
+</Cards>

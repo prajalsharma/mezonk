@@ -1,0 +1,150 @@
+---
+title: Writing good rules
+description: A practical guide to questions and resolution rules that pass review and settle cleanly, with good and bad examples for every part.
+icon: PenLine
+---
+
+A market is only as good as its rules. Traders price what the rules say, the resolver applies what the rules say, and the arbitrator judges against what the rules say. Once a market is published its rules can never be edited, so any gap you leave becomes a fight, or an Invalid result, later.
+
+The test for every rule is simple: **would a stranger, reading only your text and the named source at the stated time, reach the same answer you would?**
+
+## What a market's rules contain
+
+When you [suggest a market](/docs/markets/suggest-a-market), the form builds a structured rules document. It's serialized with a fixed key order, its hash is stored on-chain at publication, and the full text is published in the market's creation event. These are the parts and their limits:
+
+| Field | Form label | Limit |
+|---|---|---|
+| `question` | *Question* | 15 to 160 characters, ends in "?" |
+| `category` | *Category* | One of the listed categories |
+| `description` | *Context (optional)* | Up to 1,200 characters |
+| `rules.yes` | *Resolves Yes if* | 20 to 600 characters |
+| `rules.no` | *Resolves No if* | 20 to 600 characters |
+| `rules.invalid` | *Invalid if* | 20 to 600 characters |
+| `rules.ambiguity` | *Conflicting, late or revised data* plus *Fallback source and rule* | Up to 600 characters |
+| `source.name`, `source.url` | *Primary source*, *Source link* | 2 to 80 characters; an https:// link |
+| `resolvesAt` | *Event evaluated at (UTC)* | A date and time in UTC |
+
+The one-line summary, images and references are shown on the market page but are **not** part of the rules. Only the fields above decide the outcome.
+
+Here's what a complete rules document looks like. It's an example, not a real market:
+
+```json title="Example rules document (illustrative)"
+{
+  "v": 1,
+  "question": "Will DefiLlama show Mezo TVL above 500,000,000 USD on 31 Mar 2027 at 00:00 UTC?",
+  "category": "defi",
+  "description": "Measures total value locked on the Mezo chain as tracked by DefiLlama.",
+  "rules": {
+    "yes": "DefiLlama's Mezo chain page shows TVL above 500,000,000 USD at 31 Mar 2027 00:00 UTC.",
+    "no": "DefiLlama's Mezo chain page shows TVL at or below 500,000,000 USD at 31 Mar 2027 00:00 UTC.",
+    "invalid": "DefiLlama stops tracking Mezo, or shows no figure for the date within 7 days after it.",
+    "ambiguity": "If the source revises the figure, the first value published at the evaluation time counts. Fallback source: if DefiLlama is down, use the Mezo explorer's TVL figure at the same time."
+  },
+  "source": { "name": "DefiLlama, Mezo chain", "url": "https://defillama.com/chain/Mezo" },
+  "resolvesAt": "2027-03-31T00:00:00.000Z"
+}
+```
+
+## Six principles
+
+1. **One measurable fact.** A number crossing a threshold, an official result, a named party announcing something. Not a judgement.
+2. **A named source with a link.** Say exactly which page, feed or account decides it, and what to use if it's unavailable.
+3. **An exact time in UTC.** "By end of March" means different things in different places. "31 Mar 2027 23:59 UTC" doesn't.
+4. **Yes and No cover everything.** Between them, plus the Invalid cases, every possible state of the world must be assigned. Pay attention to the boundary.
+5. **Invalid is specific.** List the situations where the question can't be answered fairly. Invalid pays 0.50 per share, so it shouldn't be a catch-all for "something went wrong".
+6. **Trading closes at or before evaluation.** If people can trade after the answer is known, the last traders take money from everyone else.
+
+## Good and bad, part by part
+
+### The question
+
+| Bad | Better | Why |
+|---|---|---|
+| Will Bitcoin moon soon? | Will BTC-USD on Coinbase close above 150,000 on 31 Dec 2026 (UTC)? | "moon" and "soon" are blocked words: they mean nothing checkable. The better version has a source, a threshold and a date |
+| Will Project X be successful in 2027? | Will Project X's token trade above 1.00 USD on Coinbase at 00:00 UTC on 1 Jul 2027? | "successful" is blocked. Pick the number you actually mean |
+| Is Mezo the biggest Bitcoin L2? | Will DefiLlama rank Mezo first by TVL among Bitcoin chains on 1 Jun 2027 at 00:00 UTC? | "biggest" by what, on which page, when? |
+| Mezo mainnet TVL over $500M | Will Mezo mainnet TVL exceed $500M on 31 Mar 2027 (UTC)? | Must be a yes/no question ending in "?" |
+
+The automated check blocks these words in the question and in the Yes and No rules: "soon", "significant" (or "significantly"), "a lot", "major", "popular", "successful", "big" and "moon". It also warns if neither the question nor the Yes rule contains a number or date.
+
+### The Yes and No rules
+
+| Bad | Better | Why |
+|---|---|---|
+| Yes: TVL above 500M. No: TVL below 500M. | Yes: above 500,000,000 USD. No: at or below 500,000,000 USD. | The bad version leaves exactly 500,000,000 undefined |
+| Yes: Project X launches mainnet. | Yes: Project X's official blog or verified X account announces, between 1 Jan and 31 Mar 2027 23:59 UTC, that its mainnet is open to public deposits. | "Launches" could mean a testnet, a soft launch, a whitelist. Name the act, the source and the window |
+| No: Otherwise. | No: No such announcement is published by 31 Mar 2027 23:59 UTC. | "Otherwise" hides edge cases inside No. Say what No looks like, so Invalid cases stay out of it |
+| Yes and No with identical text | Distinct conditions | Identical Yes and No rules block submission |
+
+### Invalid
+
+| Bad | Better | Why |
+|---|---|---|
+| If something unexpected happens. | If DefiLlama stops tracking Mezo, or shows no figure for the date within 7 days after it. | "Unexpected" invites every loser to argue for Invalid |
+| If the event is delayed. | If the match is postponed beyond 7 days after the scheduled date, or cancelled. | Delays happen; decide how long a delay is tolerable |
+| (none of the source's failure modes covered) | If the source is unavailable at the evaluation time and the fallback source shows no figure either. | Every named source can go down. Say what happens then |
+
+### Sources, revisions and fallbacks
+
+| Bad | Better | Why |
+|---|---|---|
+| According to the news. | Coinbase BTC-USD daily candle, https://… | A resolver must know which single page to open |
+| (no rule for revisions) | If the source revises the figure, the first value published at the evaluation time counts. | Economic data and TVL figures are revised. Decide in advance which number wins |
+| (no fallback) | Fallback source: if Coinbase is unavailable, use Kraken BTC-USD at the same time. | Without one, an outage at the wrong moment means Invalid |
+
+### Timing
+
+| Bad | Better | Why |
+|---|---|---|
+| Trading closes Friday 18:00; the announcement is due Friday 15:00. | Trading closes Friday 15:00, at or before the announcement. | Otherwise people trade for three hours on a known answer |
+| Evaluated "at the end of the day". | Evaluated at 31 Mar 2027 23:59 UTC. | Days end at different times in different zones |
+| Closes in 30 minutes. | Closes at least an hour from now, after a seeding period and minimum live time. | The form needs at least an hour; the contract needs room to seed and trade (see below) |
+
+The form rejects a close time after the evaluation time, and the server blocks submission if the event is evaluated before trading closes.
+
+The contract adds its own timing floor: the close time must be at least the policy's seeding period plus the minimum live time after publication. A curator approval also has to be published within 14 days. If your close time is too close for both, a curator can't approve it and will ask for a later one. Use the live values on [Seeding and launch](/docs/how-it-works/seeding-and-launch) when picking dates.
+
+## A worked example, start to finish
+
+Suppose you want a market on an upcoming protocol vote.
+
+**First draft:** "Will the vote pass?" Too short, no date, no source, and "pass" isn't defined.
+
+**Second draft:** "Will Proposal 12 on the Example DAO forum pass by the end of the month?" Better, but which forum page, what counts as passing (quorum? simple majority?), which month, what time zone, and what if the vote is cancelled?
+
+**Final version:**
+
+- *Question:* "Will Example DAO Proposal 12 pass its on-chain vote ending 15 Apr 2027 (UTC)?"
+- *Resolves Yes if:* "The proposal's page on the Example DAO governance portal shows status Passed (quorum met and more For than Against votes) when the vote ends at 15 Apr 2027 16:00 UTC."
+- *Resolves No if:* "That page shows status Defeated, or quorum not met, when the vote ends at 15 Apr 2027 16:00 UTC."
+- *Invalid if:* "The vote is cancelled, or its end time moves later than 22 Apr 2027 16:00 UTC, or the portal shows no final status within 7 days after the vote ends."
+- *Conflicting, late or revised data:* "The on-chain result counts over any forum post. If the portal and the on-chain state disagree, the on-chain state counts."
+- *Primary source:* Example DAO governance portal, with the proposal's link.
+- *Event evaluated at:* 15 Apr 2027 16:00. *Trading closes at:* the same time.
+- *Disclosures:* tick the box if you're a delegate or the proposal's author, and say so.
+
+A stranger with only that text and the link could settle it in a minute.
+
+## Before you submit
+
+Run through the curator's checklist yourself. Every item must hold:
+
+- The question has one objectively checkable answer.
+- The primary source is public and appropriate.
+- Deadline and time zone are explicit.
+- Invalid conditions are defined.
+- Not a duplicate of an open market.
+- Within the [market policy](/docs/markets/market-policy).
+- Conflicts of interest are disclosed where relevant.
+
+<Callout type="info" title="Rules can't be fixed later">
+Once published, the rules are hashed on-chain and the text is final. If you spot a problem after submitting but before approval, withdraw or ask the curator for changes. After publication, the only fix is resolution: a broken market should resolve Invalid.
+</Callout>
+
+## Next
+
+<Cards>
+  <Card title="Suggest a market" href="/docs/markets/suggest-a-market" description="Put your rules into the form." />
+  <Card title="Market policy" href="/docs/markets/market-policy" description="What's allowed, and where it's enforced." />
+  <Card title="Resolution" href="/docs/how-it-works/resolution" description="How your rules are applied after close." />
+</Cards>
