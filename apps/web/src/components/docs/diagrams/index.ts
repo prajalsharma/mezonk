@@ -9,3 +9,4 @@ export { GovernanceFlow } from "./GovernanceFlow";
 export { ResolutionFlow } from "./ResolutionFlow";
 export { LoanFlow } from "./LoanFlow";
 export { PriceResolverFlow } from "./PriceResolverFlow";
+export { BtcRoundsFlow } from "./BtcRoundsFlow";

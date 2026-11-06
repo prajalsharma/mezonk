@@ -1,0 +1,232 @@
+---
+title: BTC up or down, with BTC
+description: Stake BTC on whether BTC's price will be higher or lower an hour from now, paid in BTC from the other side's stakes, settled by Mezo's own PriceFeed.
+icon: ArrowUpDown
+---
+
+<Callout type="warn" title="Next deployment">
+  Everything on this page describes `MezonkBtcRounds`, which is built and tested (16 Foundry tests, including a fuzz
+  test that the pool is always conserved) but not deployed on testnet yet. The page at `/btc` is being built alongside
+  it. Until the contract is on chain there are no rounds to bet on.
+</Callout>
+
+The Mezo team asked for exactly this: a way to bet on BTC going up or down, using BTC. The rest of MEZONK settles in
+MUSD, Mezo's bitcoin-backed dollar. This part doesn't. You stake native BTC on *Up* or *Down* for the next round, the
+price is read from the same Mezo PriceFeed that prices Mezo's loans, and if you're right you're paid in BTC from the
+stakes of the people who were wrong. Nothing is converted, nothing is wrapped, and there is no house: the contract
+holds nothing but stakes and pays out nothing but stakes.
+
+## The plain version
+
+- **A round is an hour.** Rounds run back to back on a fixed interval (one hour on the planned settings). Each round
+  has a betting window (one interval) followed by a price window (the next interval). At the start of the price
+  window the BTC price is captured; at its end it's captured again.
+- **You pick a side and a size.** During the betting window you stake BTC on *Up* or *Down*. The size is chosen in
+  dollars (the page offers $10, $25, $50 and $100 chips) and converted to BTC at Mezo's price at that moment. The
+  contract checks the dollar value itself and refuses stakes outside its limits.
+- **Up wins if the close price is above the lock price.** Down wins if it's below. Winners share the whole pool, both
+  sides' stakes, in proportion to how much each of them staked, minus a 1% fee.
+- **Anything that isn't a clean result is a refund.** A tie, a round where nobody backed the winning side, nobody
+  backed the losing side, or a round where the price wasn't captured in time: everyone gets their exact stake back and
+  no fee is taken.
+- **You claim when you like.** Winnings and refunds are paid in BTC when you press *Claim*, for one round or many at
+  once. Claims never expire.
+
+Follow one round through the picture: your stake enters on the left, the keeper captures a price at each boundary,
+and the round ends as Up, Down or Void.
+
+<BtcRoundsFlow />
+
+### A worked example
+
+These are example numbers, not live data. Say the planned settings apply (1% fee, stakes between $8 and $125) and
+Mezo's PriceFeed says BTC is $80,000 when round 12's betting window opens.
+
+| Bettor | Side | Stake | In BTC at $80,000 |
+| --- | --- | --- | --- |
+| Alice | Up | $100 | 0.00125 BTC |
+| Bob | Up | $50 | 0.000625 BTC |
+| Carol | Down | $100 | 0.00125 BTC |
+
+The pool is 0.003125 BTC. At the lock the price is captured at $80,000. An hour later it's captured again at $80,400.
+Up wins.
+
+- Fee: 1% of the whole pool, 0.00003125 BTC. The remaining 0.00309375 BTC goes to the Up side.
+- Alice staked 0.00125 of the 0.001875 BTC on Up, two thirds, so she gets 0.0020625 BTC. At $80,400 that's about
+  $165.83 for a $100 stake.
+- Bob staked one third of the Up side, so he gets 0.00103125 BTC, about $82.91 for his $50.
+- Carol gets nothing. Her 0.00125 BTC is what Alice and Bob won.
+
+Alice's payout plus Bob's plus the fee is exactly the pool: 0.0020625 + 0.00103125 + 0.00003125 = 0.003125 BTC.
+
+If the second capture had been $79,600 instead, Down wins. Carol is the only Down bettor, so she gets the whole pool
+less the fee: 0.00309375 BTC, about $246.26 at the new price, for her $100. If it had been exactly $80,000 again,
+nobody wins: all three get their exact BTC back and no fee is taken.
+
+## How it works exactly
+
+### Round timing
+
+The contract has four immutable timing values set at deployment: `genesis` (a unix time at or after deployment, the
+deploy script rounds it up to the next whole hour), `interval`, `captureWindow` and the PriceFeed address. From those,
+for round `r` (counting from 0):
+
+```solidity title="MezonkBtcRounds.sol"
+betStart(r)  = genesis + r * interval
+lockTime(r)  = genesis + (r + 1) * interval   // betting closes, first price capture
+closeTime(r) = genesis + (r + 2) * interval   // second price capture
+currentRound() = (block.timestamp - genesis) / interval
+```
+
+Round `r`'s price window is round `r + 1`'s betting window, so exactly one round is open for bets at any time. The
+constructor requires `interval ≥ 5 minutes`, `60 s ≤ captureWindow < interval` (so a capture can never be mistaken for
+the next boundary's) and `genesis ≥ now`. The planned settings are one hour and ten minutes
+(`contracts/script/DeployBtcRounds.s.sol` defaults).
+
+### Placing a bet
+
+```solidity title="MezonkBtcRounds.sol"
+function bet(uint256 round, Side side) external payable;
+```
+
+In order, it:
+
+1. Reverts `IsPaused` if the owner has paused betting.
+2. Reverts `BettingClosed` unless `round` is `currentRound()` and the lock time hasn't passed.
+3. Calls `priceFeed.fetchPrice()`. This is Mezo's own check: it reverts `PriceFeed: Oracle is stale.` if the oracle's
+   last update is more than 60 seconds old, so a bet can never be sized at an old price.
+4. Computes `usd = msg.value × price / 1e18` and reverts `StakeOutsideRange(usd)` unless
+   `minStakeUsd ≤ usd ≤ maxStakeUsd`. The limits are in USD so the chips mean the same thing whatever BTC costs.
+5. Reverts `OtherSide` if you already have a stake on the other side in this round. Staking again on the same side
+   adds to it.
+6. Adds `msg.value` to the round's `upPool` or `downPool`, records your `amount` and the `usd` it was worth (for
+   display only), and emits `BetPlaced(round, account, side, amount, usd, price)`.
+
+The page sizes a chip with `btcForUsd(usd)`, which returns the BTC that `usd` buys at the price right now and the
+price it used. BTC can move between that quote and your transaction confirming, which is why the planned limits are
+$8 to $125 rather than exactly $10 to $100: the four chips fit with room for the price to drift either way.
+
+### One price per boundary
+
+Mezo's oracle reports only the latest price; there is no history to look up later (see
+[BTC price markets](/docs/mezo/btc-price-markets) for how that was verified). So someone has to read the price at
+each boundary, while it's current. That someone is a keeper, and anyone can be one:
+
+```solidity title="MezonkBtcRounds.sol"
+function roll(uint256 round) external;
+```
+
+`roll(r)` may be called from `lockTime(r)` until `captureWindow` seconds later (`NotYet` before, `WindowClosed`
+after, `AlreadyRolled` if done). It reads `fetchPrice()` and the oracle's `latestRoundData()` and requires a positive
+answer whose `updatedAt` is at or after `lockTime(r)`, so the price always describes that boundary and never a moment
+before it (a too-old update reverts `NotYet`, and the keeper simply tries again inside the window). Then, in one
+call, it:
+
+- locks round `r` with that price as its `lockPrice`, and
+- if round `r − 1` was locked and not yet settled, settles it with the same price as its `closePrice`, computes its
+  result, and if the result is Up or Down takes the fee from the pool (`pool × feeBps / 10,000`) into `fees`.
+
+It emits `Rolled(round, price, updatedAt, settledRound, settledResult)`. One capture closes one round and locks the
+next, so a round's close price is by construction the next round's lock price. There is no gap between rounds for a
+price to slip through, and the keeper has exactly one job per interval.
+
+### Deciding a round
+
+`result(round)` returns `Pending`, `Up`, `Down` or `Void`:
+
+| Case | Result | Why |
+| --- | --- | --- |
+| `closePrice > lockPrice`, both sides staked | Up | The Up side wins the Down side's stakes |
+| `closePrice < lockPrice`, both sides staked | Down | The Down side wins the Up side's stakes |
+| `closePrice == lockPrice` | Void | Nobody was right |
+| One side has no stakes | Void | There's nothing to win; paying "winners" from the pool would hand them their own money minus a fee |
+| Lock capture missed (`now > lockTime + captureWindow`, never locked) | Void | No honest lock price exists, and the contract won't guess |
+| Close capture missed (`now > closeTime + captureWindow`, locked, never settled) | Void | Same, for the close price |
+
+A void round refunds every stake in full and takes no fee: `fee` stays 0 for that round, and nothing is added to
+`fees`. A later roll never touches a round whose window has passed, so a void result is final.
+
+### Payouts and claims
+
+For a settled round, your payout is:
+
+```text
+Void:            your stake
+Losing side:     0
+Winning side:    your stake × (upPool + downPool − fee) / winningPool
+```
+
+Integer division leaves at most 1 wei per winner in the contract; the fuzz test `testFuzz_poolIsConserved` checks
+that payouts plus the fee never exceed the pool and fall short of it by at most a few wei.
+
+```solidity title="MezonkBtcRounds.sol"
+function claim(uint256[] calldata roundIds) external returns (uint256 total);
+function claimable(uint256 round, address account) external view returns (uint256);
+```
+
+`claim` walks the rounds you pass, skips any where you have no stake, already claimed, or the result is still
+`Pending`, marks the rest claimed, and sends the total as native BTC in one transfer. It reverts `NothingToClaim` if
+the total is zero, and it's reentrancy-guarded. **Claims never expire**: a round that settled months ago still pays
+when you claim it, and nothing in the contract can take an unclaimed payout.
+
+### What the owner can and can't do
+
+| Function | Bounds | Effect |
+| --- | --- | --- |
+| `setStakeLimits(minUsd, maxUsd)` | `minUsd > 0`, `maxUsd ≥ minUsd` | New bets only |
+| `setFee(bps)` | at most 500 (5%) | Rounds settled after the change |
+| `setPaused(bool)` | | Stops new bets. Rolling and claiming always work, so money never gets stuck |
+| `sweep(to)` | `fees > 0` | Moves accrued fees out. Stakes can't be swept: `fees` is the only amount this ever pays |
+
+Ownership is two-step (`Ownable2Step`), so it can't be handed to a wrong address by mistake. There is no function that
+moves a stake anywhere except back to the wallet that placed it, and no upgrade mechanism. Events: `StakeLimitsSet`,
+`FeeSet`, `PausedSet`, `FeesSwept`.
+
+### Limits
+
+- One side per wallet per round. You can add to a stake, but not hedge by staking the other side too.
+- Stakes are checked in USD at Mezo's price at that moment, so the same chip buys a different amount of BTC an hour
+  later.
+- If Mezo's oracle is stale (no update in 60 seconds), `bet` reverts. The page should show this as "price
+  unavailable, try again", not as an error you caused.
+- You can only bet on the round that is open now, and only until its lock time. There's no betting on later rounds
+  in advance.
+
+### What can go wrong
+
+- **The keeper misses a window.** The market-maker bot rolls every round (with `MM_BTC_ROUNDS` set), but anyone can
+  call `roll`. If nobody does within the capture window, or the oracle is stale for the whole window, the rounds that
+  needed that price are void: you get your stake back, no fee. You don't lose money, but you also don't win, and your
+  BTC sits in the contract until you claim it.
+- **The fee.** 1% of the whole pool on the planned settings, taken only on rounds with a winner. The owner can raise
+  it to at most 5%; `feeBps()` is public and the page should show the current value.
+- **BTC price risk on the stake itself.** You stake BTC and you're paid BTC. If you win *Down*, you receive more BTC,
+  but each one is worth less than when you staked. If a round is void, you get the same BTC back, now worth whatever
+  BTC is worth. Your result in dollars is the BTC result and BTC's move combined.
+- **Price capture timing.** A capture is the first oracle update at or after the boundary, read within the window,
+  so "the price at 14:00" means the price a little after 14:00, usually within a minute or two. Both captures follow
+  the same rule.
+- **Not audited.** This contract has not been reviewed by an independent firm. It's about 300 lines, standalone, and
+  tested (`contracts/test/exchange/BtcRounds.t.sol`), and the only money it holds is stakes, but read it before you
+  trust it with more than test BTC.
+
+### What reviewers should notice
+
+- **Native BTC stays BTC.** Stakes are `msg.value`; payouts are native transfers. No wrapped token, no MUSD
+  conversion, no swap, no approval step.
+- **Same price Mezo uses.** The only price source is Mezo's MUSD PriceFeed, the one that prices Mezo's loans and
+  liquidations (testnet `0x86bCF0841622a5dAC14A313a15f96A95421b9366`). MEZONK adds no oracle of its own, and the
+  contract refuses stale or pre-boundary prices the same way the [price resolver](/docs/mezo/btc-price-markets) does.
+- **No counterparty.** Winners are paid from losers. The contract never fronts a payout, never holds an inventory,
+  and can never owe more than it holds: a round pays out exactly its own pool less the fee, or exactly its own pool.
+- **Standalone.** It doesn't touch the exchange, the factory or MUSD, so it can be deployed and paused on its own.
+- **A refund is the default.** Every unclear case (tie, one-sided, missed capture) resolves to "everyone gets their
+  BTC back, no fee", not to a judgment call.
+
+## Next
+
+<Cards>
+  <Card title="BTC price markets" href="/docs/mezo/btc-price-markets" description="The same PriceFeed settling 'BTC above $X' markets, with bonds and challenges." />
+  <Card title="Contracts" href="/docs/developers/contracts" description="Every MEZONK contract's functions, events and addresses." />
+  <Card title="Built on Mezo" href="/docs/mezo/overview" description="Every place MEZONK uses Mezo, in one list." />
+</Cards>

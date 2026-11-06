@@ -19,6 +19,8 @@ one of those touchpoints in one place.
   from your Mezo loan, and the claim screen can send winnings back to the loan.
 - **BTC price markets read Mezo's PriceFeed.** A market like "BTC at or above $100,000 when trading closes" settles
   from the price Mezo uses for loans and liquidations. This part is built and tested but not deployed yet.
+- **BTC up or down, with BTC.** Hourly rounds where you stake native BTC on *Up* or *Down* and winners are paid in BTC
+  from the other side's stakes, decided by the same PriceFeed. Built and tested, not deployed yet.
 
 The picture below shows where Mezo sits. Look at the right-hand side: MUSD, Mezo's borrowing contracts and the
 PriceFeed are all called directly by your wallet or by MEZONK's contracts, never through MEZONK's server.
@@ -111,10 +113,26 @@ limits: [BTC price markets](/docs/mezo/btc-price-markets).
   not deployed on testnet yet. No live market settles from the PriceFeed today.
 </Callout>
 
+### Touchpoint 4: BTC up or down, staked in BTC
+
+`MezonkBtcRounds` is the one part of MEZONK that doesn't use MUSD. Rounds run back to back on a fixed interval (one
+hour planned). During a round's betting window you stake native BTC on *Up* or *Down*; the stake must be worth between
+the contract's USD limits at `PriceFeed.fetchPrice()` right then. A keeper captures the price at each boundary with one
+`roll()` call that closes one round and locks the next, so there is exactly one price per boundary. Winners split the
+whole pool in BTC, pro rata, less a fee; a tie, a one-sided round or a missed capture refunds everyone with no fee.
+The contract holds nothing but stakes, the owner can sweep only fees, and claims never expire. Details:
+[BTC up or down, with BTC](/docs/mezo/btc-up-down).
+
+<Callout type="warn" title="Next deployment">
+  `MezonkBtcRounds` is built and tested (16 Foundry tests) but not deployed on testnet yet. There are no rounds to bet
+  on until it is.
+</Callout>
+
 ### What MEZONK does not do with Mezo
 
-- It never custodies BTC and never holds or manages anyone's loan. There is no MEZONK contract that calls
-  BorrowerOperations.
+- It never holds or manages anyone's loan. There is no MEZONK contract that calls BorrowerOperations. The only BTC a
+  MEZONK contract ever holds is a round stake in `MezonkBtcRounds`, which can go nowhere but back to the wallet that
+  staked it (or to the winners of that round).
 - It does not use the MEZO token for anything.
 - It does not route MUSD through any other protocol.
 
@@ -123,5 +141,6 @@ limits: [BTC price markets](/docs/mezo/btc-price-markets).
 <Cards>
   <Card title="Borrowing" href="/docs/mezo/borrowing" description="Open a Mezo loan from the app: functions, hints, fees and every check." />
   <Card title="Bet from your loan" href="/docs/mezo/bet-from-your-loan" description="Borrow the exact shortfall from a trade and repay from winnings." />
+  <Card title="BTC up or down, with BTC" href="/docs/mezo/btc-up-down" description="Hourly rounds staked and paid in native BTC, settled by Mezo's PriceFeed." />
   <Card title="Architecture" href="/docs/developers/architecture" description="How the contracts, app, indexer and Mezo fit together." />
 </Cards>

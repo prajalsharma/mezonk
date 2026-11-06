@@ -19,12 +19,21 @@
  *   MM_DRY=1 MM_ONCE=1 MM_ADDRESS=0x… pnpm --filter web mm      # read-only: prints what it would place
  *
  * Env: MM_ACCOUNT (creator), MM_MARKETS (all live), MM_SHARES (100), MM_LEVELS (3), MM_BUDGET_MUSD (2000),
- *      MM_INTERVAL seconds (30), MM_CLOSE_MARGIN seconds (600), MM_ONCE=1, MM_DRY=1 + MM_ADDRESS.
+ *      MM_INTERVAL seconds (30), MM_CLOSE_MARGIN seconds (600), MM_ONCE=1, MM_DRY=1 + MM_ADDRESS,
+ *      MM_RPC_URL (rpc.test.mezo.org; a local fork for dry runs), MM_PRICE_RESOLVER, MM_BTC_ROUNDS, MM_BTC_INTERVAL seconds (10).
  *
  * Keeper: with MM_PRICE_RESOLVER=<MezonkPriceResolver>, each pass also calls settle() on markets that name that
  * resolver, have closed, have a rule and are still inside its capture window. settle() is permissionless; it reads
  * Mezo's PriceFeed and proposes the outcome (the resolver contract posts the bond). Mezo's oracle has no history,
  * so this has to happen within minutes of close, which is why it runs every pass.
+ *
+ * BTC rounds keeper: with MM_BTC_ROUNDS=<MezonkBtcRounds>, a second loop (every MM_BTC_INTERVAL seconds, default
+ * 10, tighter than the market-maker pass because the capture window can be as short as a minute) calls roll(r) on
+ * the round whose lock time just passed, r = currentRound - 1, while chain time is inside lockTime(r)..lockTime(r)
+ * + captureWindow and the round isn't locked yet. One roll captures one PriceFeed price that locks round r and
+ * settles round r - 1. roll() is permissionless and the bot pays only gas. A failed roll (stale oracle, lagging
+ * node) is retried on the next tick while the window is open; a missed window voids the rounds, which then refund.
+ * Without a signer (MM_DRY=1) it prints the roll it would send.
  */
 import { execFileSync } from "node:child_process";
 import { createServer } from "node:http";
@@ -51,9 +60,11 @@ import {
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { mezoTestnet } from "../src/lib/chain/config";
 import { laggingNodeFetch } from "../src/lib/chain/laggingNodeFetch";
-import { exchangeAbi, priceResolverAbi, resolutionAbi } from "../src/lib/contracts/abi";
+import { btcRoundsAbi, exchangeAbi, priceResolverAbi, resolutionAbi } from "../src/lib/contracts/abi";
+import { lockTime as roundLockTime, rollableRound, roundAt } from "../src/features/btc/math";
 
-const RPC = "https://rpc.test.mezo.org";
+/** Mezo Testnet's public RPC; MM_RPC_URL points it at a local fork of it (dev-chain.sh) for dry runs. Same chain id either way. */
+const RPC = process.env.MM_RPC_URL?.trim() || "https://rpc.test.mezo.org";
 const CHAIN_ID = 31611;
 const EXCHANGE = "0x4555cfF10200e1007435Cffc683C60683c5C49B9" as Address;
 const MUSD = "0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503" as Address;
@@ -82,6 +93,8 @@ const CLOSE_MARGIN = BigInt(positiveInt("MM_CLOSE_MARGIN", "600"));
 const SHARES = parseUnits(env("MM_SHARES", "100"), 18);
 const BUDGET = parseUnits(env("MM_BUDGET_MUSD", "2000"), 18);
 const PRICE_RESOLVER = isAddress(process.env.MM_PRICE_RESOLVER?.trim() ?? "") ? getAddress(process.env.MM_PRICE_RESOLVER!.trim()) : null;
+const BTC_ROUNDS = isAddress(process.env.MM_BTC_ROUNDS?.trim() ?? "") ? getAddress(process.env.MM_BTC_ROUNDS!.trim()) : null;
+const BTC_INTERVAL_MS = positiveInt("MM_BTC_INTERVAL", "10") * 1000;
 const MARKETS: bigint[] | null = process.env.MM_MARKETS?.trim()
   ? process.env.MM_MARKETS.split(",").map((s) => BigInt(s.trim()))
   : null;
@@ -99,17 +112,19 @@ const dir = mkdtempSync(path.join(tmpdir(), "mezonk-mm-"));
 process.on("exit", () => rmSync(dir, { recursive: true, force: true }));
 
 let stopping = false;
-let wake: (() => void) | null = null;
+/** One waker per sleeping loop (market maker, BTC rounds keeper), so a stop signal wakes them all. */
+const wakers = new Set<() => void>();
+const wakeAll = () => { for (const w of [...wakers]) w(); };
 process.on("SIGINT", () => {
   if (stopping) process.exit(130);
   stopping = true;
   console.log("\nStopping after the current step (Ctrl-C again to quit now).");
-  wake?.();
+  wakeAll();
 });
 // Hosts stop containers with SIGTERM: finish the current step, then exit.
 process.on("SIGTERM", () => {
   stopping = true;
-  wake?.();
+  wakeAll();
 });
 
 /**
@@ -127,9 +142,18 @@ if (process.env.PORT) {
 
 const sleep = (ms: number) =>
   new Promise<void>((res) => {
-    const t = setTimeout(() => ((wake = null), res()), ms);
-    wake = () => (clearTimeout(t), (wake = null), res());
+    const wake = () => (clearTimeout(t), wakers.delete(wake), res());
+    const t = setTimeout(wake, ms);
+    wakers.add(wake);
   });
+
+/** Two loops share one wallet: transactions are sent one at a time so they never race for a nonce. */
+let sendQueue: Promise<unknown> = Promise.resolve();
+function serialized<T>(fn: () => Promise<T>): Promise<T> {
+  const next = sendQueue.then(fn, fn);
+  sendQueue = next.catch(() => undefined);
+  return next;
+}
 
 async function retry<T>(label: string, fn: () => Promise<T>, tries = 4): Promise<T> {
   for (let i = 1; ; i++) {
@@ -174,7 +198,9 @@ async function signer(name: string): Promise<Signer> {
 /** Highest block we know is mined (receipts we waited for); reads are pinned at or after it. */
 let minBlock = 0n;
 
-async function send(s: Signer, to: Address, data: Hex, label: string) {
+const send = (s: Signer, to: Address, data: Hex, label: string) => serialized(() => sendNow(s, to, data, label));
+
+async function sendNow(s: Signer, to: Address, data: Hex, label: string) {
   let hash: Hex;
   try {
     // Sent once, never retried here: a retry after a broadcast that did land could place the order twice.
@@ -415,6 +441,75 @@ async function keeperPass(w: Wallet) {
   }
 }
 
+// ─── Keeper: roll BTC up/down rounds ───────────────────────────────────────────
+
+let btcSchedule: { genesis: bigint; interval: bigint; captureWindow: bigint } | null = null;
+/** Rounds already rolled (or found rolled) this run, and the last "waiting" line, so logs stay quiet between boundaries. */
+const rolled = new Set<bigint>();
+let btcLastNote = "";
+const btcNote = (t: string) => { if (t !== btcLastNote) { btcLastNote = t; console.log(`  rounds: ${t}`); } };
+
+async function btcRoundsPass(w: Wallet) {
+  if (!BTC_ROUNDS) return;
+  const head = await retry("blockNumber", () => client.getBlockNumber({ cacheTime: 0 }));
+  const at = head < minBlock ? minBlock : head;
+  const blk = await retry("block", () => client.getBlock({ blockNumber: at }));
+  if (blk.timestamp > chainNow) chainNow = blk.timestamp;
+  const now = chainNow;
+  if (!btcSchedule) {
+    const c = { address: BTC_ROUNDS, abi: btcRoundsAbi } as const;
+    const [genesis, interval, captureWindow] = await Promise.all([
+      retry("genesis", () => client.readContract({ ...c, functionName: "genesis" })),
+      retry("interval", () => client.readContract({ ...c, functionName: "interval" })),
+      retry("captureWindow", () => client.readContract({ ...c, functionName: "captureWindow" })),
+    ]);
+    btcSchedule = { genesis: BigInt(genesis), interval: BigInt(interval), captureWindow: BigInt(captureWindow) };
+    console.log(`Rounds keeper on: ${BTC_ROUNDS}, every ${btcSchedule.interval}s, capture window ${btcSchedule.captureWindow}s, checked every ${BTC_INTERVAL_MS / 1000}s.`);
+  }
+  const s = btcSchedule;
+  const r = rollableRound(now, s);
+  if (r == null) {
+    const cur = roundAt(now, s);
+    // One line per round, not per tick: the note only prints when its text changes.
+    btcNote(now < s.genesis ? `genesis at ${s.genesis}, nothing to roll before then` : `round ${cur} open; roll(${cur}) from ${roundLockTime(cur, s)}`);
+    return;
+  }
+  if (rolled.has(r)) return;
+  const round = await retry(`getRound(${r})`, () => client.readContract({ address: BTC_ROUNDS, abi: btcRoundsAbi, functionName: "getRound", args: [r], blockNumber: at }));
+  if (round.locked) { rolled.add(r); btcNote(`round ${r} already rolled`); return; }
+  const left = roundLockTime(r, s) + s.captureWindow - now;
+  if (!w.signer) { btcNote(`would roll(${r}) (dry run), ${left}s of the window left`); return; }
+  try {
+    const rc = await send(w.signer, BTC_ROUNDS, encodeFunctionData({ abi: btcRoundsAbi, functionName: "roll", args: [r] }), `roll(${r})`);
+    rolled.add(r);
+    for (const ev of parseEventLogs({ abi: btcRoundsAbi, logs: rc.logs, eventName: "Rolled" })) {
+      const a = ev.args;
+      const res = ["pending", "Up", "Down", "void"][a.settledResult] ?? String(a.settledResult);
+      console.log(`  rounds: locked ${a.round} at $${dec2(a.price)}${a.settledRound !== a.round ? `, settled ${a.settledRound}: ${res}` : ""}`);
+    }
+  } catch (e) {
+    // Oracle not yet updated past the lock time, stale, or a lagging node: try again next tick while the window is open.
+    console.log(`  rounds: roll(${r}) failed, ${left}s of the window left, will retry: ${short(e)}`);
+  }
+}
+
+async function btcRoundsLoop(w: Wallet) {
+  if (!BTC_ROUNDS) return;
+  while (!stopping) {
+    try {
+      if (w.signer) {
+        const gas = await retry("gas balance", () => client.getBalance({ address: w.address }));
+        if (gas < MIN_GAS) btcNote(`${w.address} is low on test BTC for gas (${dec2(gas)}); not rolling`);
+        else await btcRoundsPass(w);
+      } else await btcRoundsPass(w);
+    } catch (e) {
+      console.log(`rounds keeper failed: ${short(e)}`);
+    }
+    if (ONCE || stopping) break;
+    await sleep(BTC_INTERVAL_MS);
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -433,6 +528,8 @@ async function main() {
     console.log(`Market maker running as ${s.kind === "key" ? "MM_PRIVATE_KEY" : ACCOUNT} (${s.address}) on Mezo Testnet.`);
   }
   if (PRICE_RESOLVER) console.log(`Keeper on: settles BTC-price markets through ${PRICE_RESOLVER}.`);
+  // The rounds keeper runs on its own, tighter timer; sends are serialized with the market maker's.
+  const rounds = btcRoundsLoop(w);
   console.log(
     `Shares ${shares(SHARES)} per level, ${LEVELS} levels per side, budget ${musd(BUDGET)}, markets ${MARKETS ? MARKETS.join(",") : "all live"}, ` +
       `${ONCE ? "one pass" : `every ${INTERVAL_MS / 1000}s`}.`,
@@ -457,6 +554,9 @@ async function main() {
     if (ONCE || stopping) break;
     await sleep(INTERVAL_MS);
   }
+  stopping = true;
+  wakeAll();
+  await rounds;
   console.log("Market maker stopped.");
 }
 

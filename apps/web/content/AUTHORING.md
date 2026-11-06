@@ -16,7 +16,8 @@ Every concept page serves both: a plain explanation first, then the exact detail
   worked example, say which settings it assumes ("today's testnet settings").
 - **Say what is live and what isn't.** Exchange `0x4555cfF10200e1007435Cffc683C60683c5C49B9` is live on Mezo testnet
   (chain 31611) since 2026-10-22. Not yet deployed (code merged on GitHub, tested, but not on chain):
-  the BTC price resolver (`MezonkPriceResolver`, see docs/PRICE_RESOLVER.md) and the KupiaSec resolution/rebate fixes
+  the BTC price resolver (`MezonkPriceResolver`, see docs/PRICE_RESOLVER.md), the BTC up/down rounds (`MezonkBtcRounds`,
+  see docs/BTC_ROUNDS.md) and the KupiaSec resolution/rebate fixes
   (commit c8fbaff: rebate weight only from in-band seed escrow; anyone may propose after half the proposal window; an
   overturned proposal loses half its bond to the protocol; the proposer can't dispute their own proposal). Describe the
   live contract's behaviour as current and mark the merged-but-not-deployed changes with a `<Callout type="warn"
@@ -82,6 +83,7 @@ before it saying what to look at:
 - `<ResolutionFlow />` propose with bond + evidence hash → challenge window → finalize, or dispute → arbitrator → final; timeouts → Invalid; who gets each bond.
 - `<LoanFlow />` BTC → Mezo trove → MUSD → MEZONK trade → winnings → repay loan → BTC back.
 - `<PriceResolverFlow />` close → keeper `settle()` within the capture window → Mezo PriceFeed read → proposal with evidence → challenge window → final.
+- `<BtcRoundsFlow />` BTC up/down rounds: betting window → keeper `roll()` locks at P1 (Mezo PriceFeed) → price window (next round's betting) → `roll()` settles at P2 → Up / Down / Void → pool split less fee, refunds, claim BTC.
 - `<IndexerPipeline />` getLogs (≤ 9,999 blocks) → chain_events → pure replay → read tables → public API; reorg rewind; reconcile.
 
 ## Sources to read before writing (read the code, not just the docs; docs can be stale)

@@ -56,12 +56,14 @@ export default function Layout({ children }: { children: ReactNode }) {
 /** Which network the app points at, so readers know the docs' live numbers come from there. */
 function NetworkCard() {
   const live = deployment.ready && !deployment.isLocalFork;
+  const name = deployment.isLocalFork ? `Local fork of ${deployment.chain.name}` : deployment.chain.name;
+  const note = live ? "Contracts live · test money only" : deployment.isLocalFork ? "Local chain · nothing here is public" : "Contracts not configured";
   return (
     <div className="docs-network">
       <span aria-hidden className={live ? "docs-network-dot is-live" : "docs-network-dot"} />
       <span className="min-w-0">
-        <span className="block text-[0.8125rem] font-medium text-fd-foreground">{deployment.chain.name}</span>
-        <span className="block text-xs text-fd-muted-foreground">{live ? "Contracts live · test money only" : "Contracts not configured"}</span>
+        <span className="block text-[0.8125rem] font-medium text-fd-foreground">{name}</span>
+        <span className="block text-xs text-fd-muted-foreground">{note}</span>
       </span>
     </div>
   );

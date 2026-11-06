@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { BookOpen, LayoutList, Lightbulb, Search, Wallet } from "lucide-react";
+import { ArrowDownUp, BookOpen, LayoutList, Lightbulb, Search, Wallet, type LucideIcon } from "lucide-react";
 import { Lockup, LogoMark } from "@/components/brand/Logo";
 import { cx } from "@/components/ui/cx";
 import { useAccount } from "wagmi";
@@ -14,13 +14,15 @@ import { NetworkStatus } from "./NetworkStatus";
 import { ThemeToggle } from "./ThemeToggle";
 import { WalletButton } from "@/components/wallet/WalletButton";
 
-// Three primary destinations plus docs. Discover, Activity, Resolution and Status live in the footer.
-export const NAV = [
+// Four primary destinations plus docs. Discover, Activity, Resolution and Status live in the footer.
+// `short` is the label on the five-column mobile bar, where "BTC up/down" doesn't fit.
+export const NAV: ReadonlyArray<{ href: string; label: string; short?: string; icon: LucideIcon }> = [
   { href: "/markets", label: "Markets", icon: LayoutList },
+  { href: "/btc", label: "BTC up/down", short: "Up/down", icon: ArrowDownUp },
   { href: "/portfolio", label: "Portfolio", icon: Wallet },
   { href: "/suggest", label: "Suggest", icon: Lightbulb },
   { href: "/docs", label: "Docs", icon: BookOpen },
-] as const;
+];
 
 const isActive = (path: string, href: string) => path === href || path.startsWith(`${href}/`);
 
@@ -113,7 +115,7 @@ export function MobileNav() {
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-[var(--z-sticky)] px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] lg:hidden"
     >
-      <ul className="glass mx-auto grid max-w-md grid-cols-4 rounded-xl border shadow-3">
+      <ul className="glass mx-auto grid max-w-md grid-cols-5 rounded-xl border shadow-3">
         {NAV.map((n) => {
           const active = isActive(path, n.href);
           return (
@@ -124,7 +126,7 @@ export function MobileNav() {
                 className={cx("press flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium", active ? "text-ink" : "text-muted")}
               >
                 <n.icon className="size-5" aria-hidden />
-                {n.label}
+                {n.short ?? n.label}
                 <span aria-hidden className={cx("mt-0.5 size-1 rounded-full", active ? "bg-accent" : "bg-transparent")} />
               </Link>
             </li>

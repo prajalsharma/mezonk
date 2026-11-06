@@ -12,6 +12,7 @@ export function Contracts() {
     ["MezonkResolution", deployment.resolutionAddress, "Proposals, challenges, rulings, bonds"],
     ["MezonkIncentives", deployment.incentivesAddress, "Seeder rebates and referral credit"],
     ["MezonkPriceResolver", deployment.priceResolverAddress, "Settles BTC price markets from Mezo's PriceFeed"],
+    ["MezonkBtcRounds", deployment.btcRoundsAddress, "BTC up/down rounds, paid in BTC"],
     ["MUSD (collateral)", deployment.musd, "Mezo's bitcoin-backed dollar"],
   ];
   return (

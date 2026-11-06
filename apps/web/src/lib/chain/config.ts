@@ -72,6 +72,8 @@ export interface Deployment {
   incentivesAddress: Address | null;
   /** MezonkPriceResolver (env NEXT_PUBLIC_PRICE_RESOLVER): settles BTC-price markets from Mezo's PriceFeed. Optional. */
   priceResolverAddress: Address | null;
+  /** MezonkBtcRounds (env NEXT_PUBLIC_BTC_ROUNDS): BTC up/down rounds staked in native BTC. Optional. */
+  btcRoundsAddress: Address | null;
   deployBlock: bigint;
   musd: Address;
   explorer: string;
@@ -103,6 +105,7 @@ function readDeployment(): Deployment {
     musd: MUSD[chainId] ?? MUSD[MEZO_TESTNET_ID]!,
     explorer: baseChain.blockExplorers.default.url,
     priceResolverAddress: isAddress(process.env.NEXT_PUBLIC_PRICE_RESOLVER ?? "") ? getAddress(process.env.NEXT_PUBLIC_PRICE_RESOLVER!) : null,
+    btcRoundsAddress: isAddress(process.env.NEXT_PUBLIC_BTC_ROUNDS ?? "") ? getAddress(process.env.NEXT_PUBLIC_BTC_ROUNDS!) : null,
   };
 
   const none = { marketsAddress: null, resolutionAddress: null, factoryAddress: null, incentivesAddress: null };

@@ -38,7 +38,16 @@ const CONTRACT_ERRORS: Record<string, string> = {
   EnforcedPause: "New markets and trading are paused right now. Claims and resolution still work.",
   ERC20InsufficientBalance: "Your MUSD balance is too low for this.",
   ERC20InsufficientAllowance: "MUSD spending approval is too low. Approve first.",
+  // MezonkBtcRounds
+  BettingClosed: "That round just closed for bets. The page refreshes to the new round; bet again there.",
+  StakeOutsideRange: "At the current BTC price this stake is outside the allowed range. Pick another amount and try again.",
+  OtherSide: "You already backed the other side this round. You can add to that side, not switch.",
+  IsPaused: "Betting is paused right now. Rolling and claiming still work.",
+  NotYet: "The price feed hasn't updated since the lock time yet. Try again in a moment.",
+  AlreadyRolled: "This round's price was already captured.",
 };
+
+const STALE_ORACLE = "Mezo's price feed is stale right now, try again in a moment.";
 
 export function explainError(e: unknown): string {
   if (e instanceof BaseError) {
@@ -47,6 +56,8 @@ export function explainError(e: unknown): string {
     const name = revert?.data?.errorName;
     if (name && CONTRACT_ERRORS[name]) return CONTRACT_ERRORS[name];
     const msg = e.shortMessage || e.message;
+    // Mezo's PriceFeed reverts with a string, "PriceFeed: Oracle is stale.", when its oracle is over a minute old.
+    if (/oracle is stale/i.test(revert?.reason ?? "") || /oracle is stale/i.test(e.message)) return STALE_ORACLE;
     if (/insufficient funds/i.test(msg)) return "Not enough BTC to pay network fees. Get testnet BTC from the faucet.";
     if (/user rejected|denied/i.test(msg)) return "You declined the request in your wallet.";
     if (/chain/i.test(msg) && /mismatch|does not match/i.test(msg)) return "Your wallet is on a different network. Switch to Mezo and retry.";

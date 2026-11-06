@@ -2,8 +2,9 @@
 
 ## What this is
 Binary prediction market on Mezo settled in MUSD, traded on an order book with fully collateralized YES/NO shares.
-`contracts/` (Foundry: `MezonkExchange` + `MezonkMarketFactory` + `MezonkResolution` + `MezonkIncentives`; the v1 AMM
-`MezonkMarkets` is kept for reference only) + `apps/web/` (Next.js 15, wagmi/RainbowKit, Drizzle, indexer).
+`contracts/` (Foundry: `MezonkExchange` + `MezonkMarketFactory` + `MezonkResolution` + `MezonkIncentives`; standalone
+`MezonkPriceResolver` and `MezonkBtcRounds` (BTC up/down with native BTC, docs/BTC_ROUNDS.md); the v1 AMM `MezonkMarkets` is kept
+for reference only) + `apps/web/` (Next.js 15, wagmi/RainbowKit, Drizzle, indexer).
 Read docs/ORDERBOOK_ARCHITECTURE.md and docs/SECURITY_AND_SOLVENCY.md before touching money paths.
 
 ## Hard rules

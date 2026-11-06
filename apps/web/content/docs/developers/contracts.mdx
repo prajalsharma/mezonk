@@ -7,7 +7,8 @@ icon: FileCode
 MEZONK's on-chain part is one deployment of `MezonkExchange`, which creates `MezonkResolution`,
 `MezonkMarketFactory` and `MezonkIncentives` in its constructor. All four are Solidity 0.8.24 (via-IR, London EVM,
 OpenZeppelin), live on Mezo testnet since 2026-10-22, and not upgradeable. A fifth, `MezonkPriceResolver`, is merged
-but not deployed. Source: [github.com/prajalsharma/mezonk](https://github.com/prajalsharma/mezonk), `contracts/src`.
+but not deployed, and a sixth, `MezonkBtcRounds` (BTC up/down rounds staked in native BTC), is built and tested but
+not deployed. Source: [github.com/prajalsharma/mezonk](https://github.com/prajalsharma/mezonk), `contracts/src`.
 
 ## Live addresses
 
@@ -188,10 +189,28 @@ Events: `ReferrerSet`, `RebateAccrued`, `ReferralAccrued`, `RebateClaimed`, `Reb
 
 Events: `RuleSet`, `PriceCaptured`, `ManualProposal`, `Swept`. Details: [BTC price markets](/docs/mezo/btc-price-markets).
 
+## MezonkBtcRounds (not deployed)
+
+Standalone: it needs nothing from the exchange and holds nothing but native BTC stakes. Timing (`genesis`,
+`interval`, `captureWindow`) and the PriceFeed are immutable.
+
+| Function | Who | Does |
+| --- | --- | --- |
+| `bet(round, side)` payable | anyone, during the open round's betting window | Stake BTC on Up or Down; `msg.value` must be worth `minStakeUsd`..`maxStakeUsd` at `fetchPrice()` now; one side per wallet per round |
+| `roll(round)` | anyone, from `lockTime(round)` for `captureWindow` seconds | Capture one price: locks `round` and settles `round − 1`; takes the fee on a decided round |
+| `claim(roundIds)` | anyone with a stake | Pay winnings or refunds in BTC for settled or void rounds; never expires |
+| `result(round)`, `claimable(round, account)`, `btcForUsd(usd)`, `getRound`, `getBet`, `currentRound`, `betStart`, `lockTime`, `closeTime` | view | What the page reads |
+| `setStakeLimits`, `setFee` (≤ 500 bps), `setPaused` | owner | Limits for new bets; pause stops bets only |
+| `sweep(to)` | owner | Move accrued fees out; stakes can't be swept |
+
+Events: `BetPlaced(round, account, side, amount, usd, price)`, `Rolled(round, price, updatedAt, settledRound,
+settledResult)`, `Claimed(account, round, amount)`, `StakeLimitsSet`, `FeeSet`, `PausedSet`, `FeesSwept`.
+Details: [BTC up or down, with BTC](/docs/mezo/btc-up-down).
+
 ## ABIs
 
 The app's ABIs are generated from the Foundry build into `apps/web/src/lib/contracts/abi.ts` (`exchangeAbi`,
-`factoryAbi`, `resolutionAbi`, `incentivesAbi`, `priceResolverAbi`). After changing a contract:
+`factoryAbi`, `resolutionAbi`, `incentivesAbi`, `priceResolverAbi`, `btcRoundsAbi`). After changing a contract:
 `forge build && node scripts/export-abi.mjs`.
 
 ## Next

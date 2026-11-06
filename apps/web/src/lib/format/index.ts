@@ -81,3 +81,23 @@ export function marketSignal(m: { priceYes: number | null; bestBid: number | nul
   if (m.bestBid != null && m.bestAsk != null) return { kind: "indicative", p: (m.bestBid + m.bestAsk) / 200 };
   return { kind: "none" };
 }
+
+/** Native BTC (18 decimals) → "0.00012345", at most 8 decimals (one satoshi), trailing zeros trimmed, never rounded up. */
+export function formatBtc(wei: bigint | null | undefined, max = 8): string {
+  if (wei === null || wei === undefined) return "—";
+  const neg = wei < 0n;
+  const abs = neg ? -wei : wei;
+  const unit = 10n ** 18n;
+  const whole = abs / unit;
+  const frac = (abs % unit).toString().padStart(18, "0").slice(0, max).replace(/0+$/, "");
+  if (whole === 0n && frac === "" && abs > 0n) return `${neg ? "-" : ""}< 0.${"0".repeat(max - 1)}1`;
+  return `${neg ? "-" : ""}${whole.toLocaleString("en-US")}${frac ? `.${frac}` : ""}`;
+}
+
+/** USD with 18 decimals (PriceFeed units) → "$80,123.45". Whole cents, rounded down. */
+export function formatUsd(wei: bigint | null | undefined): string {
+  if (wei === null || wei === undefined) return "—";
+  const neg = wei < 0n;
+  const cents = (neg ? -wei : wei) / 10n ** 16n;
+  return `${neg ? "-" : ""}$${(cents / 100n).toLocaleString("en-US")}.${(cents % 100n).toString().padStart(2, "0")}`;
+}
