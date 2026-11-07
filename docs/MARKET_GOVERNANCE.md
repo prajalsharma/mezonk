@@ -76,6 +76,15 @@ Rules are hashed into the contract and cannot be edited. The only corrections ar
 itself (a deficient market should be resolved Invalid) or, for a market that must not run, the owner pausing
 trading protocol-wide. There is no per-market kill switch, deliberately.
 
+### Automated imports
+
+`pnpm --filter web import:btc` (docs/BTC_IMPORT.md) lists Bitcoin price questions from Polymarket and Kalshi
+through this same path, with two dedicated wallets: an import creator and an **import curator** whose key may run on
+a host. That curator signs only rules generated from a fixed template (point-in-time BTC strike, settled by
+`MezonkPriceResolver`), and the importer checks the server's approval against what it built before signing. It is
+still an on-chain curator, so treat its key like one: a wallet used for nothing else, revocable with
+`setCurator(wallet, false)`. Human curators keep reviewing community suggestions.
+
 ## Review standard
 
 A curator approves only when all of the following hold (the checklist is required on approval):

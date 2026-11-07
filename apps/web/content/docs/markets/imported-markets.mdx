@@ -1,0 +1,76 @@
+---
+title: Imported Bitcoin markets
+description: Why some Bitcoin markets are copied from Polymarket and Kalshi each month, what changes on MEZONK, and how they settle on Mezo's own price.
+icon: Import
+---
+
+<Callout type="warn" title="Next deployment">
+  Imported markets settle through `MezonkPriceResolver`, which is merged on GitHub and tested but not yet deployed on
+  testnet. Until it is, no markets are imported.
+</Callout>
+
+Once a month MEZONK looks at the most traded Bitcoin price questions on Polymarket and Kalshi and lists the same
+questions here. They go through the same review as any other market, settle on the BTC price Mezo itself uses, and
+start with orders on both sides so you can trade them as soon as they launch.
+
+## The plain version
+
+- **Same question, Mezo's price.** "Will Bitcoin be at or above $120,000 at 17:00 UTC on Nov 30?" is answered by
+  reading Mezo's BTC price right after that moment, not the price Polymarket or Kalshi uses.
+- **The page shows the other market.** Under the question you'll see *Same question on Polymarket* (or Kalshi), with
+  its current Yes price and when it was read. That's for comparison only: it doesn't set the price here and doesn't
+  decide the result.
+- **The two can disagree at the edge.** Mezo's price and an exchange price can differ by a few dollars. If Bitcoin ends
+  right at the strike, the two markets can resolve differently. Read the rules on the market page.
+- **It starts with real orders.** The importer places a Yes bid and a No bid about 6¢ apart around the other market's
+  price, with its own MUSD. They're ordinary orders that anyone can trade against.
+- **It may wait in seeding.** If the market policy needs more than one seeder, the market stays in *Seeding* until
+  someone else adds orders. You can be that seeder: see [Seeding and launch](/docs/how-it-works/seeding-and-launch).
+
+## Which questions qualify
+
+Only questions about the price at **one moment**. Mezo's price feed has no history: it can be read now, not
+looked up later. So the resolver reads it once, just after close, and that reading answers exactly one question:
+was BTC at or above the strike then?
+
+| Imported | Not imported |
+|---|---|
+| "Bitcoin above $120,000 on November 30?" | "Will Bitcoin reach $130,000 in November?" (any time during a month) |
+| Kalshi's "$100,000 or above" at 5pm on a date | Price ranges like "$121,000 to $121,499" |
+| | "Bitcoin up or down today?" (that's [BTC up or down](/docs/mezo/btc-up-down)) |
+| | Questions already at 90% or 10% (nobody trades them) |
+
+## How it works exactly
+
+Each month the importer:
+
+1. Reads open Bitcoin markets from Polymarket's and Kalshi's public APIs.
+2. Keeps the point-in-time above/below questions measured between one day after seeding ends and 45 days out,
+   with Yes between 10% and 90%. The same moment and strike on both sources counts once.
+3. Ranks them by 24-hour volume and takes the top three, at most two per moment.
+4. Writes MEZONK rules from a fixed template: the strike, "at or above" or "below", the close time in UTC, Mezo's
+   PriceFeed as the source, and Invalid only if the feed publishes no price for 24 hours after close.
+5. Suggests each one from the import creator wallet. The import curator wallet reviews it, assigns the price
+   resolver and signs the approval. The creator publishes it, the curator records the strike on the resolver, and the
+   creator seeds both sides.
+
+Every step leaves the usual public trail: the proposal page shows the source market, the review and the approval;
+the rules hash is on-chain; the strike is in the resolver's `RuleSet` event.
+
+After close, the keeper calls `settle()`, which reads Mezo's PriceFeed and proposes Yes or No with the exact reading
+as evidence. The challenge window and arbitration work as for every market. See
+[BTC price markets](/docs/mezo/btc-price-markets) for the resolver's checks.
+
+<Callout type="info" title="An automated curator">
+  The import curator is a wallet whose key runs on a server. It signs only rules the importer generates from the
+  template above, and the factory owner can remove its curator role at any time. It's a separate wallet from the
+  people who review community suggestions.
+</Callout>
+
+## Next
+
+<Cards>
+  <Card title="BTC price markets" href="/docs/mezo/btc-price-markets" description="How the price resolver reads Mezo's PriceFeed and proposes the result." />
+  <Card title="Seeding and launch" href="/docs/how-it-works/seeding-and-launch" description="How a market gets its first orders and goes live." />
+  <Card title="Roles" href="/docs/markets/roles" description="Who can suggest, approve, publish and resolve a market." />
+</Cards>
