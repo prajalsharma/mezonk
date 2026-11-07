@@ -17,7 +17,7 @@ Every concept page serves both: a plain explanation first, then the exact detail
 - **Say what is live and what isn't.** Exchange `0x4555cfF10200e1007435Cffc683C60683c5C49B9` is live on Mezo testnet
   (chain 31611) since 2026-10-22. Not yet deployed (code merged on GitHub, tested, but not on chain):
   the BTC price resolver (`MezonkPriceResolver`, see docs/PRICE_RESOLVER.md), the BTC up/down rounds (`MezonkBtcRounds`,
-  see docs/BTC_ROUNDS.md), the monthly Bitcoin market import that depends on the resolver (docs/BTC_IMPORT.md) and the KupiaSec resolution/rebate fixes
+  see docs/BTC_ROUNDS.md), the monthly markets job that depends on the resolver (docs/MONTHLY_MARKETS.md; public pages never name the sites its questions come from) and the KupiaSec resolution/rebate fixes
   (commit c8fbaff: rebate weight only from in-band seed escrow; anyone may propose after half the proposal window; an
   overturned proposal loses half its bond to the protocol; the proposer can't dispute their own proposal). Describe the
   live contract's behaviour as current and mark the merged-but-not-deployed changes with a `<Callout type="warn"

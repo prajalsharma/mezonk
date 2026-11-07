@@ -31,6 +31,10 @@ export interface ExternalMarket {
   volume24h: number;
   /** Kalshi only: structured strike. */
   strike?: { type: string; floor: number | null; cap: number | null };
+  /** Polymarket only: the official source the question resolves on (an https URL), its event and the event's tags. */
+  resolutionSource?: string;
+  eventId?: string;
+  tags?: string[];
 }
 
 const num = (v: unknown): number | null => {
@@ -76,6 +80,10 @@ export function parsePolymarketEvents(body: unknown): { markets: ExternalMarket[
   if (!Array.isArray(body)) return { markets, skipped };
   for (const e of body as Array<Record<string, unknown>>) {
     const eventSlug = str(e.slug);
+    const tags = (Array.isArray(e.tags) ? e.tags : [])
+      .map((t) => (typeof t === "string" ? t : str((t as Record<string, unknown>)?.slug) || str((t as Record<string, unknown>)?.label)))
+      .filter(Boolean)
+      .map((t) => t.toLowerCase());
     for (const m of (Array.isArray(e.markets) ? e.markets : []) as Array<Record<string, unknown>>) {
       const id = str(m.slug);
       const title = str(m.question) || str(e.title);
@@ -97,6 +105,9 @@ export function parsePolymarketEvents(body: unknown): { markets: ExternalMarket[
         evaluatesAt: at,
         probYes: probability(num(m.bestBid), num(m.bestAsk), prices[0] ?? null),
         volume24h: num(m.volume24hr) ?? 0,
+        resolutionSource: str(m.resolutionSource) || str(e.resolutionSource),
+        eventId: str(e.id) || eventSlug,
+        tags,
       });
     }
   }
@@ -160,6 +171,12 @@ export async function fetchPolymarketBitcoin(limit = 50) {
   return parsePolymarketEvents(await getJson(`${POLYMARKET_API}/events?${q}`));
 }
 
+/** The most traded open events across every topic (for the monthly picks beyond Bitcoin). */
+export async function fetchPolymarketTop(limit = 100) {
+  const q = new URLSearchParams({ closed: "false", active: "true", order: "volume24hr", ascending: "false", limit: String(limit) });
+  return parsePolymarketEvents(await getJson(`${POLYMARKET_API}/events?${q}`));
+}
+
 export async function fetchKalshiBitcoin(series = DEFAULT_KALSHI_SERIES) {
   const out = { markets: [] as ExternalMarket[], skipped: [] as Skipped[], errors: [] as string[] };
   for (const s of series) {
@@ -174,39 +191,43 @@ export async function fetchKalshiBitcoin(series = DEFAULT_KALSHI_SERIES) {
   return out;
 }
 
-// ─── One market, for the live reference shown on an imported market's page ──────────────────────────────────
+// ─── Source tags and final results ──────────────────────────────────────────────────────────────────────────
 
-/** What a reference label encodes: `polymarket:<slug>` or `kalshi:<ticker>`. */
-export function parseReferenceLabel(label: string): { source: ExternalSource; id: string } | null {
-  const m = /^(polymarket|kalshi):([A-Za-z0-9._-]{1,72})$/.exec(label.trim());
+/**
+ * Where an imported market came from, kept in the proposal's private seeding-plan field (only its author and
+ * curators can read it), never in public text: `[source polymarket:<slug>]`.
+ */
+export const sourceTag = (source: ExternalSource, id: string) => `[source ${source}:${id}]`;
+export function parseSourceTag(text: string | null | undefined): { source: ExternalSource; id: string } | null {
+  const m = /\[source (polymarket|kalshi):([A-Za-z0-9._-]{1,120})\]/.exec(text ?? "");
   return m ? { source: m[1] as ExternalSource, id: m[2]! } : null;
 }
-export const referenceLabel = (source: ExternalSource, id: string) => `${source}:${id}`;
 
-export interface ReferenceQuote {
-  source: ExternalSource;
-  probYes: number | null;
-  closed: boolean;
-  fetchedAt: string;
+export type SourceResult = "yes" | "no" | "pending";
+
+/** A Polymarket market's final result: closed with one outcome priced at 1. Anything else is pending. */
+export function polymarketResult(m: Record<string, unknown> | null | undefined): SourceResult {
+  if (!m || m.closed !== true) return "pending";
+  const status = str(m.umaResolutionStatus);
+  if (status && status !== "resolved") return "pending";
+  const prices = jsonArray(m.outcomePrices).map(num);
+  if (prices[0] === 1 && prices[1] === 0) return "yes";
+  if (prices[0] === 0 && prices[1] === 1) return "no";
+  return "pending";
 }
 
-export async function fetchReferenceQuote(source: ExternalSource, id: string): Promise<ReferenceQuote> {
-  const fetchedAt = new Date().toISOString();
+/** A Kalshi market's final result (`result` once settled). */
+export function kalshiResult(m: Record<string, unknown> | null | undefined): SourceResult {
+  if (!m || !["settled", "finalized", "determined"].includes(str(m.status))) return "pending";
+  const r = str(m.result);
+  return r === "yes" || r === "no" ? r : "pending";
+}
+
+export async function fetchSourceResult(source: ExternalSource, id: string): Promise<SourceResult> {
   if (source === "polymarket") {
-    const body = await getJson(`${POLYMARKET_API}/markets?${new URLSearchParams({ slug: id })}`, 8_000);
-    const m = (Array.isArray(body) ? body[0] : null) as Record<string, unknown> | null;
-    if (!m) throw new Error("market not found");
-    const prices = jsonArray(m.outcomePrices).map(num);
-    return { source, probYes: probability(num(m.bestBid), num(m.bestAsk), prices[0] ?? null), closed: m.closed === true, fetchedAt };
+    const body = await getJson(`${POLYMARKET_API}/markets?${new URLSearchParams({ slug: id, closed: "true" })}`, 10_000);
+    return polymarketResult((Array.isArray(body) ? body[0] : null) as Record<string, unknown> | null);
   }
-  const body = (await getJson(`${KALSHI_API}/markets/${encodeURIComponent(id)}`, 8_000)) as { market?: Record<string, unknown> };
-  const m = body.market;
-  if (!m) throw new Error("market not found");
-  const status = str(m.status);
-  return {
-    source,
-    probYes: probability(kalshiPrice(m, "yes_bid"), kalshiPrice(m, "yes_ask"), kalshiPrice(m, "last_price")),
-    closed: !!status && !["active", "open"].includes(status),
-    fetchedAt,
-  };
+  const body = (await getJson(`${KALSHI_API}/markets/${encodeURIComponent(id)}`, 10_000)) as { market?: Record<string, unknown> };
+  return kalshiResult(body.market);
 }

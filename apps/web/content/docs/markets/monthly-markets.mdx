@@ -1,0 +1,87 @@
+---
+title: Monthly markets
+description: Every month MEZONK lists new Bitcoin price markets on its own, plus two picks on other topics. How they're chosen, seeded and settled.
+icon: CalendarDays
+---
+
+<Callout type="warn" title="Next deployment">
+  The monthly Bitcoin markets settle through `MezonkPriceResolver`, which is merged on GitHub and tested but not yet
+  deployed on testnet. Until it is, no monthly markets are listed.
+</Callout>
+
+You don't have to wait for someone to suggest a market. Once a month MEZONK lists a fresh set on its own:
+
+- **Bitcoin price markets**, like *Will Bitcoin be at or above $120,000 on Mezo's price feed at 17:00 UTC, Nov 30,
+  2026?* They settle on the BTC price Mezo itself uses, with no person deciding.
+- **Two picks beyond Bitcoin**, drawn at random from the questions people are trading most right now: an interest-rate
+  decision, an economic number, a sports final. They settle from the official source named in their rules.
+
+Both kinds go through the same review as every other market and start with orders on both sides.
+
+## The plain version
+
+- **Chosen by what's active.** The Bitcoin markets are the most traded Bitcoin price questions of the moment. The two
+  other picks are drawn at random from the 20 most traded open questions that pass the checks below.
+- **They start with real orders.** A MEZONK wallet places a Yes bid and a No bid about 6¢ apart, around the price the
+  question trades at elsewhere, with its own MUSD. Anyone can trade against them.
+- **They may wait in seeding.** If the market policy needs more than one seeder, a market stays in *Seeding* until
+  someone else adds orders. You can be that seeder: see [Seeding and launch](/docs/how-it-works/seeding-and-launch).
+- **They settle on their own.** Bitcoin markets are read from Mezo's price feed right after close. For the other picks,
+  the resolver proposes the result from the named source once it's out. Either way you can challenge it, and claims
+  open once it's final.
+
+## Which questions qualify
+
+**Bitcoin markets** must be about the price at one moment. Mezo's price feed has no history: it can be read now, not
+looked up later. So the resolver reads it once, just after close, and that answers exactly one question: was BTC at
+or above the strike then?
+
+| Listed | Not listed |
+|---|---|
+| "Bitcoin at or above $120,000 at 17:00 UTC on Nov 30?" | "Will Bitcoin reach $130,000 in November?" (any time during a month) |
+| "Bitcoin below $90,000 at 22:00 UTC on Dec 15?" | Price ranges like "$121,000 to $121,499" |
+| | "Bitcoin up or down today?" (that's [BTC up or down](/docs/mezo/btc-up-down)) |
+
+**Picks beyond Bitcoin** must have rules that work on their own:
+
+- a clear "Yes if …" condition;
+- an official https source that publishes the result (a central bank, a statistics office, a league);
+- no crypto (Bitcoin has its own markets), and nothing the [market policy](/docs/markets/market-policy) forbids;
+- they pass the same automatic rule checks as a suggestion.
+
+For both kinds: Yes between 10% and 90% (nobody trades a sure thing), and an end date between one day after seeding
+and 45 days out.
+
+## How it works exactly
+
+Each month the listing job:
+
+1. Reads the most traded open questions, keeps the ones that qualify, and picks the Bitcoin markets by volume and the
+   other two at random.
+2. Writes MEZONK rules. Bitcoin markets use a fixed template: strike, "at or above" or "below", the close time in
+   UTC, Mezo's PriceFeed as the source, and Invalid only if the feed publishes nothing for 24 hours after close. The
+   other picks keep the original condition and name its official source, with Invalid if that source publishes no
+   result within 7 days.
+3. Suggests each one from the listing wallet. A curator wallet reviews it, assigns the resolver and signs the
+   approval. The listing wallet publishes it and seeds both sides; Bitcoin markets also get their strike recorded on
+   the price resolver.
+
+A daily run launches markets whose seeding is complete and proposes outcomes for ended picks. The keeper bot
+finalizes any market whose deadline has passed, so claims open without anyone having to press *Finalize*.
+
+Every step leaves the usual public trail: the proposal page shows the review and the approval, the rules hash is
+on-chain, and every proposal carries its evidence.
+
+<Callout type="info" title="Automated wallets">
+  The listing, curator and resolver wallets used for monthly markets are keys run by a server. The curator signs
+  only rules that passed the checks above, and the factory owner can remove its role at any time. People reviewing
+  community suggestions use separate wallets.
+</Callout>
+
+## Next
+
+<Cards>
+  <Card title="BTC price markets" href="/docs/mezo/btc-price-markets" description="How the price resolver reads Mezo's PriceFeed and proposes the result." />
+  <Card title="Resolution" href="/docs/how-it-works/resolution" description="Proposals, challenges, deadlines and what happens when nobody proposes." />
+  <Card title="Seeding and launch" href="/docs/how-it-works/seeding-and-launch" description="How a market gets its first orders and goes live." />
+</Cards>

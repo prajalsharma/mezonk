@@ -19,7 +19,6 @@ import { UserChip, type PublicPerson } from "@/components/profile/UserChip";
 import { Discussion } from "@/features/comments/Discussion";
 import { cx } from "@/components/ui/cx";
 import { RulesPanel } from "@/components/markets/RulesPanel";
-import { ReferenceOdds } from "@/components/markets/ReferenceOdds";
 import { StageStatus } from "@/components/markets/StageStatus";
 import { TradeTicket } from "@/features/trading/TradeTicket";
 import { OrderBook } from "@/features/trading/OrderBook";
@@ -56,8 +55,6 @@ export interface IndexedMarket {
     proposalId: string | null;
     summary: string;
     media: Array<{ id: string; url: string; width: number; height: number; role: string }>;
-    /** Set when the market was imported from another prediction market. */
-    reference: { source: "polymarket" | "kalshi"; id: string; url: string } | null;
   } | null;
 }
 
@@ -218,9 +215,6 @@ export function MarketView({ id, indexed, dbError }: { id: number; indexed: Inde
               </div>
               <h1 className="max-w-3xl text-[1.75rem] font-medium leading-[1.15] tracking-tight md:text-[2.5rem]">{question}</h1>
               {pres?.summary && <p className="max-w-2xl text-lg text-ink-2">{pres.summary}</p>}
-              {pres?.reference && (
-                <ReferenceOdds marketId={id} sourceName={pres.reference.source === "kalshi" ? "Kalshi" : "Polymarket"} url={pres.reference.url} />
-              )}
               {pres && (
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
                   <UserChip person={pres.creator} sub="created this market" />

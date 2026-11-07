@@ -6,7 +6,7 @@
  * and "up or down" questions can't be settled that way and are skipped with a reason.
  */
 import type { MarketMetadata } from "@/lib/market/metadata";
-import { referenceLabel, sourceName, type ExternalMarket } from "./external";
+import { sourceTag, type ExternalMarket } from "./external";
 
 export type Direction = "above" | "below";
 
@@ -131,21 +131,22 @@ export function utcMoment(d: Date): string {
 
 export const MEZO_PRICE_FEED_URL = "https://explorer.test.mezo.org/address/0x86bCF0841622a5dAC14A313a15f96A95421b9366";
 
-/** The MEZONK market for a candidate. Close time = the source's measurement time = when Mezo's price is read. */
+/**
+ * The MEZONK market for a candidate. Close time = the measurement time = when Mezo's price is read.
+ * Public text never names the place the question was found; it stands on its own.
+ */
 export function buildMetadata(c: Candidate, captureMinutes: number, priceFeedUrl = MEZO_PRICE_FEED_URL): MarketMetadata {
   const { strike, direction } = c.rule;
   const when = utcMoment(c.market.evaluatesAt);
-  const src = sourceName[c.market.source];
   const level = direction === "above" ? `at or above ${usd(strike)}` : `below ${usd(strike)}`;
-  const theirs = c.market.title.length > 140 ? `${c.market.title.slice(0, 137)}…` : c.market.title;
   return {
     v: 1,
     question: `Will Bitcoin be ${level} on Mezo's price feed at ${when}?`,
     category: "bitcoin",
     description:
-      `The same question as ${src}'s "${theirs}", settled on Mezo's own BTC/USD price: the price Mezo uses for loans and liquidations. ` +
-      `Trading closes at ${when}, and the price is read right after. Mezo's price and the exchange price ${src} uses can differ by a few dollars, ` +
-      `so if Bitcoin ends very close to ${usd(strike)} the two markets can resolve differently.`,
+      `One of this month's Bitcoin markets on MEZONK, settled on Mezo's own BTC/USD price: the price Mezo uses for loans and liquidations. ` +
+      `Trading closes at ${when}, and the price is read right after. Exchanges quote slightly different prices, so if Bitcoin ends within a few ` +
+      `dollars of ${usd(strike)}, only Mezo's price decides.`,
     rules: {
       yes:
         direction === "above"
@@ -154,26 +155,24 @@ export function buildMetadata(c: Candidate, captureMinutes: number, priceFeedUrl
       no: direction === "above" ? `That reading is lower than ${usd(strike)}.` : `That reading is ${usd(strike)} or higher.`,
       invalid: `Mezo's PriceFeed publishes no BTC/USD price update in the 24 hours after ${when}, or the feed is discontinued before then.`,
       ambiguity:
-        `Only Mezo's PriceFeed counts; ${src}'s result does not decide this market. If the automatic reading is missed, the resolver proposes the ` +
-        `first PriceFeed update after the close, with evidence, and anyone can challenge it.`,
+        `Only Mezo's PriceFeed counts; prices on exchanges and other markets don't decide this market. If the automatic reading is missed, the ` +
+        `resolver proposes the first PriceFeed update after the close, with evidence, and anyone can challenge it.`,
     },
     source: { name: "Mezo PriceFeed (BTC/USD)", url: priceFeedUrl },
     resolvesAt: c.market.evaluatesAt.toISOString(),
   };
 }
 
-/** Off-chain proposal fields (not hashed into the rules). */
+/** Off-chain proposal fields. Public ones are neutral; the source is only in the private seeding plan. */
 export function buildProposalExtras(c: Candidate, importedAt: Date) {
-  const src = sourceName[c.market.source];
-  const vol = c.market.source === "polymarket" ? `${usd(c.market.volume24h)} traded in 24h` : `${Math.round(c.market.volume24h).toLocaleString("en-US")} contracts traded in 24h`;
   return {
-    summary: `One of the most traded Bitcoin price questions on ${src}, brought to Mezo.`,
+    summary: "This month's Bitcoin price question, settled on Mezo's own BTC price.",
     rationale:
-      `Imported automatically on ${importedAt.toISOString().slice(0, 10)}: one of the most traded Bitcoin price questions on ${src} (${vol}). ` +
-      `It asks about the price at one moment, so Mezo's PriceFeed can settle it without a person deciding.`,
-    references: [{ url: c.market.url, label: referenceLabel(c.market.source, c.market.id).slice(0, 80) }],
-    liquidityPlan: `The importer seeds both sides around ${src}'s price at import time (Yes ≈ ${Math.round(c.probYes * 100)}¢).`,
-    conflicts: "None. Imported by the MEZONK importer; the importing wallets hold no position on the source market.",
+      `Picked automatically on ${importedAt.toISOString().slice(0, 10)} for this month's Bitcoin markets: one of the most traded Bitcoin price ` +
+      `questions right now. It asks about the price at one moment, so Mezo's PriceFeed can settle it without a person deciding.`,
+    references: [] as Array<{ url: string; label: string }>,
+    liquidityPlan: `Seeded automatically on both sides around Yes ≈ ${Math.round(c.probYes * 100)}¢. ${sourceTag(c.market.source, c.market.id)}`,
+    conflicts: "None. Listed by MEZONK's monthly market wallets, which hold no position on this question elsewhere.",
   };
 }
 

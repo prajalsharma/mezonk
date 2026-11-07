@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildMetadata, classify, seedPlan, select, type SelectOptions } from "@/lib/import/btc";
-import { parseKalshiMarkets, parsePolymarketEvents, parseReferenceLabel, type ExternalMarket } from "@/lib/import/external";
+import { buildProposalExtras } from "@/lib/import/btc";
+import { classifyEvent, eventProposalExtras, selectEvents } from "@/lib/import/events";
+import { kalshiResult, parseKalshiMarkets, parsePolymarketEvents, parseSourceTag, polymarketResult, sourceTag, type ExternalMarket } from "@/lib/import/external";
 import { metadataSchema, reviewMetadata } from "@/lib/market/metadata";
 
 // Fixtures follow each API's documented shape. Gamma encodes outcomes/outcomePrices as JSON strings.
@@ -150,11 +152,20 @@ describe("external market parsers", () => {
     expect(parsePolymarketEvents([{ markets: [{ slug: "x", question: "Bitcoin above $100,000?", outcomes: '["Yes","No"]' }] }]).skipped[0]?.reason).toBe("no end date");
   });
 
-  it("reads reference labels strictly", () => {
-    expect(parseReferenceLabel("kalshi:KXBTCD-26NOV3017-T119999.99")).toEqual({ source: "kalshi", id: "KXBTCD-26NOV3017-T119999.99" });
-    expect(parseReferenceLabel("polymarket:bitcoin-above-120k")).toEqual({ source: "polymarket", id: "bitcoin-above-120k" });
-    expect(parseReferenceLabel("polymarket:../../etc")).toBeNull();
-    expect(parseReferenceLabel("Coinbase")).toBeNull();
+  it("keeps the source in a strict private tag", () => {
+    expect(parseSourceTag(`Seeded around 41¢. ${sourceTag("kalshi", "KXBTCD-26NOV3017-T119999.99")}`)).toEqual({ source: "kalshi", id: "KXBTCD-26NOV3017-T119999.99" });
+    expect(parseSourceTag("[source polymarket:../../etc]")).toBeNull();
+    expect(parseSourceTag(null)).toBeNull();
+  });
+
+  it("reads final results only when settled", () => {
+    expect(polymarketResult({ closed: true, outcomePrices: '["1","0"]', umaResolutionStatus: "resolved" })).toBe("yes");
+    expect(polymarketResult({ closed: true, outcomePrices: '["0","1"]' })).toBe("no");
+    expect(polymarketResult({ closed: true, outcomePrices: '["0.5","0.5"]' })).toBe("pending");
+    expect(polymarketResult({ closed: true, outcomePrices: '["1","0"]', umaResolutionStatus: "disputed" })).toBe("pending");
+    expect(polymarketResult({ closed: false, outcomePrices: '["1","0"]' })).toBe("pending");
+    expect(kalshiResult({ status: "finalized", result: "no" })).toBe("no");
+    expect(kalshiResult({ status: "active", result: "" })).toBe("pending");
   });
 });
 
@@ -210,7 +221,12 @@ describe("buildMetadata", () => {
     expect(m.question).toBe("Will Bitcoin be at or above $120,000 on Mezo's price feed at 17:00 UTC, Nov 30, 2026?");
     expect(m.rules.yes).toContain("$120,000 or higher");
     expect(m.resolvesAt).toBe("2026-11-30T17:00:00.000Z");
-    expect(m.description).toContain("Polymarket");
+  });
+  it("never names where the question was found in public text", () => {
+    const extras = buildProposalExtras(c, new Date("2026-11-01T00:00:00Z"));
+    const pub = JSON.stringify({ m, summary: extras.summary, rationale: extras.rationale, references: extras.references, conflicts: extras.conflicts });
+    expect(pub).not.toMatch(/polymarket|kalshi/i);
+    expect(parseSourceTag(extras.liquidityPlan)).toEqual({ source: "polymarket", id: "bitcoin-above-120k-on-november-30" });
   });
 });
 
@@ -228,5 +244,67 @@ describe("seedPlan", () => {
   it("raises size until the escrow counts as a seeder", () => {
     const p = seedPlan(0.5, { ...fast, minBidDepth: 1, minAskDepth: 1, minSeederNotional: 30 });
     expect(p.shares * (p.yesBid + p.noBid)).toBeGreaterThanOrEqual(3000);
+  });
+});
+
+// Shaped like Gamma events across all topics.
+const ev = (over: Partial<ExternalMarket> = {}): ExternalMarket => ({
+  source: "polymarket",
+  id: "fed-cut-december",
+  url: "https://example.invalid/event/fed-december",
+  title: "Will the Fed cut rates at its December 2026 meeting?",
+  label: "",
+  rules:
+    'This market will resolve to "Yes" if the FOMC lowers the target range for the federal funds rate at its December 15–16, 2026 meeting. ' +
+    'Otherwise, this market will resolve to "No". The primary resolution source for this market will be the official FOMC statement. ' +
+    "If no clarification is issued, Polymarket may use its discretion.",
+  evaluatesAt: new Date("2026-12-16T19:00:00Z"),
+  probYes: 0.55,
+  volume24h: 1_000_000,
+  resolutionSource: "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+  eventId: "e1",
+  tags: ["economy", "fed-rates"],
+  ...over,
+});
+
+describe("picks beyond Bitcoin", () => {
+  it("rewrites clean rules from the official source, without site wording", () => {
+    const c = classifyEvent(ev());
+    expect(c.ok).toBe(true);
+    if (!c.ok) return;
+    const m = c.metadata;
+    expect(m.rules.yes).toBe("Yes if the FOMC lowers the target range for the federal funds rate at its December 15–16, 2026 meeting.");
+    expect(m.rules.ambiguity).toBe("The primary resolution source for this question will be the official FOMC statement.");
+    expect(m.source).toEqual({ name: "federalreserve.gov", url: "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm" });
+    expect(m.category).toBe("economics");
+    expect(JSON.stringify(m)).not.toMatch(/polymarket|kalshi/i);
+    expect(metadataSchema.safeParse(m).success).toBe(true);
+  });
+  it("skips crypto, missing sources, other markets as sources and rules it can't rewrite", () => {
+    expect(classifyEvent(ev({ title: "Will Ethereum flip Bitcoin in 2026?" }))).toMatchObject({ ok: false, reason: "crypto question" });
+    expect(classifyEvent(ev({ resolutionSource: "" }))).toMatchObject({ ok: false, reason: "no official https source" });
+    expect(classifyEvent(ev({ resolutionSource: "https://polymarket.com/x" }))).toMatchObject({ ok: false, reason: "resolves on another prediction market" });
+    expect(classifyEvent(ev({ rules: "Resolves according to the consensus of credible reporting." })).ok).toBe(false);
+    expect(classifyEvent(ev({ title: "Will someone be killed in the protest by December?" })).ok).toBe(false);
+  });
+  it("draws the requested number at random, one per event, from the most traded", () => {
+    const markets = [
+      ev({ id: "a", eventId: "e1", volume24h: 5 }),
+      ev({ id: "b", eventId: "e1", volume24h: 9, title: "Will the Fed hold rates at its December 2026 meeting?" }),
+      ev({ id: "c", eventId: "e2", volume24h: 7, title: "Will US CPI inflation for November 2026 be above 3.0%?" }),
+      ev({ id: "d", eventId: "e3", volume24h: 1, title: "Will US unemployment for November 2026 be above 4.5%?" }),
+    ];
+    const o = { minClose: new Date("2026-11-10"), maxClose: new Date("2026-12-31"), count: 2, pool: 2, minProb: 0.1, maxProb: 0.9 };
+    const first = selectEvents(markets, { ...o, randomInt: () => 0 });
+    expect(first.picked.map((c) => c.market.id)).toEqual(["b", "c"]); // pool = busiest per event: b (e1), c (e2)
+    expect(selectEvents(markets, { ...o, randomInt: (n) => n - 1 }).picked.map((c) => c.market.id)).toEqual(["c", "b"]);
+    expect(selectEvents(markets, { ...o, randomInt: () => 0, existingQuestions: new Set([first.picked[0]!.metadata.question]) }).picked.map((c) => c.market.id)).toEqual(["c", "a"]); // e1 falls back to its next question
+  });
+  it("keeps proposal text neutral and the source private", () => {
+    const c = classifyEvent(ev());
+    if (!c.ok) throw new Error("expected ok");
+    const x = eventProposalExtras({ market: ev(), metadata: c.metadata, probYes: 0.55 }, new Date("2026-11-01T00:00:00Z"));
+    expect(JSON.stringify({ s: x.summary, r: x.rationale, refs: x.references, c: x.conflicts })).not.toMatch(/polymarket|kalshi/i);
+    expect(parseSourceTag(x.liquidityPlan)?.id).toBe("fed-cut-december");
   });
 });

@@ -93,6 +93,8 @@ const CLOSE_MARGIN = BigInt(positiveInt("MM_CLOSE_MARGIN", "600"));
 const SHARES = parseUnits(env("MM_SHARES", "100"), 18);
 const BUDGET = parseUnits(env("MM_BUDGET_MUSD", "2000"), 18);
 const PRICE_RESOLVER = isAddress(process.env.MM_PRICE_RESOLVER?.trim() ?? "") ? getAddress(process.env.MM_PRICE_RESOLVER!.trim()) : null;
+/** Finalize markets whose resolution deadline has passed (permissionless, gas only). MM_FINALIZE=0 turns it off. */
+const FINALIZE = env("MM_FINALIZE", "1") !== "0";
 const BTC_ROUNDS = isAddress(process.env.MM_BTC_ROUNDS?.trim() ?? "") ? getAddress(process.env.MM_BTC_ROUNDS!.trim()) : null;
 const BTC_INTERVAL_MS = positiveInt("MM_BTC_INTERVAL", "10") * 1000;
 const MARKETS: bigint[] | null = process.env.MM_MARKETS?.trim()
@@ -441,6 +443,41 @@ async function keeperPass(w: Wallet) {
   }
 }
 
+// ─── Keeper: finalize markets past their resolution deadlines ────────────────
+
+/**
+ * A market whose deadline passed (no proposal in time, an unchallenged proposal, or a lapsed arbitration) only needs
+ * someone to call `finalize`, which anyone may do. Until then winners can't claim. The contract decides the outcome
+ * (the proposal, or Invalid); this just sends the call, after an eth_call shows it will succeed.
+ */
+const finalized = new Set<bigint>();
+async function finalizePass(w: Wallet) {
+  if (!FINALIZE) return;
+  const head = await retry("blockNumber", () => client.getBlockNumber({ cacheTime: 0 }));
+  const at = head < minBlock ? minBlock : head;
+  const now = (await retry("block", () => client.getBlock({ blockNumber: at }))).timestamp;
+  resolutionAddr ??= await retry("resolution", () => client.readContract({ address: EXCHANGE, abi: exchangeAbi, functionName: "resolution" }));
+  const n = await retry("marketCount", () => client.readContract({ address: EXCHANGE, abi: exchangeAbi, functionName: "marketCount", blockNumber: at }));
+  for (let id = 1n; id <= n; id++) {
+    if (stopping || finalized.has(id)) continue;
+    const m = await retry(`getMarket(${id})`, () => client.readContract({ address: EXCHANGE, abi: exchangeAbi, functionName: "getMarket", args: [id], blockNumber: at }));
+    if (m.finalized) { finalized.add(id); continue; }
+    if (m.graduatedAt === 0n || now < m.closeTime) continue;
+    try {
+      await client.simulateContract({ address: resolutionAddr!, abi: resolutionAbi, functionName: "finalize", args: [id], account: w.address, blockNumber: at });
+    } catch {
+      continue; // a window is still open
+    }
+    if (!w.signer) { console.log(`  keeper #${id}: would finalize (deadline passed; dry run)`); continue; }
+    try {
+      await send(w.signer, resolutionAddr!, encodeFunctionData({ abi: resolutionAbi, functionName: "finalize", args: [id] }), `market #${id}: finalize (deadline passed)`);
+      finalized.add(id);
+    } catch (e) {
+      console.log(`  keeper #${id}: finalize failed, will retry: ${short(e)}`);
+    }
+  }
+}
+
 // ─── Keeper: roll BTC up/down rounds ───────────────────────────────────────────
 
 let btcSchedule: { genesis: bigint; interval: bigint; captureWindow: bigint } | null = null;
@@ -542,10 +579,12 @@ async function main() {
         if (gas < MIN_GAS) console.log(`${w.address} is low on test BTC for gas (${dec2(gas)}); get some at https://faucet.test.mezo.org/`);
         else {
           await keeperPass(w).catch((e) => console.log(`keeper failed: ${short(e)}`));
+          await finalizePass(w).catch((e) => console.log(`finalize keeper failed: ${short(e)}`));
           await pass(w);
         }
       } else {
         await keeperPass(w).catch((e) => console.log(`keeper failed: ${short(e)}`));
+        await finalizePass(w).catch((e) => console.log(`finalize keeper failed: ${short(e)}`));
         await pass(w);
       }
     } catch (e) {

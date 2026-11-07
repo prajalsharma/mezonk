@@ -80,7 +80,8 @@ export function deriveStage(m: StageInput, now = Date.now()): StageInfo {
     const dl = new Date(close.getTime() + m.proposalWindow * 1000);
     return {
       stage: "closed",
-      label: "Awaiting outcome",
+      // Past the deadline nobody can propose any more: anyone can finalize, and the market settles Invalid.
+      label: now >= dl.getTime() ? "No outcome proposed" : "Awaiting outcome",
       finalizable: now >= dl.getTime(),
       deadline: dl,
       deadlineLabel: "Proposal deadline",

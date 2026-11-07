@@ -1,5 +1,4 @@
 import "server-only";
-import { parseReferenceLabel, type ExternalSource } from "@/lib/import/external";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { keccak256, toBytes, verifyTypedData, type Address, type Hex } from "viem";
@@ -517,16 +516,5 @@ export async function marketPresentation(marketId: number, creator: string) {
     proposalId: p?.id ?? null,
     summary: p?.summary ?? "",
     media: p ? await proposalMediaList(p.id) : [],
-    reference: p ? importedFrom(p.references_) : null,
   };
-}
-
-/** The external market an imported market mirrors (reference label `polymarket:<slug>` / `kalshi:<ticker>`). */
-export function importedFrom(refs: unknown): { source: ExternalSource; id: string; url: string } | null {
-  if (!Array.isArray(refs)) return null;
-  for (const r of refs as Array<{ url?: unknown; label?: unknown }>) {
-    const parsed = typeof r.label === "string" ? parseReferenceLabel(r.label) : null;
-    if (parsed && typeof r.url === "string" && r.url.startsWith("https://")) return { ...parsed, url: r.url };
-  }
-  return null;
 }
