@@ -13,7 +13,10 @@ Read docs/ORDERBOOK_ARCHITECTURE.md and docs/SECURITY_AND_SOLVENCY.md before tou
 - **Chain time, not wall clock,** for anything lifecycle-related (`useBlock` on the client, `chainNowMs()` on the server).
 - **Verified addresses only.** Network and token config lives in `apps/web/src/lib/chain/config.ts` and `contracts/src/MezoAddresses.sol`. Never resolve a token by symbol.
 - **No secrets in git or NEXT_PUBLIC_*.** Deploy keys go in a Foundry keystore. The app needs no keys.
-- **No mainnet deploys** without explicit owner authorization (`ALLOW_MAINNET`, `NEXT_PUBLIC_ENABLE_MAINNET`).
+- **No mainnet deploys** without explicit owner authorization (`ALLOW_MAINNET`). Mainnet is live and is the default
+  network of the web app (owner, 2026-11-18); `NEXT_PUBLIC_ENABLE_MAINNET=false` turns mainnet trading off. The testnet
+  practice site is a separate deployment with `NEXT_PUBLIC_CHAIN_ID=31611`; the header switch links the two
+  (`NEXT_PUBLIC_MAINNET_URL` / `NEXT_PUBLIC_TESTNET_URL`). Public copy and docs present mainnet; testnet only as practice.
 - **Explorer links only for verified public networks** (`hasExplorer`); never on local forks.
 - **The contract is not upgradeable.** Interface changes mean a new deployment (see docs/RESOLUTION_DESIGN.md §8).
 - Permissions for UI actions come from `lib/market/permissions.ts` only. Don't scatter address checks.
@@ -41,5 +44,10 @@ Read docs/ORDERBOOK_ARCHITECTURE.md and docs/SECURITY_AND_SOLVENCY.md before tou
 Mezo Testnet 31611, rpc.test.mezo.org, explorer.test.mezo.org, MUSD 0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503.
 Mainnet 31612, MUSD 0xdD468A1DDc392dcdbEf6db6e34E89AA338F9F186. getLogs ≤ 9,999 blocks. EVM target london.
 Deployed on testnet (2026-10-22): MezonkExchange 0x4555cfF10200e1007435Cffc683C60683c5C49B9, deploy block 16298919
-(details in docs/TESTING_AND_DEPLOYMENT.md). Testnet RPC has a lagging node: app clients use laggingNodeFetch, scripts use
+(details in docs/TESTING_AND_DEPLOYMENT.md).
+Deployed on mainnet (2026-11-18, owner 0x017FF5FB886E90f9e5ADb405D8eFddffC1162dD2): MezonkExchange
+0x102C908dCA719742f1958D18021B7C1c0092Ddf0, deploy block 13301975; factory 0x056F302D8AA87A4a1F4062a6c53EFe6425A6Bbc8,
+resolution 0xaB7d8e1F4b2fF15a23dE463B041F98483B73b28f, incentives 0x506F1FD8F0418beEdcFD5bDE7b1d8Dd56481d8A5,
+MezonkBtcRounds 0xc27f434195e4aF70782817A280A5D3Cb5de2ECa8, MezonkPriceResolver 0xc58D8A13B1e6f1614508ca20124A9d0F60520354
+(allowlisted; 0xf8F110fC…80B7 is an unused duplicate, not allowlisted). Testnet RPC has a lagging node: app clients use laggingNodeFetch, scripts use
 scripts/rpc-retry-proxy.mjs.

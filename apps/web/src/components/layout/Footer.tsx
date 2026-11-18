@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Lockup } from "@/components/brand/Logo";
-import { deployment, explorerAddress, readinessMessage } from "@/lib/chain/config";
+import { deployment, explorerAddress, isMainnet, readinessMessage } from "@/lib/chain/config";
 import { shortAddress } from "@/lib/format";
 
 const GROUPS: Array<{ title: string; links: Array<[string, string]> }> = [
@@ -35,20 +35,30 @@ const GROUPS: Array<{ title: string; links: Array<[string, string]> }> = [
   },
 ];
 
-function ChainLink({ address, label }: { address: string; label: string }) {
+function ChainLink({ address }: { address: string }) {
   const url = explorerAddress(address);
   return url ? (
-    <a className="underline decoration-line underline-offset-2 hover:text-ink" href={url} target="_blank" rel="noreferrer">
-      {label} {shortAddress(address)}
+    <a className="underline decoration-line underline-offset-2 hover:text-ink" href={url} target="_blank" rel="noreferrer" title={address}>
+      {shortAddress(address)}
     </a>
   ) : (
-    <span>
-      {label} {shortAddress(address)}
-    </span>
+    <span title={address}>{shortAddress(address)}</span>
   );
 }
 
 export function Footer() {
+  // Every contract this site talks to, each linked to the explorer, so anyone can check what they're trading against.
+  const contracts = (
+    [
+      ["Exchange", deployment.marketsAddress],
+      ["Factory", deployment.factoryAddress],
+      ["Resolution", deployment.resolutionAddress],
+      ["Incentives", deployment.incentivesAddress],
+      ["BTC rounds", deployment.btcRoundsAddress],
+      ["Price resolver", deployment.priceResolverAddress],
+      ["MUSD", deployment.musd],
+    ] as Array<[string, string | null]>
+  ).filter((c): c is [string, string] => !!c[1]);
   return (
     <footer className="mt-28 border-t border-line bg-surface pb-28 lg:pb-0">
       <div className="mx-auto grid max-w-[84rem] gap-12 px-4 py-14 md:px-6 lg:grid-cols-[1.4fr_2fr]">
@@ -63,20 +73,23 @@ export function Footer() {
             </a>
             , settled in MUSD. Prices are not predictions of certainty and nothing here is financial advice.
           </p>
-          <dl className="mono space-y-1 text-xs text-muted">
-            <div className="flex gap-2">
-              <dt>Network</dt>
-              <dd className="text-ink-2">{deployment.isLocalFork ? `Local fork of ${deployment.chain.name}` : deployment.chain.name}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt>Market</dt>
-              <dd className="text-ink-2">{deployment.marketsAddress ? <ChainLink address={deployment.marketsAddress} label="contract" /> : "Not deployed"}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt>Collateral</dt>
-              <dd className="text-ink-2"><ChainLink address={deployment.musd} label="MUSD" /></dd>
-            </div>
-          </dl>
+          <div id="footer-contracts" className="scroll-mt-24 space-y-2">
+            <p className="text-sm text-ink-2">
+              {deployment.isLocalFork
+                ? `Local fork of ${deployment.chain.name}`
+                : isMainnet
+                  ? "Live on Mezo Mainnet."
+                  : "Mezo Testnet: practice markets with test funds."}
+            </p>
+            <dl className="mono grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-muted">
+              {contracts.map(([label, address]) => (
+                <div key={label} className="contents">
+                  <dt>{label}</dt>
+                  <dd className="text-ink-2"><ChainLink address={address} /></dd>
+                </div>
+              ))}
+            </dl>
+          </div>
           {!deployment.ready && <p className="text-sm text-warn">{readinessMessage[deployment.reason]}</p>}
         </div>
         <nav aria-label="Footer" className="grid grid-cols-2 gap-8 sm:grid-cols-3">

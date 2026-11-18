@@ -1,14 +1,22 @@
 "use client";
 
+import { Check, ChevronDown } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { Status } from "@/components/ui/primitives";
+import { cx } from "@/components/ui/cx";
 import { useHealth } from "@/hooks/useHealth";
-import { deployment } from "@/lib/chain/config";
+import { deployment, isMainnet, NETWORK_SITES } from "@/lib/chain/config";
 
-/** Dot + network name. The dot colour and tooltip carry the state; the banner below the header explains problems. */
+/**
+ * Dot + network name, and a switch to the other network when both sites are configured. Each network is its own
+ * deployment, so switching is a link to the same page on the other site. The dot colour and tooltip carry the health
+ * state; the banner below the header explains problems.
+ */
 export function NetworkStatus({ compact = false }: { compact?: boolean }) {
   const { data, isLoading, isError } = useHealth();
-  // Compact (narrow headers): "Testnet" alone fits next to the wallet button on a phone.
-  const name = deployment.isLocalFork ? "Local fork" : compact && deployment.chain.testnet ? "Testnet" : deployment.chain.name;
+  const short = isMainnet ? "Mainnet" : "Testnet";
+  const name = deployment.isLocalFork ? "Local fork" : compact ? short : deployment.chain.name;
   let tone: "yes" | "warn" | "no" | "muted" = "muted";
   let text = name;
   let title = "Checking network status";
@@ -23,21 +31,84 @@ export function NetworkStatus({ compact = false }: { compact?: boolean }) {
       title = "The Mezo RPC did not respond.";
     } else if (!data.chain.ready) {
       tone = "warn";
-      text = name; // the banner under the header explains; the dot and tooltip carry the state
       title = data.chain.message;
     } else if (!data.indexer || data.indexer.stale) {
       tone = "warn";
-      text = name;
       title = "Indexed data is behind the chain. Balances and trades shown from the chain are still live.";
     } else {
       tone = "yes";
-      text = name;
       title = `Block ${data.rpc.blockNumber} · indexer ${data.indexer.lagBlocks ?? 0} blocks behind`;
     }
   }
+
+  const other = isMainnet ? NETWORK_SITES.testnet : NETWORK_SITES.mainnet;
+  if (!other || deployment.isLocalFork) {
+    return (
+      <span title={title} className="whitespace-nowrap">
+        <Status tone={tone}>{text}</Status>
+      </span>
+    );
+  }
+  return <Switcher tone={tone} text={text} title={title} other={other} />;
+}
+
+const SHARED_PATHS = new Set(["/", "/markets", "/btc", "/borrow", "/portfolio", "/suggest", "/discover", "/activity", "/status"]);
+
+function Switcher({ tone, text, title, other }: { tone: "yes" | "warn" | "no" | "muted"; text: string; title: string; other: string }) {
+  const path = usePathname() ?? "/";
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  // Market ids, proposals and profiles differ per network; only keep paths that exist on both.
+  const keep = SHARED_PATHS.has(path) || path.startsWith("/docs");
+  const href = `${other}${keep ? path : "/"}`;
+  const items = [
+    { key: "mainnet", label: "Mezo Mainnet", note: "Real BTC and MUSD", current: isMainnet },
+    { key: "testnet", label: "Mezo Testnet", note: "Free test funds", current: !isMainnet },
+  ];
   return (
-    <span title={title} className="whitespace-nowrap">
-      <Status tone={tone}>{text}</Status>
-    </span>
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={title}
+        className="press inline-flex h-9 items-center gap-1 whitespace-nowrap rounded-md px-2 hover:bg-surface-2"
+      >
+        <Status tone={tone}>{text}</Status>
+        <ChevronDown className={cx("size-3.5 text-muted transition-transform", open && "rotate-180")} aria-hidden />
+      </button>
+      {open && (
+        <div role="menu" aria-label="Network" className="glass fade absolute right-0 top-11 z-[var(--z-dropdown)] w-60 overflow-hidden rounded-lg border p-1.5 shadow-3">
+          {items.map((it) =>
+            it.current ? (
+              <div key={it.key} role="menuitemradio" aria-checked="true" className="flex items-center justify-between rounded-sm px-3 py-2 text-sm">
+                <span>
+                  <span className="block font-medium">{it.label}</span>
+                  <span className="block text-xs text-muted">{it.note}</span>
+                </span>
+                <Check className="size-4 text-yes-text" aria-label="Current network" />
+              </div>
+            ) : (
+              <a key={it.key} role="menuitemradio" aria-checked="false" href={href} className="block rounded-sm px-3 py-2 text-sm hover:bg-surface-2">
+                <span className="block font-medium">{it.label}</span>
+                <span className="block text-xs text-muted">{it.note}</span>
+              </a>
+            ),
+          )}
+        </div>
+      )}
+    </div>
   );
 }

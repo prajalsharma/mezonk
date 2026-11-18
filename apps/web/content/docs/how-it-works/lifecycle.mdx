@@ -41,20 +41,20 @@ Details: [suggesting](/docs/markets/suggest-a-market), [seeding](/docs/how-it-wo
 
 ## A worked timeline
 
-Today's testnet settings for new markets (check the live values on [Fees and incentives](/docs/how-it-works/fees-and-incentives)): seeding up to 1 hour, at least 1 hour live after the seeding deadline, a 3-day proposal window, a 1-hour challenge window, a 7-day arbitration window.
+Today's settings for new markets (check the live values on [Fees and incentives](/docs/how-it-works/fees-and-incentives)): seeding up to 7 days, at least 1 day live after the seeding deadline, a 3-day proposal window, a 1-day challenge window, a 7-day arbitration window.
 
-A market about an event on Friday is approved on Monday and closes at Friday 12:00 UTC.
+A market is published on a Monday and closes at 12:00 UTC on Friday of the following week.
 
 | When (UTC) | What happens |
 |---|---|
-| Monday 09:00 | The creator publishes. Seeding runs until 10:00 |
+| Monday 09:00 | The creator publishes. Seeding can run until the next Monday 09:00 |
 | Monday 09:35 | Seed orders meet the launch rules. Someone presses *Launch market*. Trading opens |
-| Monday to Friday | People trade. Seeder rebates accrue for 30 days from launch |
-| Friday 12:00 | Trading closes |
-| Friday 13:00 | The resolver proposes an outcome. The challenge window runs to 14:00 |
-| Friday 14:00 | Nobody challenged. Anyone presses *Finalize*. Holders claim |
+| The next 11 days | People trade. Seeder rebates accrue for 30 days from launch |
+| Friday 12:00, week 2 | Trading closes |
+| Friday 13:00 | The resolver proposes an outcome. The challenge window runs to Saturday 13:00 |
+| Saturday 13:00 | Nobody challenged. Anyone presses *Finalize*. Holders claim |
 
-If the resolver had stayed silent, anyone could have finalized as Invalid from Monday 12:00, three days after close. If someone had challenged and the arbitrator stayed silent, Invalid would have been available at most 3 days + 1 hour + 7 days after close. Those are the longest any market can wait.
+If the resolver had stayed silent, anyone could have proposed from Sunday 00:00, a day and a half after close. If nobody proposed at all, anyone could have finalized as Invalid from Monday 12:00, three days after close. If someone had challenged and the arbitrator stayed silent, Invalid would have been available at most 3 + 1 + 7 = 11 days after close. Those are the longest any market can wait.
 
 ## How the contract knows the stage
 

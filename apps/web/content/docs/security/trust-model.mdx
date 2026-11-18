@@ -23,8 +23,9 @@ biggest single point of trust is the arbitrator. MEZONK is **not independently a
 | Anyone | Trade; challenge a proposal with a bond; finalize after a deadline; graduate a market that meets its policy | |
 | MEZONK server | Store signed orders and suggestions; serve indexed data | Sign for anyone, hold keys, invent fills or prices, authorize anything financial |
 
-The exchange and factory both use `Ownable2Step`: a new owner must accept before control moves. On testnet the owner
-is a single key (`0x017FF5FB886E90f9e5ADb405D8eFddffC1162dD2`, an EOA), not a multisig.
+The exchange and factory both use `Ownable2Step`: a new owner must accept before control moves. On Mezo Mainnet the
+owner is a single key (`0x017FF5FB886E90f9e5ADb405D8eFddffC1162dD2`, an EOA), not a multisig. The same wallet is also
+a curator.
 
 ## What pausing does
 
@@ -41,7 +42,7 @@ unpaused.
 Every MUSD the exchange holds is in exactly one bucket: `totalCollateral` (backs shares), `escrowedCollateral`
 (open resting buy orders) or `protocolFees`. The only owner function that sends MUSD is
 `withdrawProtocolFees(to)`, which sends `protocolFees` and nothing else. The incentives contract has no owner. The
-resolution contract has no owner; on the next deployment the exchange owner can sweep only `slashedBonds`. Fuzzed
+resolution contract has no owner; the exchange owner can sweep only `slashedBonds` from it. Fuzzed
 invariants check that the buckets always equal the token balances: see [Solvency](/docs/security/solvency).
 
 ### Outcomes come from one place
@@ -51,11 +52,11 @@ only for a market that graduated and closed. The resolution contract finalizes i
 proposal after the challenge window, an arbitrator ruling, no proposal by the end of the proposal window (Invalid), or
 no ruling by the end of the arbitration window (Invalid, both bonds refunded).
 
-| Situation (live contract) | Who gets the bonds |
+| Situation | Who gets the bonds |
 | --- | --- |
-| Undisputed | Resolver gets its bond back |
-| Disputed, arbitrator agrees with the proposal | Resolver gets both bonds |
-| Disputed, arbitrator overturns it | Disputer gets both bonds |
+| Undisputed | Proposer gets its bond back |
+| Disputed, arbitrator agrees with the proposal | Proposer gets both bonds |
+| Disputed, arbitrator overturns it | Disputer gets its bond plus half the proposer's; the other half goes to `slashedBonds` |
 | Arbitrator misses the window | Both refunded; market settles Invalid |
 
 ### Per-market snapshots
@@ -71,14 +72,11 @@ flip side: the owner can't replace the arbitrator on markets that already exist,
   keeping roles apart after deployment is an owner responsibility.
 - An approval nonce can be used once; approvals expire at their `deadline`.
 
-### What changes in the next deployment
+### Resolution safeguards
 
-<Callout type="warn" title="Next deployment">
-  From commit c8fbaff, not on testnet yet: after half the proposal window anyone can propose, so a silent resolver
-  can't force Invalid; the proposer, whoever it is, can't dispute their own proposal; an overturned proposal loses half
-  its bond to the protocol, so disputing your own false proposal from a second wallet costs money. Seeder rebates count
-  only seed escrow inside the graduation band.
-</Callout>
+After half the proposal window anyone can propose, so a silent resolver can't force Invalid. The proposer, whoever it
+is, can't dispute their own proposal. An overturned proposal loses half its bond to the protocol, so disputing your own
+false proposal from a second wallet costs money. Seeder rebates count only seed escrow inside the graduation band.
 
 ### Off-chain roles
 

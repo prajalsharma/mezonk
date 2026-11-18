@@ -18,9 +18,9 @@ one of those touchpoints in one place.
 - **The trade ticket can borrow for you.** If a trade is short on MUSD, it offers to borrow exactly the difference
   from your Mezo loan, and the claim screen can send winnings back to the loan.
 - **BTC price markets read Mezo's PriceFeed.** A market like "BTC at or above $100,000 when trading closes" settles
-  from the price Mezo uses for loans and liquidations. This part is built and tested but not deployed yet.
+  from the price Mezo uses for loans and liquidations. Live on Mezo Mainnet.
 - **BTC up or down, with BTC.** Hourly rounds where you stake native BTC on *Up* or *Down* and winners are paid in BTC
-  from the other side's stakes, decided by the same PriceFeed. Built and tested, not deployed yet.
+  from the other side's stakes, decided by the same PriceFeed. Live on Mezo Mainnet.
 
 The picture below shows where Mezo sits. Look at the right-hand side: MUSD, Mezo's borrowing contracts and the
 PriceFeed are all called directly by your wallet or by MEZONK's contracts, never through MEZONK's server.
@@ -47,9 +47,7 @@ See [Bet from your loan](/docs/mezo/bet-from-your-loan) for the exact flow.
 
 ### Touchpoint 1: MUSD as the only collateral
 
-| | Testnet (31611) | Mainnet (31612) |
-| --- | --- | --- |
-| MUSD | `0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503` | `0xdD468A1DDc392dcdbEf6db6e34E89AA338F9F186` |
+MUSD on Mezo Mainnet (chain 31612) is [`0xdD468A1DDc392dcdbEf6db6e34E89AA338F9F186`](https://explorer.mezo.org/address/0xdD468A1DDc392dcdbEf6db6e34E89AA338F9F186).
 
 - The exchange takes the collateral token in its constructor and stores it as `immutable collateralToken`. It can
   never be changed. The deploy script refuses to deploy unless the address has code, 18 decimals and the symbol
@@ -66,16 +64,16 @@ See [Bet from your loan](/docs/mezo/bet-from-your-loan) for the exact flow.
 
 The app calls Mezo's MUSD borrowing contracts ([mezo-org/musd](https://github.com/mezo-org/musd), a Liquity-v1-style
 design) straight from your wallet. The addresses come from mezo-org/musd's deployment files and were checked on-chain
-on 2026-10-22: every contract has code, they reference each other, and `MUSD.mintList(BorrowerOperations)` is true.
+on 2026-11-18: every contract has code, they reference each other, and `MUSD.mintList(BorrowerOperations)` is true.
 
-| Contract | Testnet | Mainnet |
-| --- | --- | --- |
-| BorrowerOperations | `0xCdF7028ceAB81fA0C6971208e83fa7872994beE5` | `0x44b1bac67dDA612a41a58AAf779143B181dEe031` |
-| TroveManager | `0xE47c80e8c23f6B4A1aE41c34837a0599D5D16bb0` | `0x94AfB503dBca74aC3E4929BACEeDfCe19B93c193` |
-| SortedTroves | `0x722E4D24FD6Ff8b0AC679450F3D91294607268fA` | `0x8C5DB4C62BF29c1C4564390d10c20a47E0b2749f` |
-| HintHelpers | `0x4e4cBA3779d56386ED43631b4dCD6d8EacEcBCF6` | `0xD267b3bE2514375A075fd03C3D9CBa6b95317DC3` |
-| PriceFeed | `0x86bCF0841622a5dAC14A313a15f96A95421b9366` | `0xc5aC5A8892230E0A3e1c473881A2de7353fFcA88` |
-| InterestRateManager | `0xD4D6c36A592A2c5e86035A6bca1d57747a567f37` | `0x4a453700d157717Fe02fB62E7700ED7845048285` |
+| Contract | Mezo Mainnet |
+| --- | --- |
+| BorrowerOperations | `0x44b1bac67dDA612a41a58AAf779143B181dEe031` |
+| TroveManager | `0x94AfB503dBca74aC3E4929BACEeDfCe19B93c193` |
+| SortedTroves | `0x8C5DB4C62BF29c1C4564390d10c20a47E0b2749f` |
+| HintHelpers | `0xD267b3bE2514375A075fd03C3D9CBa6b95317DC3` |
+| PriceFeed | `0xc5aC5A8892230E0A3e1c473881A2de7353fFcA88` |
+| InterestRateManager | `0x4a453700d157717Fe02fB62E7700ED7845048285` |
 
 Writes the app sends to `BorrowerOperations`, always with `msg.sender` = your wallet:
 
@@ -108,25 +106,20 @@ closes, compares the price with a strike recorded before close, and proposes Yes
 resolution process, with an evidence hash of the exact reading. The proposal can still be challenged. Details and
 limits: [BTC price markets](/docs/mezo/btc-price-markets).
 
-<Callout type="warn" title="Next deployment">
-  `MezonkPriceResolver` is merged on GitHub and tested against the real exchange and resolution contracts, but it is
-  not deployed on testnet yet. No live market settles from the PriceFeed today.
-</Callout>
+`MezonkPriceResolver` is live on Mezo Mainnet at [`0xc58D8A13B1e6f1614508ca20124A9d0F60520354`](https://explorer.mezo.org/address/0xc58D8A13B1e6f1614508ca20124A9d0F60520354).
 
 ### Touchpoint 4: BTC up or down, staked in BTC
 
-`MezonkBtcRounds` is the one part of MEZONK that doesn't use MUSD. Rounds run back to back on a fixed interval (one
-hour planned). During a round's betting window you stake native BTC on *Up* or *Down*; the stake must be worth between
+`MezonkBtcRounds` is the one part of MEZONK that doesn't use MUSD. Rounds run back to back, one
+hour each. During a round's betting window you stake native BTC on *Up* or *Down*; the stake must be worth between
 the contract's USD limits at `PriceFeed.fetchPrice()` right then. A keeper captures the price at each boundary with one
 `roll()` call that closes one round and locks the next, so there is exactly one price per boundary. Winners split the
 whole pool in BTC, pro rata, less a fee; a tie, a one-sided round or a missed capture refunds everyone with no fee.
 The contract holds nothing but stakes, the owner can sweep only fees, and claims never expire. Details:
 [BTC up or down, with BTC](/docs/mezo/btc-up-down).
 
-<Callout type="warn" title="Next deployment">
-  `MezonkBtcRounds` is built and tested (16 Foundry tests) but not deployed on testnet yet. There are no rounds to bet
-  on until it is.
-</Callout>
+`MezonkBtcRounds` is live on Mezo Mainnet at
+[`0xc27f434195e4aF70782817A280A5D3Cb5de2ECa8`](https://explorer.mezo.org/address/0xc27f434195e4aF70782817A280A5D3Cb5de2ECa8).
 
 ### What MEZONK does not do with Mezo
 

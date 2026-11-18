@@ -53,7 +53,7 @@ signs one transaction. When it confirms, the MUSD is in your wallet.
 
 ## A worked example
 
-This uses the parameters Mezo testnet reported on 2026-11-06 (fee 0.1%, deposit 200 MUSD, minimum net debt 1,800
+This uses the parameters Mezo Mainnet reported on 2026-11-18 (fee 0.1%, deposit 200 MUSD, minimum net debt 1,800
 MUSD, 1% interest a year) and assumes BTC at $80,000 to keep the arithmetic round. The form always reads the real
 values at the moment you sign.
 
@@ -155,8 +155,8 @@ The app turns Mezo's revert strings into plain messages (`explainBorrowRevert`):
 | `net debt must be greater than minimum` | That's under Mezo's minimum loan size. |
 | `Trove is active` | This wallet already has a Mezo loan. Borrow more on it instead. |
 
-The stale-oracle case is usually Mezo testnet's public RPC: it load-balances over a node that can lag far behind,
-and reads served by it see a price older than 60 seconds. The app retries those reads automatically.
+The stale-oracle case usually means the RPC answered from a node that was behind, so the price it saw was older
+than 60 seconds. The app retries those reads automatically.
 
 ## Next
 

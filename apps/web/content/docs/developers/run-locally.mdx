@@ -108,22 +108,24 @@ signing anything:
 MM_DRY=1 MM_ONCE=1 MM_ADDRESS=0x… pnpm --filter web mm
 ```
 
-## Deploying to testnet
+## Deploying
 
-Deployment uses a Foundry keystore, never a raw key in an env file, and mainnet needs `ALLOW_MAINNET=true` plus
-`NEXT_PUBLIC_ENABLE_MAINNET=true`.
+Deployment uses a Foundry keystore, never a raw key in an env file. The script refuses Mezo Mainnet unless
+`ALLOW_MAINNET=true`.
 
 ```bash
 cd contracts
 cast wallet import deployer --interactive
-OWNER=0x… ARBITRATOR=0x… RESOLVER=0x… CURATOR=0x… CREATOR=0x… \
-  forge script script/DeployExchange.s.sol --rpc-url mezo_testnet --broadcast \
+export MEZO_MAINNET_RPC_URL=https://mezo-mainnet.boar.network
+ALLOW_MAINNET=true OWNER=0x… ARBITRATOR=0x… RESOLVER=0x… CURATOR=0x… CREATOR=0x… \
+  forge script script/DeployExchange.s.sol --rpc-url mezo_mainnet --broadcast \
   --gas-estimate-multiplier 105 --account deployer
 ```
 
-The owner then calls `acceptOwnership()` on the exchange and the factory. Testnet's lagging node can confuse forge,
-so point `MEZO_TESTNET_RPC_URL` at `node scripts/rpc-retry-proxy.mjs` (port 8600) and take the deploy block from the
-broadcast receipt.
+If the owner isn't the deployer, the owner then calls `acceptOwnership()` on the exchange and the factory. Take the
+deploy block from the broadcast receipt, not the script log. For the testnet practice site, use `--rpc-url
+mezo_testnet` and point `MEZO_TESTNET_RPC_URL` at `node scripts/rpc-retry-proxy.mjs` (port 8600), which skips
+testnet's lagging node.
 
 ## Next
 

@@ -21,7 +21,7 @@ export const mezoTestnet = defineChain({
 
 export const mezoMainnet = defineChain({
   id: MEZO_MAINNET_ID,
-  name: "Mezo",
+  name: "Mezo Mainnet",
   nativeCurrency: { name: "Bitcoin", symbol: "BTC", decimals: 18 },
   // No official mezo.org endpoint exists; these are providers listed in the Mezo docs.
   rpcUrls: { default: { http: ["https://mezo-mainnet.boar.network", "https://mezo.drpc.org"] } },
@@ -36,11 +36,18 @@ export const MUSD: Record<number, Address> = {
 export const MUSD_DECIMALS = 18;
 
 /**
- * MEZONK's own deployment per network, used when NEXT_PUBLIC_MARKETS_ADDRESS isn't set. Testnet deployed by the owner on
- * 2026-10-22 (verified on-chain: code present, factory and owner as expected). Never add mainnet here without sign-off.
+ * MEZONK's own deployment per network, used when NEXT_PUBLIC_MARKETS_ADDRESS isn't set. Both deployed by the owner
+ * (wallet 0x017FF5FB886E90f9e5ADb405D8eFddffC1162dD2) and verified on-chain: code present, owner, factory and MUSD
+ * collateral as expected. Testnet 2026-10-22; mainnet 2026-11-18 (deploy block from the transaction receipt).
  */
-export const DEFAULT_DEPLOYMENT: Record<number, { exchange: Address; deployBlock: bigint }> = {
+export const DEFAULT_DEPLOYMENT: Record<number, { exchange: Address; deployBlock: bigint; btcRounds?: Address; priceResolver?: Address }> = {
   [MEZO_TESTNET_ID]: { exchange: "0x4555cfF10200e1007435Cffc683C60683c5C49B9", deployBlock: 16298919n },
+  [MEZO_MAINNET_ID]: {
+    exchange: "0x102C908dCA719742f1958D18021B7C1c0092Ddf0",
+    deployBlock: 13301975n,
+    btcRounds: "0xc27f434195e4aF70782817A280A5D3Cb5de2ECa8",
+    priceResolver: "0xc58D8A13B1e6f1614508ca20124A9d0F60520354",
+  },
 };
 
 /** MEZO token (precompile-style address). Not used for any protocol function yet. */
@@ -81,8 +88,14 @@ export interface Deployment {
   reason: ReadinessReason;
 }
 
+function optionalAddress(env: string | undefined, fallback: Address | undefined): Address | null {
+  if (env && isAddress(env)) return getAddress(env);
+  return fallback ?? null;
+}
+
 function readDeployment(): Deployment {
-  const chainId = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? MEZO_TESTNET_ID);
+  // Mainnet is the product; the testnet practice site and local forks set NEXT_PUBLIC_CHAIN_ID=31611.
+  const chainId = Number(process.env.NEXT_PUBLIC_CHAIN_ID || MEZO_MAINNET_ID);
   const rpcOverride = process.env.NEXT_PUBLIC_RPC_URL;
   const baseChain = chainId === MEZO_MAINNET_ID ? mezoMainnet : mezoTestnet;
   // With an RPC override (private provider or local fork), wallets and connectors must use it too.
@@ -104,15 +117,16 @@ function readDeployment(): Deployment {
         : 0n,
     musd: MUSD[chainId] ?? MUSD[MEZO_TESTNET_ID]!,
     explorer: baseChain.blockExplorers.default.url,
-    priceResolverAddress: isAddress(process.env.NEXT_PUBLIC_PRICE_RESOLVER ?? "") ? getAddress(process.env.NEXT_PUBLIC_PRICE_RESOLVER!) : null,
-    btcRoundsAddress: isAddress(process.env.NEXT_PUBLIC_BTC_ROUNDS ?? "") ? getAddress(process.env.NEXT_PUBLIC_BTC_ROUNDS!) : null,
+    priceResolverAddress: optionalAddress(process.env.NEXT_PUBLIC_PRICE_RESOLVER, fallback?.priceResolver),
+    btcRoundsAddress: optionalAddress(process.env.NEXT_PUBLIC_BTC_ROUNDS, fallback?.btcRounds),
   };
 
   const none = { marketsAddress: null, resolutionAddress: null, factoryAddress: null, incentivesAddress: null };
   if (chainId !== MEZO_TESTNET_ID && chainId !== MEZO_MAINNET_ID) {
     return { ...base, ...none, ready: false, reason: "unsupported-chain" };
   }
-  if (chainId === MEZO_MAINNET_ID && process.env.NEXT_PUBLIC_ENABLE_MAINNET !== "true") {
+  // Owner-authorized 2026-11-18. NEXT_PUBLIC_ENABLE_MAINNET=false switches mainnet trading off again.
+  if (chainId === MEZO_MAINNET_ID && process.env.NEXT_PUBLIC_ENABLE_MAINNET === "false") {
     return { ...base, ...none, ready: false, reason: "mainnet-disabled" };
   }
   if (!rawAddress) return { ...base, ...none, ready: false, reason: "no-deployment" };
@@ -136,12 +150,24 @@ export function protocolAddresses(exchange: Address) {
 
 export const deployment = readDeployment();
 
+/** True on the real-money network. Copy that differs per network keys off this (or `deployment.chain.testnet`). */
+export const isMainnet = deployment.chainId === MEZO_MAINNET_ID;
+
+/**
+ * Each network is its own deployment of this app (own build, database and indexer). The header switcher links
+ * between them, keeping the current path. Unset → that network isn't offered.
+ */
+export const NETWORK_SITES: { mainnet: string | null; testnet: string | null } = {
+  mainnet: process.env.NEXT_PUBLIC_MAINNET_URL?.replace(/\/+$/, "") || null,
+  testnet: process.env.NEXT_PUBLIC_TESTNET_URL?.replace(/\/+$/, "") || null,
+};
+
 export const readinessMessage: Record<ReadinessReason, string> = {
   ok: "Connected to the deployed market contract.",
   "unsupported-chain": "This build is configured for an unsupported network. Trading is off.",
   "no-deployment": "The market contract is not deployed on this network yet. Trading is off.",
   "invalid-address": "The configured market contract address is malformed. Trading is off.",
-  "mainnet-disabled": "Mainnet trading is not enabled. Use Mezo Testnet.",
+  "mainnet-disabled": "Mainnet trading isn't switched on yet. You can try everything on Mezo Testnet.",
 };
 
 /**
@@ -153,10 +179,10 @@ export const explorerTx = (hash: string): string | null => (hasExplorer ? `${dep
 export const explorerAddress = (addr: string): string | null =>
   hasExplorer ? `${deployment.explorer}/address/${addr}` : null;
 
-/** Official routes to testnet funds (verified 2026-10-19). */
 /** Where to borrow MUSD against BTC. Testnet page verified; on mainnet we link the Mezo home page rather than guess a path. */
-export const mezoBorrowUrl = () => (deployment.chain.testnet ? TESTNET_FUNDING.borrowMusd : "https://mezo.org");
+export const mezoBorrowUrl = () => (deployment.chain.testnet ? TESTNET_FUNDING.borrowMusd : "https://mezo.org/feature/borrow");
 
+/** Official routes to testnet funds (verified 2026-10-19). */
 export const TESTNET_FUNDING = {
   btcFaucet: "https://faucet.test.mezo.org/",
   borrowMusd: "https://testnet.mezo.org/feature/borrow",

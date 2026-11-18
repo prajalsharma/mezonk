@@ -4,11 +4,9 @@ description: Stake BTC on whether BTC's price will be higher or lower an hour fr
 icon: ArrowUpDown
 ---
 
-<Callout type="warn" title="Next deployment">
-  Everything on this page describes `MezonkBtcRounds`, which is built and tested (16 Foundry tests, including a fuzz
-  test that the pool is always conserved) but not deployed on testnet yet. The page at `/btc` is being built alongside
-  it. Until the contract is on chain there are no rounds to bet on.
-</Callout>
+`MezonkBtcRounds` is live on Mezo Mainnet at
+[`0xc27f434195e4aF70782817A280A5D3Cb5de2ECa8`](https://explorer.mezo.org/address/0xc27f434195e4aF70782817A280A5D3Cb5de2ECa8).
+Bet at [/btc](/btc).
 
 The Mezo team asked for exactly this: a way to bet on BTC going up or down, using BTC. The rest of MEZONK settles in
 MUSD, Mezo's bitcoin-backed dollar. This part doesn't. You stake native BTC on *Up* or *Down* for the next round, the
@@ -18,7 +16,7 @@ holds nothing but stakes and pays out nothing but stakes.
 
 ## The plain version
 
-- **A round is an hour.** Rounds run back to back on a fixed interval (one hour on the planned settings). Each round
+- **A round is an hour.** Rounds run back to back on a fixed interval (one hour on Mezo Mainnet). Each round
   has a betting window (one interval) followed by a price window (the next interval). At the start of the price
   window the BTC price is captured; at its end it's captured again.
 - **You pick a side and a size.** During the betting window you stake BTC on *Up* or *Down*. The size is chosen in
@@ -39,7 +37,7 @@ and the round ends as Up, Down or Void.
 
 ### A worked example
 
-These are example numbers, not live data. Say the planned settings apply (1% fee, stakes between $8 and $125) and
+These are example numbers, not live data. Say Mezo Mainnet's settings apply (1% fee, stakes between $8 and $125) and
 Mezo's PriceFeed says BTC is $80,000 when round 12's betting window opens.
 
 | Bettor | Side | Stake | In BTC at $80,000 |
@@ -80,7 +78,7 @@ currentRound() = (block.timestamp - genesis) / interval
 
 Round `r`'s price window is round `r + 1`'s betting window, so exactly one round is open for bets at any time. The
 constructor requires `interval ≥ 5 minutes`, `60 s ≤ captureWindow < interval` (so a capture can never be mistaken for
-the next boundary's) and `genesis ≥ now`. The planned settings are one hour and ten minutes
+the next boundary's) and `genesis ≥ now`. Mezo Mainnet uses one hour and ten minutes
 (`contracts/script/DeployBtcRounds.s.sol` defaults).
 
 ### Placing a bet
@@ -103,7 +101,7 @@ In order, it:
    display only), and emits `BetPlaced(round, account, side, amount, usd, price)`.
 
 The page sizes a chip with `btcForUsd(usd)`, which returns the BTC that `usd` buys at the price right now and the
-price it used. BTC can move between that quote and your transaction confirming, which is why the planned limits are
+price it used. BTC can move between that quote and your transaction confirming, which is why the limits are
 $8 to $125 rather than exactly $10 to $100: the four chips fit with room for the price to drift either way.
 
 ### One price per boundary
@@ -198,7 +196,7 @@ moves a stake anywhere except back to the wallet that placed it, and no upgrade 
   call `roll`. If nobody does within the capture window, or the oracle is stale for the whole window, the rounds that
   needed that price are void: you get your stake back, no fee. You don't lose money, but you also don't win, and your
   BTC sits in the contract until you claim it.
-- **The fee.** 1% of the whole pool on the planned settings, taken only on rounds with a winner. The owner can raise
+- **The fee.** 1% of the whole pool on Mezo Mainnet, taken only on rounds with a winner. The owner can raise
   it to at most 5%; `feeBps()` is public and the page should show the current value.
 - **BTC price risk on the stake itself.** You stake BTC and you're paid BTC. If you win *Down*, you receive more BTC,
   but each one is worth less than when you staked. If a round is void, you get the same BTC back, now worth whatever
@@ -208,14 +206,14 @@ moves a stake anywhere except back to the wallet that placed it, and no upgrade 
   the same rule.
 - **Not audited.** This contract has not been reviewed by an independent firm. It's about 300 lines, standalone, and
   tested (`contracts/test/exchange/BtcRounds.t.sol`), and the only money it holds is stakes, but read it before you
-  trust it with more than test BTC.
+  stake more than you can afford to lose.
 
 ### What reviewers should notice
 
 - **Native BTC stays BTC.** Stakes are `msg.value`; payouts are native transfers. No wrapped token, no MUSD
   conversion, no swap, no approval step.
 - **Same price Mezo uses.** The only price source is Mezo's MUSD PriceFeed, the one that prices Mezo's loans and
-  liquidations (testnet `0x86bCF0841622a5dAC14A313a15f96A95421b9366`). MEZONK adds no oracle of its own, and the
+  liquidations (`0xc5aC5A8892230E0A3e1c473881A2de7353fFcA88` on Mezo Mainnet). MEZONK adds no oracle of its own, and the
   contract refuses stale or pre-boundary prices the same way the [price resolver](/docs/mezo/btc-price-markets) does.
 - **No counterparty.** Winners are paid from losers. The contract never fronts a payout, never holds an inventory,
   and can never owe more than it holds: a round pays out exactly its own pool less the fee, or exactly its own pool.

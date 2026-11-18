@@ -192,18 +192,24 @@ export function LiveMarkets() {
       <div className="panel grid gap-8 p-8 md:grid-cols-[1.2fr_1fr] md:items-center md:p-12">
         <div className="space-y-3">
           <p className="text-2xl font-semibold tracking-tight">
-            {deployment.ready && deployment.chain.testnet ? "We're live on Mezo Testnet. The first markets are on their way." : "The first markets on Mezo are on their way."}
+            {!deployment.ready
+              ? "The first markets on Mezo are on their way."
+              : deployment.chain.testnet
+                ? "Testnet practice is open. The first markets are on their way."
+                : "We're live on Mezo Mainnet. The first markets are on their way."}
           </p>
           <p className="max-w-lg text-ink-2">
             {deployment.ready
-              ? "No market has opened yet. Suggest the first question, or get test MUSD now so you're ready when one goes live."
+              ? deployment.chain.testnet
+                ? "No market has opened yet. Suggest the first question, or get test MUSD now so you're ready when one goes live."
+                : "No market has opened yet. Suggest the first question, or borrow MUSD now so you're ready when one goes live."
               : "Trading isn't switched on for this network yet. Suggestions are already open and reviewed in public."}
           </p>
         </div>
         <div className="flex flex-wrap gap-3 md:justify-end">
           <ButtonLink href="/suggest" size="lg">Suggest a market</ButtonLink>
           {deployment.ready ? (
-            <ButtonLink href="/borrow" size="lg" variant="secondary">Get test MUSD</ButtonLink>
+            <ButtonLink href="/borrow" size="lg" variant="secondary">{deployment.chain.testnet ? "Get test MUSD" : "Borrow MUSD"}</ButtonLink>
           ) : (
             <ButtonLink href="/proposals" size="lg" variant="secondary">See suggestions</ButtonLink>
           )}

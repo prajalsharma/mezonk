@@ -44,7 +44,7 @@ export function SystemDiagram() {
       <Flow d="M344 402 H256" tone="offchain" label="writes" at={[300, 395]} />
 
       {/* ── Bot ── */}
-      <Group x={20} y={464} w={560} h={144} label="Bot host (optional, testnet)" tone="offchain" />
+      <Group x={20} y={464} w={560} h={144} label="Bot host (keeper)" tone="offchain" />
       <Box x={344} y={490} w={212} h={92} label="Market-maker bot" sub="+ keeper for price markets" tone="offchain" />
       <Note x={44} y={524} size={12.5}>A separate process with its</Note>
       <Note x={44} y={542} size={12.5}>own wallet key. Not the server.</Note>
@@ -61,7 +61,7 @@ export function SystemDiagram() {
       <Box x={648} y={384} w={232} h={44} label="MezonkResolution" tone="mezonk" />
       <Box x={648} y={436} w={232} h={44} label="MezonkIncentives" tone="mezonk" />
       <Box x={648} y={488} w={232} h={44} label="MezonkExchange" sub="holds the MUSD" tone="mezonk" emphasis />
-      <Box x={648} y={540} w={232} h={44} label="MezonkPriceResolver" sub="next deployment" tone="mezonk" dashed />
+      <Box x={648} y={540} w={232} h={44} label="MezonkPriceResolver" sub="settles BTC price markets" tone="mezonk" />
 
       {/* wallet → chain */}
       <Flow d="M556 152 H648" tone="mezo" label="borrow" at={[602, 146]} />

@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { Writable } from "node:stream";
-import { createWalletClient, getAddress, http, type Address, type Hex, type TypedDataDefinition } from "viem";
+import { createWalletClient, getAddress, http, type Address, type Chain, type Hex, type TypedDataDefinition } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mezoTestnet } from "../../src/lib/chain/config";
 import { laggingNodeFetch } from "../../src/lib/chain/laggingNodeFetch";
@@ -42,7 +42,7 @@ export interface Signer {
 }
 
 /** `envKey` names a variable holding a 0x private key; otherwise `account` is a Foundry keystore name. */
-export async function loadSigner(role: string, envKey: string, account: string): Promise<Signer> {
+export async function loadSigner(role: string, envKey: string, account: string, chain: Chain = mezoTestnet): Promise<Signer> {
   const key = process.env[envKey]?.trim();
   if (key) {
     if (!/^0x[0-9a-fA-F]{64}$/.test(key)) throw new Error(`${envKey} must be 0x followed by 64 hex characters`);
@@ -53,7 +53,7 @@ export async function loadSigner(role: string, envKey: string, account: string):
       signMessage: (message) => acct.signMessage({ message }),
       signTypedData: (def) => acct.signTypedData(def as never),
       send: (to, data, rpc) =>
-        createWalletClient({ account: acct, chain: mezoTestnet, transport: http(rpc, { retryCount: 3, retryDelay: 1000, fetchFn: laggingNodeFetch }) }).sendTransaction({ to, data }),
+        createWalletClient({ account: acct, chain, transport: http(rpc, { retryCount: 3, retryDelay: 1000, fetchFn: laggingNodeFetch }) }).sendTransaction({ to, data }),
     };
   }
   const pwFile = path.join(tempDir(), `${role}.pw`);

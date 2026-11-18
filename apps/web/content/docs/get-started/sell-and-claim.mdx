@@ -63,7 +63,7 @@ The summary shows *Fills now: … of … shares*, the *Average price*, *You rece
 </Step>
 </Steps>
 
-**Worked example** (today's testnet settings, taker fee 1%): you bought 100 Yes at 40¢ for 40.40 MUSD. The crowd comes round and buyers now pay 55¢. You sell all 100 at market:
+**Worked example** (today's settings, taker fee 1%): you bought 100 Yes at 40¢ for 40.40 MUSD. The crowd comes round and buyers now pay 55¢. You sell all 100 at market:
 
 | Line | Value |
 | --- | --- |
@@ -87,15 +87,13 @@ When the close time passes, trading stops. Closing decides nothing. Then:
 1. The market's **resolver** proposes Yes, No or Invalid, with a published evidence document whose fingerprint is stored on-chain, and posts a bond.
 2. During the **challenge window**, anyone else can challenge with their own bond and evidence. If someone does, the **arbitrator** rules, in public.
 3. If nobody challenges, anyone can **finalize** the proposal once the window ends.
-4. If the resolver never proposes in time, or the arbitrator never rules in time, anyone can finalize the market as **Invalid**. Your MUSD can't get stuck.
+4. If the resolver hasn't proposed by halfway through the proposal window, anyone may propose instead, with the same bond. A proposal that's overturned loses half its bond, and a proposer can't challenge their own proposal.
+5. If nobody proposes in time, or the arbitrator never rules in time, anyone can finalize the market as **Invalid**. Your MUSD can't get stuck.
 
 You can follow every step in the *Resolution* section of the market page, with each evidence document checked against its on-chain fingerprint. From Portfolio, *Follow resolution* takes you there. The windows are read live:
 
 <LiveParams />
 
-<Callout type="warn" title="Next deployment">
-Fixes from an external researcher's report (KupiaSec) are merged and tested in the code but not yet on the live testnet contract. After the next deployment, anyone may propose a result once half the proposal window has passed, a proposal that's overturned loses half its bond to the protocol, and a proposer can't dispute their own proposal. Today's live contract works as described above.
-</Callout>
 
 ## Claim
 

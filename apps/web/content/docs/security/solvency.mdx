@@ -19,7 +19,7 @@ Invalid). There is no house position, no loan to the protocol and no reward paid
 | 4 | Escrow = the sum of open resting buy orders' `remaining × price / 100` | Placing, filling and cancelling each move escrow by the exact cost |
 | 5 | Incentives balance = `rebateReserve + referralReserve` | Rewards are funded only by the fee share the exchange sends inside `take` |
 | 6 | Rebates claimed ≤ rebates accrued, per market | Pro-rata entitlement capped by what accrued, then per wallet |
-| 7 | Resolution balance = `lockedBonds + bondCreditsTotal` (next deployment: `+ slashedBonds`) | Bonds are pulled, credited and withdrawn through one ledger |
+| 7 | Resolution balance = `lockedBonds + bondCreditsTotal + slashedBonds` | Bonds are pulled, credited and withdrawn through one ledger |
 | 8 | Nothing rounds | Prices are whole cents and quantities multiples of 0.01 share, so `q × p / 100` is exact |
 
 Fees are never part of collateral, refundable seed escrow is never revenue, and rebate and referral payouts can never
@@ -39,21 +39,21 @@ In `contracts/test/exchange/ExchangeInvariants.t.sol`:
   signed fills, placements and splits or merges. 40 runs by default, 200 under `ci`.
 - **Value conservation** (`testFuzz_fillConservesValue`): for any price and size, the two sides of a pairing fill add
   up to exactly one set, and the fee is exact.
-- **Fork tests** (`contracts/test/fork/`) run a full lifecycle against the real testnet MUSD contract.
+- **Fork tests** (`contracts/test/fork/`) ran a full lifecycle against the real MUSD contract on Mezo Testnet before launch.
 
 Run them with `cd contracts && forge test`, or at CI depth with
 `FOUNDRY_PROFILE=ci forge test --match-contract "ExchangeRandomWalkTest|ExchangeInvariantTest"`.
 
 ## Check the live contracts yourself
 
-You need [Foundry's `cast`](https://book.getfoundry.sh). These are read-only calls against Mezo testnet.
+You need [Foundry's `cast`](https://book.getfoundry.sh). These are read-only calls against Mezo Mainnet.
 
 ```bash
-RPC=https://rpc.test.mezo.org
-MUSD=0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503
-EX=0x4555cfF10200e1007435Cffc683C60683c5C49B9
-RES=0x6Da57dDd874f02E3ad704F75aCC86D0319d3b944
-INC=0xF1a014E4E291EB2690777104D65990efAFC3f06B
+RPC=https://mezo-mainnet.boar.network
+MUSD=0xdD468A1DDc392dcdbEf6db6e34E89AA338F9F186
+EX=0x102C908dCA719742f1958D18021B7C1c0092Ddf0
+RES=0xaB7d8e1F4b2fF15a23dE463B041F98483B73b28f
+INC=0x506F1FD8F0418beEdcFD5bDE7b1d8Dd56481d8A5
 ```
 
 ### Exchange: balance equals its three buckets
@@ -78,6 +78,7 @@ cast call $INC "referralReserve()(uint256)" --rpc-url $RPC
 cast call $MUSD "balanceOf(address)(uint256)" $RES --rpc-url $RPC
 cast call $RES "lockedBonds()(uint256)"      --rpc-url $RPC
 cast call $RES "bondCreditsTotal()(uint256)" --rpc-url $RPC
+cast call $RES "slashedBonds()(uint256)"     --rpc-url $RPC
 ```
 
 ### One market

@@ -9,10 +9,10 @@ When trading closes, the market still needs an answer: Yes, No or Invalid. MEZON
 ## The plain version
 
 1. **Trading closes** at the time fixed when the market was published. Closing decides nothing.
-2. **The resolver proposes** Yes, No or Invalid, attaches evidence, and posts a bond (a deposit that can be lost).
+2. **The resolver proposes** Yes, No or Invalid, attaches evidence, and posts a bond (a deposit that can be lost). If the resolver stays silent for half the proposal window, anyone may propose instead.
 3. **Anyone can challenge** during the challenge window by posting their own bond and evidence.
-4. **No challenge?** Once the window ends, anyone can finalize the proposed outcome. The resolver gets the bond back.
-5. **Challenged?** The arbitrator rules, with a published rationale. The side that was right takes both bonds.
+4. **No challenge?** Once the window ends, anyone can finalize the proposed outcome. The proposer gets the bond back.
+5. **Challenged?** The arbitrator rules, with a published rationale. If the proposal stands, the proposer takes both bonds. If it's overturned, the challenger gets their bond back plus half the proposer's.
 6. **Nobody acted in time?** If no outcome is proposed, or the arbitrator doesn't rule, anyone can finalize the market as **Invalid**: every share pays 0.50 MUSD and bonds are refunded.
 
 The diagram follows those paths. Read it left to right: the top row is the common case, the branch below is a challenge, and the grey exits are the timeouts that end in Invalid.
@@ -29,16 +29,16 @@ Resolution lives in `MezonkResolution`, which the exchange deployed itself and i
 
 `proposeOutcome(marketId, outcome, evidenceHash, evidenceURI)`
 
-- **Who:** the market's resolver only (on the live contract).
+- **Who:** the market's resolver during the first half of the proposal window. After that, anyone (posting the same bond), so a silent resolver can't force the market to Invalid. With a 3-day window, that's after 1.5 days.
 - **When:** after close, before `closeTime + proposalWindow`.
-- **What:** one of Yes, No or Invalid, plus the hash of an evidence document (it can't be zero). The resolver's proposer bond is pulled from their wallet.
+- **What:** one of Yes, No or Invalid, plus the hash of an evidence document (it can't be zero). The proposer bond is pulled from the proposer's wallet.
 - In the app: *Propose outcome*, then *Publish evidence and sign*.
 
 ### Challenge
 
 `dispute(marketId, evidenceHash, evidenceURI)`
 
-- **Who:** anyone except the market's resolver and its arbitrator.
+- **Who:** anyone except the proposer, the market's resolver and its arbitrator.
 - **When:** before `proposedAt + challengeWindow`. Only one challenge per proposal.
 - **What:** an evidence hash and the dispute bond. The contract doesn't record which outcome the challenger thinks is right; that goes in the evidence document. The arbitrator can rule any outcome.
 - In the app: *Challenge*, then *Publish evidence and sign*.
@@ -65,54 +65,48 @@ There is no admin shortcut: nobody can finalize early, and a ruling ends the mar
 
 ## Who gets the bonds
 
-These are the rules on the live contract. The amounts assume today's testnet bonds of 25 MUSD to propose and 25 MUSD to challenge.
+The amounts assume today's bonds of 25 MUSD to propose and 25 MUSD to challenge. Bonds follow whoever proposed, which is usually the resolver.
 
-| What happened | Resolver | Challenger |
+| What happened | Proposer | Challenger |
 |---|---|---|
 | No challenge, finalized | Gets their 25 back | — |
 | Challenged, arbitrator agrees with the proposal | Gets 50 (both bonds) | Loses 25 |
-| Challenged, arbitrator rules any other outcome | Loses 25 | Gets 50 (both bonds) |
+| Challenged, arbitrator rules any other outcome | Loses 25 | Gets 37.50 (their 25 plus half the proposer's) |
 | Challenged, arbitrator never rules | Gets their 25 back | Gets their 25 back |
 | Nothing proposed | No bond was posted | — |
 
-"Any other outcome" includes a third answer: if the resolver proposed Yes, the challenger argued No, and the arbitrator ruled Invalid, the proposal was still wrong, so the challenger takes both bonds.
+"Any other outcome" includes a third answer: if the resolver proposed Yes, the challenger argued No, and the arbitrator ruled Invalid, the proposal was still wrong, so the challenger wins.
 
 Bonds won or returned are credited to your address, not sent automatically. Collect them with *Withdraw bonds*, which pays every bond you're owed across all markets in one transaction (`withdrawBond`).
 
 **Why bonds exist.** The proposer bond makes a false proposal cost money as soon as one honest person notices. The dispute bond stops people challenging every proposal just to delay payouts: a frivolous challenge loses its bond.
 
-<Callout type="warn" title="Next deployment">
-These resolution changes are merged on GitHub and tested, but not yet on chain (commit c8fbaff, from an external researcher's report by KupiaSec). Markets on the live contract keep the rules above.
+**Why half the bond is slashed.** If an overturned proposal only moved its bond to the challenger, a dishonest resolver could propose a wrong answer, challenge it from a second wallet and get its bond back while blocking honest challengers. Sending half to the protocol (the exchange owner can sweep it) makes that trick lose money.
 
-- **Anyone may propose after half the proposal window.** The resolver has the first half to itself. After that, any wallet can propose with the same bond, so a silent resolver can no longer force a market to Invalid. With a 3-day window, that's after 1.5 days.
-- **Bonds follow the proposer,** whoever that was: refunds and an upheld proposal's winnings go to the wallet that proposed.
-- **An overturned proposal loses half its bond to the protocol.** The challenger gets their own bond plus the other half. With 25 MUSD bonds: 12.50 MUSD is set aside for the protocol (the exchange owner can sweep it) and the challenger receives 37.50 MUSD. This makes "propose a wrong answer, then challenge it yourself from a second wallet" lose money, which is otherwise a way for a dishonest resolver to recover its bond while blocking honest challengers.
-- **The proposer can't challenge their own proposal,** in addition to the resolver and arbitrator.
-</Callout>
 
 ## Worked example
 
-Today's testnet values: proposal window 3 days, challenge window 1 hour, arbitration window 7 days, bonds 25 MUSD each.
+Today's values: proposal window 3 days, challenge window 1 day, arbitration window 7 days, bonds 25 MUSD each.
 
 A market closes on Monday at 12:00 UTC.
 
-1. Monday 14:00: the resolver proposes **Yes** with an evidence document and posts 25 MUSD. The challenge window runs until 15:00.
-2. Monday 14:40: a trader thinks the source shows No. They post 25 MUSD and their own evidence. The arbitration window now runs until the following Monday 14:40.
+1. Monday 14:00: the resolver proposes **Yes** with an evidence document and posts 25 MUSD. The challenge window runs until Tuesday 14:00.
+2. Monday 18:40: a trader thinks the source shows No. They post 25 MUSD and their own evidence. The arbitration window now runs until the following Monday 18:40.
 3. Wednesday: the arbitrator reads both documents and rules **No**, with a published rationale. The market is final.
-4. The challenger is credited 50 MUSD and withdraws it. No holders can now claim 1 MUSD per share; Yes shares pay nothing.
+4. The challenger is credited 37.50 MUSD (their 25 back plus half the resolver's) and withdraws it. The other 12.50 goes to the protocol. No holders can now claim 1 MUSD per share; Yes shares pay nothing.
 
-If the arbitrator had done nothing, anyone could have finalized the market as Invalid from the following Monday 14:40, and both bonds would have been refunded.
+If the arbitrator had done nothing, anyone could have finalized the market as Invalid from the following Monday 18:40, and both bonds would have been refunded.
 
 ## How long can it take?
 
-All deadlines are measured against block time, not anyone's clock. With today's testnet windows:
+All deadlines are measured against block time, not anyone's clock. With today's windows:
 
 | Path | Earliest final | Latest final |
 |---|---|---|
-| Proposed at close, no challenge | 1 hour after close | 3 days 1 hour after close |
+| Proposed at close, no challenge | 1 day after close | 4 days after close |
 | Nobody proposes | — | 3 days after close (as Invalid) |
-| Challenged, arbitrator rules | Right after the challenge | Up to about 10 days 1 hour after close |
-| Challenged, arbitrator silent | — | Up to about 10 days 1 hour after close (as Invalid) |
+| Challenged, arbitrator rules | Right after the challenge | Up to about 11 days after close |
+| Challenged, arbitrator silent | — | Up to about 11 days after close (as Invalid) |
 
 The worst case is the sum of the three windows. After that, the market is guaranteed to be finalizable by anyone.
 
@@ -130,14 +124,14 @@ Community evidence (comments with links that any signed-in wallet can post) is a
 
 ## Who you are trusting
 
-- **The arbitrator** can decide the outcome of any challenged market. This is the main point of trust in MEZONK today. Its power is bounded: it can't act on a market nobody challenged, can't act after its window, must publish a rationale hash, and can't be changed for a market already published. On Mezo testnet today the arbitrator is a single wallet, not a multisig (checked on 6 November 2026). The intended setup before any mainnet use is a multisig, and later a decentralized court behind the same address slot.
-- **The resolver** is trusted to propose honestly and on time. A wrong proposal can be challenged. On the live contract, a silent resolver forces the market to Invalid after the proposal window; the next deployment lets anyone propose after half the window instead.
+- **The arbitrator** can decide the outcome of any challenged market. This is the main point of trust in MEZONK today. Its power is bounded: it can't act on a market nobody challenged, can't act after its window, must publish a rationale hash, and can't be changed for a market already published. On Mezo Mainnet today the arbitrator is a single wallet, not a multisig (checked on 18 November 2026). The plan is a multisig, and later a decentralized court behind the same address slot.
+- **The resolver** is trusted to propose honestly and on time. A wrong proposal can be challenged. If it stays silent past half the proposal window, anyone may propose instead.
 - **Challengers** keep the system honest. Optimistic resolution needs at least one attentive person with the bond amount during each challenge window. If a wrong proposal goes unchallenged, it becomes final.
 - **The owner** can't propose, rule, change an outcome, or block resolution. Pausing the exchange doesn't stop proposals, challenges, rulings, finalization, claims or bond withdrawals.
 
-A BTC price resolver that settles price markets from Mezo's own price feed is written and tested but **not yet deployed**.
+BTC price markets can name a second resolver, `MezonkPriceResolver`, which settles them from Mezo's own price feed. See [BTC price markets](/docs/mezo/btc-price-markets).
 
-The contracts are **not audited** by an independent firm. Internal review notes and an external researcher's report exist, and the fixes from that report are the next-deployment changes above.
+The contracts are **not audited** by an independent firm. Internal review notes and an external researcher's report exist, and the fixes from that report are in the live contracts.
 
 ## Edge cases
 

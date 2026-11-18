@@ -103,7 +103,7 @@ export function MarketLifecycle() {
       <Label x={PC + 12} y={(R2 + H + INV) / 2 + 4.5} anchor="start">no ruling in time</Label>
 
       <Note x={612} y={INV + 14} size={13.5}>
-        <tspan fontWeight={600} fill="var(--ink-2)">Next deployment</tspan>
+        <tspan fontWeight={600} fill="var(--ink-2)">Silent resolver</tspan>
         <tspan x={612} dy={19}>if the resolver is silent for half the</tspan>
         <tspan x={612} dy={19}>proposal window, anyone may propose.</tspan>
       </Note>

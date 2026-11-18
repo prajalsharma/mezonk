@@ -4,7 +4,7 @@ description: Three ways to get the MUSD you trade with, and a field-by-field wal
 icon: Coins
 ---
 
-MUSD is Mezo's bitcoin-backed dollar. Every MEZONK trade, payout, refund and bond is in MUSD. MEZONK accepts only the official MUSD contract for the network it runs on (on Mezo testnet, `0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503`); it's fixed in the contract and never looked up by name.
+MUSD is Mezo's bitcoin-backed dollar. Every MEZONK trade, payout, refund and bond is in MUSD. MEZONK accepts only the official MUSD contract for the network it runs on (on Mezo Mainnet, `0xdD468A1DDc392dcdbEf6db6e34E89AA338F9F186`); it's fixed in the contract and never looked up by name.
 
 If you hold BTC but no MUSD, you don't have to sell your bitcoin. You can lock it with Mezo and borrow MUSD against it, then pay the loan back whenever you like and get the BTC back.
 
@@ -14,9 +14,9 @@ If you hold BTC but no MUSD, you don't have to sell your bitcoin. You can lock i
 | --- | --- |
 | MUSD on Mezo already | Nothing. Go to [Your first trade](/docs/get-started/first-trade). |
 | BTC on Mezo | Borrow MUSD in MEZONK at [/borrow](/borrow) (below). |
-| BTC, and you prefer Mezo's own app | Borrow on [testnet.mezo.org](https://testnet.mezo.org), then come back. |
+| BTC, and you prefer Mezo's own app | Borrow on [mezo.org](https://mezo.org/feature/borrow), then come back. |
 
-On testnet, BTC is free from the [Mezo faucet](https://faucet.test.mezo.org). If you connect a wallet that already holds at least 1 MUSD, the borrow page says *You already have … MUSD* and points you to the markets: you only need a loan if you want more.
+Need BTC on Mezo first? Bring it through [mezo.org](https://mezo.org). If you connect a wallet that already holds at least 1 MUSD, the borrow page says *You already have … MUSD* and points you to the markets: you only need a loan if you want more.
 
 ## What a Mezo loan is
 
@@ -84,7 +84,7 @@ When it confirms you see *… MUSD is in your wallet* and a *Find a market* butt
 
 ## Worked example
 
-Today's Mezo testnet settings (read on 2026-11-06; the page always reads them live): one-time fee 0.1%, interest 1% a year, minimum debt 1,800 MUSD, refundable deposit 200 MUSD, minimum ratio 110%. Suppose BTC is $75,000 (the page uses Mezo's live price feed instead).
+Mezo's settings today (read on 2026-11-18; the page always reads them live): one-time fee 0.1%, interest 1% a year, minimum debt 1,800 MUSD, refundable deposit 200 MUSD, minimum ratio 110%. Suppose BTC is $75,000 (the page uses Mezo's live price feed instead).
 
 You want 2,000 MUSD at the Balanced 200%:
 
@@ -129,22 +129,22 @@ Worked example, continuing from above: you owe 2,202 MUSD. The most you can *Rep
 
 | Message | What it means | What to do |
 | --- | --- | --- |
-| *Not enough BTC* | Your BTC balance is lower than what you're locking plus a little for fees | Lock less, or get more BTC (faucet on testnet) |
+| *Not enough BTC* | Your BTC balance is lower than what you're locking plus a little for fees | Lock less, or add more BTC |
 | *Minimum is … MUSD* | Below Mezo's smallest loan | Borrow at least that much |
 | *Lock more BTC or borrow less* / *That's below Mezo's 110% minimum.* | The ratio would be under 110% | Lock more BTC or lower the MUSD |
 | *The BTC price moved and this loan's ratio dropped. Review the new numbers and try again.* | The price changed between your preview and signing, and the ratio fell more than 2% | Check the new numbers and sign again |
-| *Mezo's BTC price feed didn't answer in time. Try again in a moment.* | Mezo testnet has a node that sometimes lags | Wait a few seconds and retry |
+| *Mezo's BTC price feed didn't answer in time. Try again in a moment.* | Mezo's network was slow to answer | Wait a few seconds and retry |
 | *Couldn't reach Mezo's price feed* | Mezo's network didn't answer | Press *Try again*, or borrow on Mezo's site |
 | *Mezo is in recovery mode* | Mezo's whole system is under 150% | Only repaying and adding BTC work until it recovers; new loans need 150% or more |
 | *This wallet already has a Mezo loan. Borrow more on it instead.* | One loan per wallet | Use the *Borrow* tab on your existing loan |
 
 ## Borrowing on Mezo's own app
 
-You can also open the loan at [testnet.mezo.org](https://testnet.mezo.org). MEZONK talks to the lending contracts Mezo publishes for testnet, so a loan opened there shows up on MEZONK's Borrow page and in Portfolio, and the other way round. Use whichever you prefer.
+You can also open the loan at [mezo.org](https://mezo.org/feature/borrow). MEZONK talks to the lending contracts Mezo publishes, so a loan opened there shows up on MEZONK's Borrow page and in Portfolio, and the other way round. Use whichever you prefer.
 
 ## Borrowed more than you'll trade?
 
-The Borrow page lists other things MUSD can do on Mezo: a savings vault, swaps and pools, or paying down the loan. Those links point to Mezo mainnet apps, not testnet.
+The Borrow page lists other things MUSD can do on Mezo: a savings vault, swaps and pools, or paying down the loan. Those links open Mezo's own apps.
 
 ## Next
 

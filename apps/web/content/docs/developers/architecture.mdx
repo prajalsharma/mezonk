@@ -29,7 +29,7 @@ accept new markets from its own factory and outcomes from its own resolution con
 | `MezonkMarketFactory` | Nothing | Creator, curator and resolver lists; checks curator approvals; config for new markets |
 | `MezonkResolution` | Proposal and dispute bonds | Proposals, disputes, arbitration, timeouts; calls `exchange.settle` once per market |
 | `MezonkIncentives` | Rebate and referral reserves, funded only from taker fees | Seeder rebates and referral credit |
-| `MezonkPriceResolver` (not deployed yet) | MUSD for its own proposer bonds | Settles BTC price markets from Mezo's PriceFeed |
+| `MezonkPriceResolver` | MUSD for its own proposer bonds | Settles BTC price markets from Mezo's PriceFeed |
 
 Full function and event lists: [Contracts](/docs/developers/contracts).
 
@@ -95,7 +95,7 @@ will read Mezo's PriceFeed. See [Built on Mezo](/docs/mezo/overview).
 | Indexer lagging | Lists and history go stale; the UI shows a stale-data notice | Money views, which read the chain live |
 | Database wrong | Wrong history or labels | Nothing financial depends on it |
 | Keeper bot down | Order books thin out; BTC price markets miss their window | Manual proposal path; normal resolution |
-| Mezo testnet's lagging RPC node | Reads look old or fail | The app's RPC client skips lagging answers (`laggingNodeFetch`) |
+| A lagging RPC node | Reads look old or fail | The app's RPC client skips lagging answers (`laggingNodeFetch`) |
 
 ## Key modules
 

@@ -47,30 +47,22 @@ A wallet counts as a seeder once the total MUSD it has locked in seed orders on 
 
 ## Worked examples
 
-These use the two policies on Mezo testnet as read from the contract on 6 November 2026. New approvals use the newest active policy, so check the live values above before relying on them.
+These use policy 1 on Mezo Mainnet as read from the contract on 18 November 2026. New approvals use the newest active policy, so check the live values above before relying on them.
 
-### Policy 2 (newest): one seeder can launch
+### Policy 1: one seeder can launch
 
-Policy 2 asks for 20 shares bid within 5¢ of the best bid, 20 offered within 5¢ of the best offer, a spread of at most 10¢, and one seeder with at least 10 MUSD locked. Seeding lasts 1 hour.
+Policy 1 asks for 20 shares bid within 5¢ of the best bid, 20 offered within 5¢ of the best offer, a spread of at most 10¢, and one seeder with at least 10 MUSD locked. Seeding lasts up to 7 days.
 
 - One wallet places *buy 20 Yes at 45¢*: locks 20 × 0.45 = **9.00 MUSD**.
 - The same wallet places *buy 20 No at 50¢*, which is an offer of Yes at 50¢: locks 20 × 0.50 = **10.00 MUSD**.
 - Spread: 50 − 45 = 5¢. Bid depth 20, offer depth 20. The wallet has 19 MUSD locked, so it counts as a seeder.
 - The market can launch with **19 MUSD** in total.
 
-### Policy 1: two seeders, more depth
+### Three ways that book fails
 
-Policy 1 asks for 100 shares on each side within 5¢, a spread of at most 10¢, and two seeders with at least 10 MUSD each. Seeding lasts 7 days.
-
-- Wallet A: *buy 100 Yes at 45¢*, locks **45 MUSD**.
-- Wallet B: *buy 100 No at 45¢* (an offer of Yes at 55¢), locks **45 MUSD**.
-- Spread: 55 − 45 = 10¢, exactly the limit. Two seeders. The market can launch with **90 MUSD** in total.
-
-### Three ways that same book fails under policy 1
-
-- **Too wide.** Wallet A bids Yes at 40¢ instead. Spread 55 − 40 = 15¢, over the 10¢ limit.
-- **Depth in the wrong place.** Wallet A splits its order: 60 Yes at 45¢ and 60 at 38¢. Only 40¢ to 45¢ counts, so bid depth is 60, short of 100.
-- **Too small to count.** Wallet B locks only 9 MUSD (20 No at 45¢). Its shares still count toward depth, but B isn't a seeder, so the market has one seeder, not two.
+- **Too wide.** The Yes bid is at 38¢ instead. Spread 50 − 38 = 12¢, over the 10¢ limit.
+- **Depth in the wrong place.** The wallet splits its bid: 10 Yes at 45¢ and 10 at 38¢. Only 40¢ to 45¢ counts, so bid depth is 10, short of 20.
+- **No seeder.** Two wallets split the book: one bids 20 Yes at 45¢ (9.00 MUSD), the other bids 20 No at 48¢, an offer of Yes at 52¢ (9.60 MUSD). Spread and depth pass, but neither wallet has 10 MUSD locked, so there is no seeder and the market can't launch.
 
 ## Launching
 
@@ -82,7 +74,7 @@ A market can launch as soon as the checks pass. It doesn't wait for the deadline
 
 ## Seed order locks
 
-A seed order can't be cancelled for a set time (`minRest`, 1 hour in both testnet policies today):
+A seed order can't be cancelled for a set time (`minRest`, 1 hour in today's policy):
 
 1. after you place it, and
 2. again after the market launches.
@@ -91,7 +83,7 @@ Why: without the first lock, someone could place orders, launch, and cancel in t
 
 Locks never apply once the seeding deadline has passed without a launch, or once trading has closed.
 
-Under a policy whose seeding period is as short as its lock (policy 2: both 1 hour), a seed order in practice can't be cancelled during seeding at all. Commit only what you're happy to leave in place until launch or refund.
+Under a policy whose seeding period is as short as its lock, a seed order in practice can't be cancelled during seeding at all. Commit only what you're happy to leave in place until launch or refund.
 
 ## If the market doesn't launch
 
@@ -99,13 +91,9 @@ After the seeding deadline, a market that hasn't launched is **Failed**, permane
 
 ## What seeders earn
 
-For a period after launch, part of every taker fee on the market is set aside for its seeders. Today's testnet policies send 20% of the 1% taker fee to seeders for 30 days after launch, split by seed weight, capped per wallet and per market, and claimable for 90 days after that. The full rules and a worked example are on [Fees and incentives](/docs/how-it-works/fees-and-incentives).
+For a period after launch, part of every taker fee on the market is set aside for its seeders. Today's policy sends 20% of the 1% taker fee to seeders for 30 days after launch, split by seed weight, capped per wallet and per market, and claimable for 90 days after that. The full rules and a worked example are on [Fees and incentives](/docs/how-it-works/fees-and-incentives).
 
-On the live contract, your **seed weight** is the MUSD you had locked in seed orders that were still open at the moment of launch. It is fixed at launch: later fills or cancellations don't reduce it, and orders placed after launch don't add to it.
-
-<Callout type="warn" title="Next deployment">
-Merged on GitHub and tested, but not yet on chain: seed weight for rebates will count only seed orders priced inside the band the launch check used (for example, bids from 40¢ to 45¢ when the best bid is 45¢ and the band is 5¢). An order far from the market, such as a Yes bid at 1¢, takes almost no risk of being filled, so it will no longer dilute the seeders who put real depth near the price. Launch rules themselves don't change. This came from an external researcher's report (KupiaSec) and is fixed in commit c8fbaff.
-</Callout>
+Your **seed weight** is the MUSD you had locked in seed orders priced inside the band the launch check used (for example, bids from 40¢ to 45¢ when the best bid is 45¢ and the band is 5¢), still open at the moment of launch. It is fixed at launch: later fills or cancellations don't reduce it, and orders placed after launch don't add to it. An order far from the market, such as a Yes bid at 1¢, takes almost no risk of being filled, so it earns no weight.
 
 ## What seeders risk
 
@@ -132,7 +120,7 @@ g.seedersOk = g.seeders >= p.minSeeders;
 
 - **Distinct wallets aren't distinct people.** The per-seeder minimum makes Sybil seeding cost real, locked money, and one-sided or crossed books can't pass, but someone with enough MUSD can be several seeders.
 - **Pausing during seeding.** While the exchange is paused, no seed orders can be placed and no market can launch. The seeding deadline is not extended, so a long pause can make a market fail. Refunds still work.
-- **Close time.** A market's close time must be at least the minimum live time after its seeding deadline (1 hour on testnet today) and at most the maximum duration after publication (365 days today). The contract refuses to publish otherwise.
+- **Close time.** A market's close time must be at least the minimum live time after its seeding deadline (1 day today) and at most the maximum duration after publication (365 days today). The contract refuses to publish otherwise.
 - **Who can seed.** Anyone, including the creator. The curator approves the question but puts no money in.
 
 ## Next

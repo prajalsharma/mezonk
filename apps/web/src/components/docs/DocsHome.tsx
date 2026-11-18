@@ -48,10 +48,10 @@ const ROUTES: Array<{ href: string; title: string; body: string; icon: LucideIco
   {
     href: "/docs/get-started/quick-start",
     title: "Make your first trade",
-    body: "From an empty wallet to holding Yes or No shares on Mezo testnet. Test money only, so you can learn it without risk.",
+    body: "From an empty wallet to holding Yes or No shares on Mezo Mainnet. Real BTC and MUSD, so start small.",
     icon: Rocket,
     wide: true,
-    points: ["Add Mezo testnet and get test BTC", "Borrow MUSD against it, or bring your own", "Pick a market and back a side", "Sell early, or claim when it settles"],
+    points: ["Add Mezo to your wallet and bring BTC", "Borrow MUSD against it, or bring your own", "Pick a market and back a side", "Sell early, or claim when it settles"],
   },
   { href: "/docs/how-it-works/shares-and-payouts", title: "How it works", body: "Shares, the order book, seeding, and how a result becomes final.", icon: BookOpenText },
   { href: "/docs/mezo/overview", title: "Built on Mezo", body: "MUSD settlement, in-app borrowing, and Mezo's price feed.", icon: Landmark },

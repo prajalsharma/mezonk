@@ -1,13 +1,12 @@
 ---
 title: BTC price markets
-description: How "BTC above or below $X" markets will settle from Mezo's own PriceFeed, what the contract checks, and what happens when it can't.
+description: How "BTC above or below $X" markets settle from Mezo's own PriceFeed, what the contract checks, and what happens when it can't.
 icon: LineChart
 ---
 
-<Callout type="warn" title="Next deployment">
-  Everything on this page describes `MezonkPriceResolver`, which is merged on GitHub and tested against the real
-  exchange and resolution contracts, but not deployed on testnet yet. Until it is, no market settles from the
-  PriceFeed, and markets about BTC's price are resolved like any other market.
+<Callout type="info" title="Live on Mezo Mainnet">
+  `MezonkPriceResolver` is at [`0xc58D8A13B1e6f1614508ca20124A9d0F60520354`](https://explorer.mezo.org/address/0xc58D8A13B1e6f1614508ca20124A9d0F60520354). Only markets that name it as their
+  resolver settle from the PriceFeed; other markets about BTC's price are resolved like any other market.
 </Callout>
 
 Some questions have an answer that's already on Mezo. "Will BTC be at or above $100,000 when trading closes?" can be
@@ -35,10 +34,10 @@ challenge window and final result.
 
 ### Mezo's PriceFeed, as verified on 2026-11-04
 
-- Testnet PriceFeed `0x86bCF0841622a5dAC14A313a15f96A95421b9366`, mainnet `0xc5aC5A8892230E0A3e1c473881A2de7353fFcA88`.
+- PriceFeed on Mezo Mainnet: `0xc5aC5A8892230E0A3e1c473881A2de7353fFcA88`.
 - `fetchPrice()` returns USD per BTC with 18 decimals. It reverts `PriceFeed: Oracle is stale.` if the oracle's
   last update is more than 60 seconds old (`MAX_PRICE_DELAY = 60` in mezo-org/musd `PriceFeed.sol`).
-- `oracle()` on testnet is `0x7b7c000000000000000000000000000000000015`, a chain precompile.
+- `oracle()` is `0x7b7c000000000000000000000000000000000015`, a chain precompile.
 - The oracle supports `latestRoundData()` only. `getRoundData()` is not supported ("method not found"), so there is
   **no price history**. A price can only be read at the time it describes. This is why settlement has a short window
   and needs a keeper.
@@ -100,8 +99,8 @@ Every input is public: the rule from `RuleSet` or `rules(marketId)`, the reading
 To check a reading against Mezo yourself, query the PriceFeed at the block in the reading:
 
 ```bash
-cast call 0x86bCF0841622a5dAC14A313a15f96A95421b9366 "fetchPrice()(uint256)" \
-  --block <blockNumber> --rpc-url https://rpc.test.mezo.org
+cast call 0xc5aC5A8892230E0A3e1c473881A2de7353fFcA88 "fetchPrice()(uint256)" \
+  --block <blockNumber> --rpc-url https://mezo-mainnet.boar.network
 ```
 
 This needs an archive node for old blocks; the public RPC may not serve them.
@@ -123,11 +122,7 @@ Owner only, and only after the window (`WindowOpen` before). It emits `ManualPro
 challenge window and arbitration as any proposal. If nobody proposes at all before the market's proposal window ends,
 the market settles Invalid, as every market does: each share, Yes or No, pays 0.5 MUSD.
 
-<Callout type="warn" title="Next deployment">
-  With the resolution fixes from commit c8fbaff, anyone may also propose directly once half the proposal window has
-  passed, so a missed window doesn't depend on the owner. On the live resolution contract only the market's resolver
-  can propose.
-</Callout>
+Anyone may also propose directly once half the proposal window has passed, so a missed window doesn't depend on the owner.
 
 ### Still disputable
 

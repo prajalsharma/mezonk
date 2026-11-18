@@ -1,6 +1,6 @@
 ---
 title: FAQ
-description: Straight answers to the questions new traders ask most, about money and safety, trading, borrowing, results and testnet.
+description: Straight answers to the questions new traders ask most, about money and safety, trading, borrowing, results and the network.
 icon: CircleHelp
 ---
 
@@ -18,7 +18,7 @@ No. Your MUSD sits in the exchange contract, which has no upgrade mechanism and 
 </Accordion>
 
 <Accordion title="Has the code been audited?">
-No. The contracts have not been audited by an independent firm. There are internal review notes, and an external researcher (KupiaSec) sent a report whose findings were fixed in the code; those fixes are merged and tested but not yet deployed to the live testnet contract. Bugs could lose funds. The source is public at [github.com/prajalsharma/mezonk](https://github.com/prajalsharma/mezonk). See [Trust model](/docs/security/trust-model).
+No. The contracts have not been audited by an independent firm. There are internal review notes, and an external researcher (KupiaSec) sent a report whose findings were fixed before the mainnet launch. Bugs could still lose funds, so only trade what you can afford to lose. The source is public at [github.com/prajalsharma/mezonk](https://github.com/prajalsharma/mezonk). See [Trust model](/docs/security/trust-model).
 </Accordion>
 
 <Accordion title="What if the MEZONK website goes down?">
@@ -50,7 +50,7 @@ The book didn't have enough on offer. The ticket buys the cheapest offers first 
 </Accordion>
 
 <Accordion title="What fees are there?">
-Only a trading fee, paid by the taker: the order that fills immediately. Orders that wait on the book pay nothing. The fee is a percentage of what the shares cost, set per market when it's published, and shown on the ticket as *Fee (…%, taker)*. On today's testnet settings it's 1%. Claims, refunds and bond withdrawals have no protocol fee. Network fees on Mezo are paid in BTC and are tiny.
+Only a trading fee, paid by the taker: the order that fills immediately. Orders that wait on the book pay nothing. The fee is a percentage of what the shares cost, set per market when it's published, and shown on the ticket as *Fee (…%, taker)*. On today's settings it's 1%. Claims, refunds and bond withdrawals have no protocol fee. Network fees on Mezo are paid in BTC and are tiny.
 </Accordion>
 
 <Accordion title="Why does my wallet ask me to approve MUSD every time?">
@@ -78,7 +78,7 @@ Mezo, not MEZONK. The Borrow page sends your transaction to Mezo's own lending c
 </Accordion>
 
 <Accordion title="What's the smallest loan, and what does it cost?">
-Mezo's minimum is 1,800 MUSD of debt, which means you receive about 1,798 MUSD. On top of what you receive you owe a one-time fee, a 200 MUSD refundable deposit (returned when you close the loan), and simple yearly interest. On today's Mezo testnet settings the fee is 0.1% and interest is 1% a year. The Borrow page reads all of these live from Mezo before you sign. See [Get MUSD](/docs/get-started/get-musd).
+Mezo's minimum is 1,800 MUSD of debt, which means you receive about 1,798 MUSD. On top of what you receive you owe a one-time fee, a 200 MUSD refundable deposit (returned when you close the loan), and simple yearly interest. On Mezo's settings today the fee is 0.1% and interest is 1% a year. The Borrow page reads all of these live from Mezo before you sign. See [Get MUSD](/docs/get-started/get-musd).
 </Accordion>
 
 <Accordion title="When does my loan get liquidated?">
@@ -99,11 +99,9 @@ Each market has a resolver who proposes Yes, No or Invalid after it closes, with
 </Accordion>
 
 <Accordion title="What if the answer is unclear, or nobody resolves the market?">
-Unclear questions should resolve Invalid, which pays 0.50 MUSD per share of either side. If the resolver never proposes in time, or the arbitrator never rules in time, anyone can finalize the market as Invalid. Funds can't get stuck.
+Unclear questions should resolve Invalid, which pays 0.50 MUSD per share of either side. If nobody proposes in time, or the arbitrator never rules in time, anyone can finalize the market as Invalid. Funds can't get stuck.
 
-<Callout type="warn" title="Next deployment">
-Merged but not yet live: anyone may propose a result once half the proposal window has passed, so a missing resolver no longer has to mean Invalid.
-</Callout>
+If the resolver hasn't proposed by halfway through the proposal window, anyone may propose instead, so a missing resolver doesn't have to mean Invalid.
 </Accordion>
 
 <Accordion title="Can the rules change after I trade?">
@@ -116,19 +114,24 @@ It fails at the seeding deadline. Nobody ever traded it, and every seeder takes 
 
 </Accordions>
 
-## Testnet
+## The network
+
 
 <Accordions type="single">
 <Accordion title="Is this real money?">
-No. MEZONK runs on Mezo testnet. Test BTC and test MUSD have no cash value. It's the real product, so you can learn it without risking anything. There is no mainnet deployment yet.
+Yes. MEZONK runs on Mezo Mainnet. Trades use real MUSD, and a loan locks real BTC. The contracts have not had an independent audit, so only trade what you can afford to lose.
 </Accordion>
 
-<Accordion title="How do I get test BTC?">
-From the [Mezo faucet](https://faucet.test.mezo.org). Paste your wallet address and request it. You need a little BTC for network fees even if you already have MUSD.
+<Accordion title="How do I get BTC on Mezo?">
+Bring it to Mezo through [mezo.org](https://mezo.org). You need a little BTC for network fees even if you already have MUSD.
+</Accordion>
+
+<Accordion title="Can I practise first?">
+Yes. Switch to Testnet in the header for free test funds and practice markets. Nothing there is real money.
 </Accordion>
 
 <Accordion title="A transaction failed or seems stuck. What do I do?">
-Read the message under it and press *Try again*. Mezo testnet's public RPC sometimes answers from a node that's behind; if you see *Mezo's BTC price feed didn't answer in time* or a quote that won't load, wait a few seconds and retry. Check that you have some BTC for the network fee and that your wallet is on Mezo Testnet (chain 31611).
+Read the message under it and press *Try again*. If you see *Mezo's BTC price feed didn't answer in time* or a quote that won't load, wait a few seconds and retry. Check that you have some BTC for the network fee and that your wallet is on Mezo Mainnet (chain 31612).
 </Accordion>
 </Accordions>
 

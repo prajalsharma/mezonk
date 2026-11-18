@@ -4,9 +4,9 @@ import type { ReactNode } from "react";
 import { Box, Figure, Flow, StepDot } from "./primitives";
 
 /*
- * Optimistic resolution in MezonkResolution, as deployed on testnet (exchange 0x4555…49B9): only the market's
- * resolver proposes; anyone but the resolver may dispute once; the arbitrator's ruling sends both bonds to whoever
- * it agrees with. The merged-but-not-deployed rules (commit c8fbaff) are in the "Next deployment" box.
+ * Optimistic resolution in MezonkResolution, as deployed on Mezo Mainnet (exchange 0x102C…Ddf0): the market's
+ * resolver proposes (anyone after half the proposal window); anyone but the proposer, resolver and arbitrator may
+ * dispute once; an upheld proposal takes both bonds, an overturned one loses half its bond to the protocol.
  */
 
 /** Arrow label at 13.5px with a surface-coloured halo so it stays readable over lines. */
@@ -30,8 +30,8 @@ const Y = [30, 130, 240, 350, 480] as const;
 const mid = (y: number) => y + H / 2;
 const NOTE_Y = 576;
 const ROLES: ReadonlyArray<readonly [string, string]> = [
-  ["Propose", "the market's resolver, once"],
-  ["Dispute", "anyone but the resolver, once, with a bond"],
+  ["Propose", "the resolver; anyone after half the window"],
+  ["Dispute", "anyone but the proposer or resolver, once"],
   ["Rule", "the market's arbitrator, with a rationale"],
   ["Finalize", "anyone, once the deadline has passed"],
 ];
@@ -47,9 +47,9 @@ export function ResolutionFlow() {
       legend={["mezonk", "success", "danger"]}
       caption={
         <>
-          Read the bond line in each final box. In the live contract the arbitrator&apos;s side takes both bonds, so a
-          wrong proposal or a frivolous challenge costs its poster a bond. If nobody rules in time, both bonds go back and
-          the market settles Invalid.
+          Read the bond line in each final box. A frivolous challenge loses its bond to the proposer; an overturned
+          proposal loses half its bond to the protocol and the challenger gets the rest. If nobody rules in time, both
+          bonds go back and the market settles Invalid.
         </>
       }
     >
@@ -98,17 +98,17 @@ export function ResolutionFlow() {
       <Label x={(B.x + B.w + R.x) / 2} y={mid(Y[3]) - 9}>no ruling in time</Label>
 
       <Box x={B.x} y={Y[4]} w={B.w} h={H} label="Final: upheld" sub="proposer gets both bonds" tone="success" />
-      <Box x={R.x} y={Y[4]} w={R.w} h={H} label="Final: overturned" sub="challenger gets both" tone="success" />
+      <Box x={R.x} y={Y[4]} w={R.w} h={H} label="Final: overturned" sub="challenger gets 1.5 bonds" tone="success" />
       <Flow d={`M${BC} ${Y[3] + H} V${Y[4] - 1}`} tone="neutral" />
       <Flow d={`M${BC} ${split} H${RC} V${Y[4] - 1}`} tone="neutral" />
       <Label x={BC - 12} y={split + 30} anchor="end">ruling agrees</Label>
       <Label x={(BC + RC) / 2 + 20} y={split - 9}>ruling differs</Label>
 
-      {/* ── Merged, not yet deployed ── */}
+      {/* ── Safeguards ── */}
       <g>
         <rect x={S.x} y={NOTE_Y} width={R.x + R.w - S.x} height={84} rx={8} fill="none" stroke="var(--border-strong)" strokeDasharray="5 4" />
         <text x={S.x + 16} y={NOTE_Y + 25} fontSize={13.5} fontWeight={600} fill="var(--ink)">
-          Next deployment <tspan fontWeight={400} fill="var(--muted)">(merged and tested, not on chain yet)</tspan>
+          Safeguards
         </text>
         <text x={S.x + 16} y={NOTE_Y + 48} fontSize={13.5} fill="var(--ink-2)">
           Overturned: half the proposer&apos;s bond goes to the protocol and the challenger gets the rest.

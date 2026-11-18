@@ -69,9 +69,9 @@ market.
 Mezo uses CometBFT, which finalizes blocks immediately, so reorgs aren't expected. The confirmations and the
 block-hash check are defence in depth, and an integration test exercises the rewind against a real EVM.
 
-### Testnet's lagging node
+### Lagging RPC nodes
 
-Mezo testnet's public RPC load-balances over a node that can sit far behind the head. The app's RPC client
+A public RPC can load-balance over a node that sits far behind the head (Mezo Testnet's does). The app's RPC client
 (`lib/chain/laggingNodeFetch.ts`) retries answers that look stale: block numbers more than 50 behind the highest seen,
 "height in the future" errors, missing blocks. Scripts use `scripts/rpc-retry-proxy.mjs` with the same rules.
 
@@ -84,7 +84,7 @@ Mezo testnet's public RPC load-balances over a node that can sit far behind the 
 | Production, worker | `pnpm --filter web indexer` against Postgres (`DATABASE_URL`) |
 
 A full backfill clears the deployment's events and cursor; the next passes re-index from the deploy block
-(16298919 on testnet).
+(13301975 on Mezo Mainnet).
 
 ## Next
 

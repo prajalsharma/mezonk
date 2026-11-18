@@ -5,12 +5,11 @@ icon: ClipboardCheck
 ---
 
 **MEZONK has not been audited by an independent security firm.** Passing tests and internal reviews are not an
-audit. The contracts run on Mezo testnet with test money only, and they should not go to mainnet before an external
-review of the contracts and their economics.
+audit. The contracts are live on Mezo Mainnet with real money, so only trade what you can afford to lose.
 
 What has happened so far: an internal, tool-assisted review of the first (AMM) version of the contracts, and a report
 from an external security researcher, KupiaSec, on the current order-book contracts. Every finding below has a fix
-in the code. Some fixes are live on testnet; the rest are merged on GitHub and wait for the next deployment.
+in the code, and every fix is in the contracts deployed on Mezo Mainnet.
 
 ## Status at a glance
 
@@ -18,17 +17,10 @@ in the code. Some fixes are live on testnet; the rest are merged on GitHub and w
 | --- | --- | --- |
 | A curator couldn't cancel an approval it had signed | Internal review | Fixed, live (`cancelApproval` on the factory) |
 | The arbitrator could challenge a proposal and then rule on its own challenge | Internal review | Fixed, live (the arbitrator can't dispute) |
-| A resolver could challenge its own wrong proposal from a second wallet and keep its bond | Internal review | Fixed in commit c8fbaff, not deployed |
-| A silent resolver could force Invalid (0.5 per share) by never proposing | Internal review | Fixed in commit c8fbaff, not deployed |
+| A resolver could challenge its own wrong proposal from a second wallet and keep its bond | Internal review | Fixed, live (commit c8fbaff) |
+| A silent resolver could force Invalid (0.5 per share) by never proposing | Internal review | Fixed, live (commit c8fbaff) |
 | A view function reverted after liquidity was withdrawn | Internal review | Applies only to the retired AMM; the order book has no such function |
-| Far-off seed orders could dilute seeders' rebates | KupiaSec | Fixed in commit c8fbaff, not deployed |
-
-<Callout type="warn" title="Next deployment">
-  Commit c8fbaff changes three contracts: rebate weight comes only from seed escrow inside the graduation band; anyone
-  may propose after half the proposal window; an overturned proposal loses half its bond to the protocol; the
-  proposer can't dispute their own proposal. The contracts aren't upgradeable, so these need a new exchange
-  deployment. Until then, the live testnet contracts behave as before.
-</Callout>
+| Far-off seed orders could dilute seeders' rebates | KupiaSec | Fixed, live (commit c8fbaff) |
 
 ## How it works exactly
 
@@ -75,7 +67,7 @@ Counted from the test files (functions named `test…`, `testFuzz…` or `invari
 | Invariants, random walks, fuzz | `test/exchange/ExchangeInvariants.t.sol` | 7 |
 | BTC price resolver | `test/exchange/PriceResolver.t.sol` | 12 |
 | Audit fixes | `test/exchange/AuditFixes.t.sol` | 6 |
-| Fork against real testnet MUSD | `test/fork/ExchangeTestnetFork.t.sol` | 1 |
+| Fork against real MUSD on Mezo Testnet | `test/fork/ExchangeTestnetFork.t.sol` | 1 |
 | Retired v1 AMM (kept for reference) | `MezonkMarkets`, `Resolution`, `Governance`, `FPMMMath`, invariants, fork | 79 |
 
 That's 78 for the current contracts and 157 in all. Invariant and fuzz tests run many sequences each: see
@@ -83,8 +75,8 @@ That's 78 for the current contracts and 157 in all. Invariant and fuzz tests run
 
 ### What an independent audit should cover
 
-- `MezonkExchange`, `MezonkMarketFactory`, `MezonkResolution`, `MezonkIncentives` and `MezonkPriceResolver` as of
-  the next deployment.
+- `MezonkExchange`, `MezonkMarketFactory`, `MezonkResolution`, `MezonkIncentives` and `MezonkPriceResolver` as deployed.
+  `MezonkBtcRounds` too.
 - The economics: seeding and graduation, rebate and referral incentives, bond sizes against market size.
 - The arbitrator's role and the path to a multisig or decentralized arbitration.
 

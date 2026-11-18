@@ -74,10 +74,10 @@ export function Header() {
             type="button"
             onClick={() => setPalette(true)}
             aria-label="Search markets (⌘K)"
-            className="press inline-flex h-9 items-center gap-2 rounded-md border border-line bg-sunk/70 px-2.5 text-sm text-muted transition-colors hover:border-ink-2/40 hover:text-ink md:w-44 md:justify-start xl:w-60"
+            className="press inline-flex h-9 items-center gap-2 rounded-md border border-line bg-sunk/70 px-2.5 text-sm text-muted transition-colors hover:border-ink-2/40 hover:text-ink md:w-44 md:justify-start lg:w-auto xl:w-60"
           >
             <Search className="size-4" aria-hidden />
-            <span className="hidden md:inline">Search markets</span>
+            <span className="hidden md:inline lg:hidden xl:inline">Search markets</span>
             <kbd className="mono ml-auto hidden rounded-sm border border-line bg-surface px-1.5 text-[11px] xl:block">⌘K</kbd>
           </button>
           <span className="hidden xl:inline"><NetworkStatus /></span>
@@ -98,7 +98,7 @@ function NavLink({ href, active, children }: { href: string; active: boolean; ch
       href={href}
       aria-current={active ? "page" : undefined}
       className={cx(
-        "relative rounded-md px-3 py-2 text-[0.9375rem] font-medium transition-colors duration-150",
+        "relative whitespace-nowrap rounded-md px-3 py-2 text-[0.9375rem] font-medium transition-colors duration-150",
         active ? "bg-surface-2 text-ink ring-1 ring-line" : "text-muted hover:text-ink",
       )}
     >

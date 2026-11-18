@@ -6,9 +6,8 @@ icon: FileCode
 
 MEZONK's on-chain part is one deployment of `MezonkExchange`, which creates `MezonkResolution`,
 `MezonkMarketFactory` and `MezonkIncentives` in its constructor. All four are Solidity 0.8.24 (via-IR, London EVM,
-OpenZeppelin), live on Mezo testnet since 2026-10-22, and not upgradeable. A fifth, `MezonkPriceResolver`, is merged
-but not deployed, and a sixth, `MezonkBtcRounds` (BTC up/down rounds staked in native BTC), is built and tested but
-not deployed. Source: [github.com/prajalsharma/mezonk](https://github.com/prajalsharma/mezonk), `contracts/src`.
+OpenZeppelin), live on Mezo Mainnet since 2026-11-18, and not upgradeable. `MezonkBtcRounds` (BTC up/down rounds
+staked in native BTC) is live too. `MezonkPriceResolver` is live at `0xc58D8A13B1e6f1614508ca20124A9d0F60520354`. Source: [github.com/prajalsharma/mezonk](https://github.com/prajalsharma/mezonk), `contracts/src`.
 
 ## Live addresses
 
@@ -16,14 +15,18 @@ These come from the app's configuration, so they're the contracts this site is u
 
 <Contracts />
 
-The testnet exchange was deployed at block 16298919. Its owner is
-`0x017FF5FB886E90f9e5ADb405D8eFddffC1162dD2`. Nothing is deployed on mainnet.
+On Mezo Mainnet (chain 31612), deployed at block 13301975:
 
-<Callout type="warn" title="Next deployment">
-  The code on GitHub includes the KupiaSec fixes (commit c8fbaff) to the exchange, resolution and incentives
-  contracts, which are not on testnet yet. Where the tables below differ between the live contracts and the next
-  deployment, it's marked. Because the contracts aren't upgradeable, the fixes need a new exchange deployment.
-</Callout>
+| Contract | Address |
+| --- | --- |
+| MezonkExchange | [`0x102C908dCA719742f1958D18021B7C1c0092Ddf0`](https://explorer.mezo.org/address/0x102C908dCA719742f1958D18021B7C1c0092Ddf0) |
+| MezonkMarketFactory | [`0x056F302D8AA87A4a1F4062a6c53EFe6425A6Bbc8`](https://explorer.mezo.org/address/0x056F302D8AA87A4a1F4062a6c53EFe6425A6Bbc8) |
+| MezonkResolution | [`0xaB7d8e1F4b2fF15a23dE463B041F98483B73b28f`](https://explorer.mezo.org/address/0xaB7d8e1F4b2fF15a23dE463B041F98483B73b28f) |
+| MezonkIncentives | [`0x506F1FD8F0418beEdcFD5bDE7b1d8Dd56481d8A5`](https://explorer.mezo.org/address/0x506F1FD8F0418beEdcFD5bDE7b1d8Dd56481d8A5) |
+| MezonkBtcRounds | [`0xc27f434195e4aF70782817A280A5D3Cb5de2ECa8`](https://explorer.mezo.org/address/0xc27f434195e4aF70782817A280A5D3Cb5de2ECa8) |
+| MezonkPriceResolver | [`0xc58D8A13B1e6f1614508ca20124A9d0F60520354`](https://explorer.mezo.org/address/0xc58D8A13B1e6f1614508ca20124A9d0F60520354) |
+
+The owner of the exchange, factory, rounds and price resolver contracts is `0x017FF5FB886E90f9e5ADb405D8eFddffC1162dD2`.
 
 ## How it works exactly
 
@@ -42,11 +45,11 @@ instead of configuring them (`protocolAddresses` in `lib/chain/config.ts`), and 
 the exchange. Check both ways:
 
 ```bash
-EX=0x4555cfF10200e1007435Cffc683C60683c5C49B9
-RPC=https://rpc.test.mezo.org
-cast compute-address $EX --nonce 1   # 0x6Da57dDd874f02E3ad704F75aCC86D0319d3b944
-cast compute-address $EX --nonce 2   # 0x3d596A0317AD7159d0E9f4A15D80A62FFC30D689
-cast compute-address $EX --nonce 3   # 0xF1a014E4E291EB2690777104D65990efAFC3f06B
+EX=0x102C908dCA719742f1958D18021B7C1c0092Ddf0
+RPC=https://mezo-mainnet.boar.network
+cast compute-address $EX --nonce 1   # 0xaB7d8e1F4b2fF15a23dE463B041F98483B73b28f
+cast compute-address $EX --nonce 2   # 0x056F302D8AA87A4a1F4062a6c53EFe6425A6Bbc8
+cast compute-address $EX --nonce 3   # 0x506F1FD8F0418beEdcFD5bDE7b1d8Dd56481d8A5
 cast call $EX "resolution()(address)" --rpc-url $RPC
 cast call $EX "factory()(address)" --rpc-url $RPC
 cast call $EX "incentives()(address)" --rpc-url $RPC
@@ -92,7 +95,7 @@ Holds all trading collateral. `Ownable2Step`, `Pausable`, `ReentrancyGuard`, EIP
 
 Key views: `getMarket`, `getPolicy`, `getResting`, `stageOf`, `bestPrices`, `graduationCheck`, `orderHash`,
 `sharesOf(marketId, index, account)`, `depthAt`, `filledOf`, `seedWeight`, `totalCollateral`, `escrowedCollateral`,
-`protocolFees`. Next deployment adds `rebateWeight(marketId, seeder)` and `totalRebateWeight(marketId)`.
+`protocolFees`, plus `rebateWeight(marketId, seeder)` and `totalRebateWeight(marketId)`.
 
 Pause blocks `openMarket`, `graduate`, `split`, `placeOrder` and `take`. It never blocks cancelling, merging,
 transferring shares, resolution or redeeming.
@@ -138,28 +141,23 @@ Events: `MarketApprovalUsed(marketId, curator, nonce)`, `MarketApprovalCancelled
 
 Holds bonds only.
 
-| Function | Who (live contract) | Does |
+| Function | Who | Does |
 | --- | --- | --- |
-| `proposeOutcome(marketId, outcome, evidenceHash, uri)` | the market's resolver, before the proposal window ends | Post the proposer bond and propose |
-| `dispute(marketId, evidenceHash, uri)` | anyone except the resolver and arbitrator, inside the challenge window | Post the dispute bond |
+| `proposeOutcome(marketId, outcome, evidenceHash, uri)` | the market's resolver; anyone after half the proposal window; before the window ends | Post the proposer bond and propose |
+| `dispute(marketId, evidenceHash, uri)` | anyone except the proposer, resolver and arbitrator, inside the challenge window | Post the dispute bond |
 | `arbitrate(marketId, outcome, rationaleHash, uri)` | the market's arbitrator, inside the arbitration window | Rule on a dispute |
 | `finalize(marketId)` | anyone, after a deadline | Undisputed → proposed outcome; no proposal or no ruling → Invalid |
 | `withdrawBond()` | anyone with credit | Withdraw credited bonds |
+| `sweepSlashed(to)` | the exchange owner | Move slashed half-bonds out |
 | `stageOf(marketId)` | view | `NotClosed`, `AwaitingProposal`, `Proposed`, `Disputed`, `Finalized` |
 
-On the live contract an upheld proposal credits both bonds to the resolver, and an overturned one credits both to the
-disputer. Timeouts refund both.
-
-<Callout type="warn" title="Next deployment">
-  After half the proposal window, anyone may propose with the bond. The proposer is recorded and gets the bonds back.
-  The proposer can't dispute their own proposal. An overturned proposal loses half its bond to the protocol
-  (`slashedBonds`, swept by the exchange owner with `sweepSlashed`), so disputing your own false proposal from a
-  second wallet still costs money.
-</Callout>
+An upheld proposal credits both bonds to the proposer. An overturned one credits the dispute bond plus half the
+proposer bond to the disputer, and the other half goes to `slashedBonds`, so disputing your own false proposal from a
+second wallet costs money. Timeouts refund both.
 
 Events: `OutcomeProposed(marketId, resolver, outcome, evidenceHash, evidenceURI, challengeDeadline)`,
 `OutcomeDisputed`, `DisputeArbitrated`, `MarketFinalized(marketId, outcome, reason)`, `BondCredited`,
-`BondWithdrawn`; next deployment adds `BondSlashed` and `SlashedSwept`.
+`BondWithdrawn`, `BondSlashed`, `SlashedSwept`.
 
 ## MezonkIncentives
 
@@ -173,12 +171,11 @@ Holds only the rebate and referral share of taker fees the exchange actually col
 | `setReferrer(referrer)` | anyone, once, before their first trade | Link a referrer; no self or two-way referral |
 | `claimReferral()` | referrer | Claim referral credit |
 
-Rebate weight on the live contract is the seeder's seed escrow (`seedWeight`). Next deployment counts only seed escrow
-inside the price band graduation measured.
+Rebate weight is the seeder's seed escrow inside the price band graduation measured; far-off orders count for nothing.
 
 Events: `ReferrerSet`, `RebateAccrued`, `ReferralAccrued`, `RebateClaimed`, `RebatesSwept`, `ReferralClaimed`.
 
-## MezonkPriceResolver (not deployed)
+## MezonkPriceResolver
 
 | Function | Who | Does |
 | --- | --- | --- |
@@ -189,7 +186,10 @@ Events: `ReferrerSet`, `RebateAccrued`, `ReferralAccrued`, `RebateClaimed`, `Reb
 
 Events: `RuleSet`, `PriceCaptured`, `ManualProposal`, `Swept`. Details: [BTC price markets](/docs/mezo/btc-price-markets).
 
-## MezonkBtcRounds (not deployed)
+## MezonkBtcRounds
+
+Live on Mezo Mainnet at `0xc27f434195e4aF70782817A280A5D3Cb5de2ECa8`: one-hour rounds, 10-minute capture window, 1% fee,
+stakes worth $8 to $125.
 
 Standalone: it needs nothing from the exchange and holds nothing but native BTC stakes. Timing (`genesis`,
 `interval`, `captureWindow`) and the PriceFeed are immutable.

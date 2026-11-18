@@ -32,7 +32,7 @@ import {
   type Address,
   type Hex,
 } from "viem";
-import { protocolAddresses } from "../src/lib/chain/config";
+import { DEFAULT_DEPLOYMENT, MEZO_MAINNET_ID, MEZO_TESTNET_ID, MUSD as MUSD_BY_CHAIN, mezoMainnet, mezoTestnet, protocolAddresses } from "../src/lib/chain/config";
 import { laggingNodeFetch } from "../src/lib/chain/laggingNodeFetch";
 import { exchangeAbi, factoryAbi, priceResolverAbi, resolutionAbi } from "../src/lib/contracts/abi";
 import { approvalTypes, type StoredApproval } from "../src/lib/governance/approval";
@@ -54,11 +54,18 @@ import { metadataHash, serializeMetadata, type MarketMetadata } from "../src/lib
 import { loadSigner, type Signer } from "./lib/signer";
 
 const env = (k: string, d: string) => process.env[k]?.trim() || d;
+/** IMPORT_CHAIN_ID 31611 (testnet, default) or 31612 (mainnet: also IMPORT_ALLOW_MAINNET=true, EXCHANGE and APP_URL). */
+const CHAIN_ID = Number(env("IMPORT_CHAIN_ID", String(MEZO_TESTNET_ID)));
+if (CHAIN_ID !== MEZO_TESTNET_ID && CHAIN_ID !== MEZO_MAINNET_ID) throw new Error(`IMPORT_CHAIN_ID ${CHAIN_ID} is not a Mezo network`);
+const MAINNET = CHAIN_ID === MEZO_MAINNET_ID;
+if (MAINNET && (process.env.IMPORT_ALLOW_MAINNET !== "true" || !process.env.EXCHANGE || !process.env.APP_URL)) {
+  throw new Error("mainnet import needs IMPORT_ALLOW_MAINNET=true, EXCHANGE and APP_URL (the mainnet site)");
+}
+const CHAIN = MAINNET ? mezoMainnet : mezoTestnet;
 const APP = env("APP_URL", "https://www.mezonk.xyz");
-const RPC = env("RPC_URL", "https://rpc.test.mezo.org");
-const CHAIN_ID = 31611;
-const EXCHANGE = getAddress(env("EXCHANGE", "0x4555cfF10200e1007435Cffc683C60683c5C49B9"));
-const MUSD = getAddress("0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503");
+const RPC = env("RPC_URL", CHAIN.rpcUrls.default.http[0]!);
+const EXCHANGE = getAddress(env("EXCHANGE", DEFAULT_DEPLOYMENT[CHAIN_ID]?.exchange ?? ""));
+const MUSD = getAddress(MUSD_BY_CHAIN[CHAIN_ID]!);
 const P = protocolAddresses(EXCHANGE);
 const PUBLISH = process.env.IMPORT_PUBLISH === "1";
 const BTC_LIMIT = Number(env("IMPORT_LIMIT", "3"));
@@ -205,7 +212,7 @@ async function fetchAll() {
 
 async function plan() {
   const chainId = await client.getChainId();
-  if (chainId !== CHAIN_ID) throw new Error(`RPC is chain ${chainId}, expected Mezo Testnet`);
+  if (chainId !== CHAIN_ID) throw new Error(`RPC is chain ${chainId}, expected ${CHAIN.name} (${CHAIN_ID})`);
   const [{ id: policyId, p: policy }, cfg, head] = await Promise.all([currentPolicy(), client.readContract({ ...fac, functionName: "config" }), client.getBlock()]);
   const priceResolver = addr(PRICE_RESOLVER_ENV);
   const captureMin = priceResolver ? Math.round(Number(await client.readContract({ address: priceResolver, abi: priceResolverAbi, functionName: "captureWindow" })) / 60) : DEFAULT_CAPTURE_MIN;
@@ -307,7 +314,7 @@ async function proposeEnded(mine: ProposalItem[], eventResolver: Address) {
     if (stage === 1) due.push({ p, id, src }); // 1 = AwaitingProposal
   }
   if (!due.length) return;
-  const resolver = await loadSigner("resolver", "IMPORT_RESOLVER_KEY", env("RESOLVER_ACCOUNT", "resolver"));
+  const resolver = await loadSigner("resolver", "IMPORT_RESOLVER_KEY", env("RESOLVER_ACCOUNT", "resolver"), CHAIN);
   if (resolver.address !== eventResolver) throw new Error(`the resolver key is ${resolver.address}, but these markets name ${eventResolver}`);
   for (const { p, id, src } of due) {
     const log = (s: string) => console.log(`  ended #${id}: ${s}`);
@@ -334,8 +341,8 @@ async function publish(rows: PlanRow[], policyId: number, priceResolver: Address
   const eventResolver = addr(EVENT_RESOLVER_ENV);
   if (rows.some((r) => r.kind === "btc") && !priceResolver) throw new Error("Set PRICE_RESOLVER (the deployed MezonkPriceResolver) to publish Bitcoin markets. See docs/PRICE_RESOLVER.md.");
   if (rows.some((r) => r.kind === "event") && !eventResolver) throw new Error("Set IMPORT_EVENT_RESOLVER (an allowlisted resolver wallet) to publish the picks beyond Bitcoin.");
-  const curator = await loadSigner("curator", "IMPORT_CURATOR_KEY", env("CURATOR_ACCOUNT", "deployer"));
-  const creator = await loadSigner("creator", "IMPORT_CREATOR_KEY", env("CREATOR_ACCOUNT", "creator"));
+  const curator = await loadSigner("curator", "IMPORT_CURATOR_KEY", env("CURATOR_ACCOUNT", "deployer"), CHAIN);
+  const creator = await loadSigner("creator", "IMPORT_CREATOR_KEY", env("CREATOR_ACCOUNT", "creator"), CHAIN);
   console.log(`\nCurator ${curator.address}, creator ${creator.address}`);
   if (curator.address === creator.address) throw new Error("Curator and creator must be different wallets (the factory rejects self-approval)");
 

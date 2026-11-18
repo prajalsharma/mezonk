@@ -1,4 +1,5 @@
 import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError } from "viem";
+import { deployment } from "@/lib/chain/config";
 
 /** Plain-language messages for exchange, factory, resolution and incentives custom errors. */
 const CONTRACT_ERRORS: Record<string, string> = {
@@ -58,7 +59,9 @@ export function explainError(e: unknown): string {
     const msg = e.shortMessage || e.message;
     // Mezo's PriceFeed reverts with a string, "PriceFeed: Oracle is stale.", when its oracle is over a minute old.
     if (/oracle is stale/i.test(revert?.reason ?? "") || /oracle is stale/i.test(e.message)) return STALE_ORACLE;
-    if (/insufficient funds/i.test(msg)) return "Not enough BTC to pay network fees. Get testnet BTC from the faucet.";
+    if (/insufficient funds/i.test(msg)) return deployment.chain.testnet
+        ? "Not enough BTC to pay network fees. Get testnet BTC from the faucet."
+        : "Not enough BTC to pay network fees. Add a little BTC to this wallet on Mezo.";
     if (/user rejected|denied/i.test(msg)) return "You declined the request in your wallet.";
     if (/chain/i.test(msg) && /mismatch|does not match/i.test(msg)) return "Your wallet is on a different network. Switch to Mezo and retry.";
     if (/timeout|timed out|fetch failed|network/i.test(msg)) return "The network didn't respond. Check your connection and retry.";

@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Box, Figure, Flow, Group, StepDot } from "./primitives";
 
 /*
- * MezonkBtcRounds (built, not deployed): bet on BTC up or down, with BTC. A timeline for one round r. Top: Mezo's
+ * MezonkBtcRounds (live on Mezo Mainnet): bet on BTC up or down, with BTC. A timeline for one round r. Top: Mezo's
  * PriceFeed, read three times (to size the stake in USD, at the lock, at the close). Middle: the betting window,
  * the price window (which is also round r+1's betting window), and the keeper's two roll() calls that capture one
  * price per boundary. Bottom: Up / Down / Void, then the pool split, the fee, the refund path and the claim.
@@ -55,17 +55,6 @@ export function BtcRoundsFlow() {
         </>
       }
     >
-      {/* Not deployed yet */}
-      <g>
-        <rect x={STAKE.x - 14} y={Y.feed} width={STAKE.w + 28} height={H} rx={8} fill="none" stroke="var(--border-strong)" strokeDasharray="5 4" />
-        <text x={cx(STAKE)} y={Y.feed + 22} textAnchor="middle" fontSize={13.5} fontWeight={600} fill="var(--ink)">
-          Next deployment
-        </text>
-        <text x={cx(STAKE)} y={Y.feed + 40} textAnchor="middle" fontSize={13} fill="var(--muted)">
-          built and tested, not on chain yet
-        </text>
-      </g>
-
       {/* ── Mezo's price feed, read three times ── */}
       <Group x={FEED.x - 20} y={4} w={FEED.w + 40} h={H + 60} label="Mezo" tone="mezo" />
       <Box x={FEED.x} y={Y.feed} w={FEED.w} h={H} label="PriceFeed" sub="fetchPrice() · BTC/USD" tone="mezo" />

@@ -50,7 +50,7 @@ What the owner **can** do still matters, and you should know it:
 - Choose the arbitrator for future markets, and the arbitrator decides every challenged market.
 - Pause the exchange. A long pause can make seeding markets fail (seeders are still refunded) and stops trading.
 
-On Mezo testnet today, the owner and the arbitrator are single-key wallets, not multisigs (checked on 6 November 2026). The intended setup before any mainnet use is a multisig for each, held by different people.
+On Mezo Mainnet today, the owner and the arbitrator are single-key wallets, not multisigs (checked on 18 November 2026). The owner wallet is also the curator. The plan is a multisig for each, held by different people.
 
 ## How on-chain roles are granted
 
@@ -85,9 +85,7 @@ That last column is deliberate: nobody can retarget an open market's resolution 
 | The first curator differs from the resolver, the arbitrator and the first creator | Deploy script, at setup only |
 | An administrator can't revoke themselves or the last administrator | Backend |
 
-<Callout type="warn" title="Next deployment">
-Merged on GitHub and tested, but not yet on chain: if the resolver hasn't proposed by halfway through the proposal window, **anyone** may propose (posting the same bond), and the wallet that proposed can't also challenge. See [Resolution](/docs/how-it-works/resolution).
-</Callout>
+If the resolver hasn't proposed by halfway through the proposal window, **anyone** may propose (posting the same bond), and the wallet that proposed can't also challenge. See [Resolution](/docs/how-it-works/resolution).
 
 ## Backend permissions
 

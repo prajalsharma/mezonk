@@ -34,6 +34,13 @@ export default function Home() {
             </ButtonLink>
             <ButtonLink href="/borrow" size="lg" variant="secondary">Borrow MUSD</ButtonLink>
           </div>
+          {deployment.ready && !deployment.chain.testnet && (
+            <p className="rise-in text-[0.9375rem] text-ink-2" style={{ "--i": 3 } as React.CSSProperties}>
+              <span aria-hidden className="pulse-dot mr-2 inline-block size-2 rounded-full bg-success align-middle" />
+              Live on Mezo Mainnet. Real BTC, real MUSD, every contract{" "}
+              <a href="#footer-contracts" className="font-medium text-yes-text underline-offset-4 hover:underline">on view</a>.
+            </p>
+          )}
           {deployment.ready && deployment.chain.testnet && !deployment.isLocalFork && (
             <p className="rise-in text-[0.9375rem] text-ink-2" style={{ "--i": 3 } as React.CSSProperties}>
               <span aria-hidden className="pulse-dot mr-2 inline-block size-2 rounded-full bg-success align-middle" />
@@ -109,8 +116,8 @@ export default function Home() {
             : deployment.isLocalFork
               ? "Built on Mezo, settled in MUSD. Running on a local fork of Mezo Testnet."
               : deployment.chain.testnet
-                ? "Live on Mezo Testnet, settled in MUSD. Mainnet comes later."
-                : `Built on Mezo, settled in MUSD. Live on ${deployment.chain.name}.`}
+                ? "Testnet practice site, settled in test MUSD. Nothing here is real money."
+                : "Live on Mezo Mainnet, settled in MUSD."}
         </p>
       </section>
     </div>

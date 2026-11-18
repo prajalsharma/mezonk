@@ -20,7 +20,8 @@
  *
  * Env: MM_ACCOUNT (creator), MM_MARKETS (all live), MM_SHARES (100), MM_LEVELS (3), MM_BUDGET_MUSD (2000),
  *      MM_INTERVAL seconds (30), MM_CLOSE_MARGIN seconds (600), MM_ONCE=1, MM_DRY=1 + MM_ADDRESS,
- *      MM_RPC_URL (rpc.test.mezo.org; a local fork for dry runs), MM_PRICE_RESOLVER, MM_BTC_ROUNDS, MM_BTC_INTERVAL seconds (10).
+ *      MM_CHAIN_ID (31611; 31612 = mainnet with MM_ALLOW_MAINNET=true + MM_EXCHANGE), MM_EXCHANGE (testnet deployment),
+ *      MM_RPC_URL (the network's public RPC; a local fork for dry runs), MM_PRICE_RESOLVER, MM_BTC_ROUNDS, MM_BTC_INTERVAL seconds (10).
  *
  * Keeper: with MM_PRICE_RESOLVER=<MezonkPriceResolver>, each pass also calls settle() on markets that name that
  * resolver, have closed, have a rule and are still inside its capture window. settle() is permissionless; it reads
@@ -58,19 +59,27 @@ import {
   type WalletClient,
 } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
-import { mezoTestnet } from "../src/lib/chain/config";
+import { DEFAULT_DEPLOYMENT, MEZO_MAINNET_ID, MEZO_TESTNET_ID, MUSD as MUSD_BY_CHAIN, mezoMainnet, mezoTestnet } from "../src/lib/chain/config";
 import { laggingNodeFetch } from "../src/lib/chain/laggingNodeFetch";
 import { btcRoundsAbi, exchangeAbi, priceResolverAbi, resolutionAbi } from "../src/lib/contracts/abi";
 import { lockTime as roundLockTime, rollableRound, roundAt } from "../src/features/btc/math";
 
-/** Mezo Testnet's public RPC; MM_RPC_URL points it at a local fork of it (dev-chain.sh) for dry runs. Same chain id either way. */
-const RPC = process.env.MM_RPC_URL?.trim() || "https://rpc.test.mezo.org";
-const CHAIN_ID = 31611;
-const EXCHANGE = "0x4555cfF10200e1007435Cffc683C60683c5C49B9" as Address;
-const MUSD = "0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503" as Address;
+/**
+ * Network: MM_CHAIN_ID 31611 (testnet, default) or 31612 (mainnet; also needs MM_ALLOW_MAINNET=true and MM_EXCHANGE).
+ * MM_RPC_URL overrides the public RPC (a local fork of the same chain for dry runs).
+ */
+const CHAIN_ID = Number(process.env.MM_CHAIN_ID?.trim() || MEZO_TESTNET_ID);
+if (CHAIN_ID !== MEZO_TESTNET_ID && CHAIN_ID !== MEZO_MAINNET_ID) throw new Error(`MM_CHAIN_ID ${CHAIN_ID} is not a Mezo network`);
+if (CHAIN_ID === MEZO_MAINNET_ID && process.env.MM_ALLOW_MAINNET !== "true") throw new Error("mainnet keeper needs MM_ALLOW_MAINNET=true");
+const CHAIN = CHAIN_ID === MEZO_MAINNET_ID ? mezoMainnet : mezoTestnet;
+const RPC = process.env.MM_RPC_URL?.trim() || CHAIN.rpcUrls.default.http[0]!;
+const EXCHANGE_RAW = process.env.MM_EXCHANGE?.trim() || DEFAULT_DEPLOYMENT[CHAIN_ID]?.exchange;
+if (!EXCHANGE_RAW || !isAddress(EXCHANGE_RAW)) throw new Error(`set MM_EXCHANGE to the MezonkExchange address on ${CHAIN.name}`);
+const EXCHANGE = getAddress(EXCHANGE_RAW);
+const MUSD = MUSD_BY_CHAIN[CHAIN_ID]!;
 const LOT = 10n ** 16n;
 const YES = 0, NO = 1, BUY = 0;
-const MIN_GAS = 10n ** 14n; // 0.0001 test BTC
+const MIN_GAS = 10n ** 14n; // 0.0001 BTC
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -182,13 +191,13 @@ function cast(args: string[]): string {
 
 type Signer =
   | { kind: "cast"; name: string; pwFile: string; address: Address }
-  | { kind: "key"; address: Address; wallet: WalletClient<Transport, typeof mezoTestnet, PrivateKeyAccount> };
+  | { kind: "key"; address: Address; wallet: WalletClient<Transport, typeof CHAIN, PrivateKeyAccount> };
 async function signer(name: string): Promise<Signer> {
   const key = process.env.MM_PRIVATE_KEY?.trim();
   if (key) {
     if (!/^0x[0-9a-fA-F]{64}$/.test(key)) throw new Error("MM_PRIVATE_KEY must be 0x followed by 64 hex characters");
     const account = privateKeyToAccount(key as Hex);
-    const wallet = createWalletClient({ account, chain: mezoTestnet, transport: http(RPC, { retryCount: 3, retryDelay: 1000, fetchFn: laggingNodeFetch }) });
+    const wallet = createWalletClient({ account, chain: CHAIN, transport: http(RPC, { retryCount: 3, retryDelay: 1000, fetchFn: laggingNodeFetch }) });
     return { kind: "key", address: account.address, wallet };
   }
   const pwFile = path.join(dir, `${name}.pw`);
@@ -536,7 +545,7 @@ async function btcRoundsLoop(w: Wallet) {
     try {
       if (w.signer) {
         const gas = await retry("gas balance", () => client.getBalance({ address: w.address }));
-        if (gas < MIN_GAS) btcNote(`${w.address} is low on test BTC for gas (${dec2(gas)}); not rolling`);
+        if (gas < MIN_GAS) btcNote(`${w.address} is low on BTC for gas (${dec2(gas)}); not rolling`);
         else await btcRoundsPass(w);
       } else await btcRoundsPass(w);
     } catch (e) {
@@ -551,7 +560,7 @@ async function btcRoundsLoop(w: Wallet) {
 
 async function main() {
   const chainId = await retry("chainId", () => client.getChainId());
-  if (chainId !== CHAIN_ID) throw new Error(`RPC is chain ${chainId}, expected Mezo Testnet`);
+  if (chainId !== CHAIN_ID) throw new Error(`RPC is chain ${chainId}, expected ${CHAIN.name} (${CHAIN_ID})`);
 
   let w: Wallet;
   if (DRY) {
@@ -576,7 +585,7 @@ async function main() {
     try {
       if (w.signer) {
         const gas = await retry("gas balance", () => client.getBalance({ address: w.address }));
-        if (gas < MIN_GAS) console.log(`${w.address} is low on test BTC for gas (${dec2(gas)}); get some at https://faucet.test.mezo.org/`);
+        if (gas < MIN_GAS) console.log(`${w.address} is low on BTC for gas (${dec2(gas)})${CHAIN.testnet ? "; get some at https://faucet.test.mezo.org/" : ""}`);
         else {
           await keeperPass(w).catch((e) => console.log(`keeper failed: ${short(e)}`));
           await finalizePass(w).catch((e) => console.log(`finalize keeper failed: ${short(e)}`));

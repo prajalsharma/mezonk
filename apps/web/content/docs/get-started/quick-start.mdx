@@ -1,15 +1,15 @@
 ---
 title: Quick start
-description: From an empty wallet to holding Yes or No shares on Mezo testnet in about five minutes, with test money only.
+description: From an empty wallet to holding Yes or No shares on Mezo in about five minutes.
 icon: Rocket
 ---
 
 MEZONK is a prediction market on Mezo. You back Yes or No on a question with clear rules, pay in MUSD (Mezo's bitcoin-backed dollar), and get paid in MUSD if you're right. Every share on the winning side pays exactly 1 MUSD.
 
-MEZONK runs on **Mezo testnet** today. Test BTC and test MUSD have no cash value, so this is the real product with nothing to lose. There is no mainnet deployment yet.
+MEZONK runs on **Mezo Mainnet** with real BTC and real MUSD. The contracts have not had an independent audit, so start small. Want to practise first? Switch to Testnet in the header for free test funds.
 
 <Callout type="info" title="The short version">
-Wallet → add Mezo testnet → free test BTC from the faucet → MUSD (borrow it against your BTC, or bring your own) → pick a market → *Buy Yes* or *Buy No*. Each step below links to a longer guide if you get stuck.
+Wallet → add Mezo → BTC on Mezo → MUSD (borrow it against your BTC, or bring your own) → pick a market → *Buy Yes* or *Buy No*. Each step below links to a longer guide if you get stuck.
 </Callout>
 
 ## Before you start
@@ -22,9 +22,9 @@ You don't need an account, email or sign-up. MEZONK reads everything about you f
 
 <Steps>
 <Step>
-### Connect and add Mezo testnet
+### Connect and add Mezo
 
-Press *Connect wallet* in the top bar and pick your wallet. If your wallet is on another network, the button changes to *Switch to Mezo Testnet*. Press it, and your wallet asks two things in a row:
+Press *Connect wallet* in the top bar and pick your wallet. If your wallet is on another network, the button changes to *Switch to Mezo Mainnet*. Press it, and your wallet asks two things in a row:
 
 1. **Add a network?** It shows the details below. Check them and approve.
 2. **Switch network?** Approve.
@@ -33,19 +33,19 @@ If your wallet can't add it automatically, add it by hand with these values:
 
 | Setting | Value |
 | --- | --- |
-| Network name | Mezo Testnet |
-| Chain ID | 31611 |
-| RPC URL | https://rpc.test.mezo.org |
+| Network name | Mezo Mainnet |
+| Chain ID | 31612 |
+| RPC URL | https://mezo-mainnet.boar.network |
 | Currency symbol | BTC |
-| Block explorer | https://explorer.test.mezo.org |
+| Block explorer | https://explorer.mezo.org |
 
 BTC is Mezo's native currency, the way ETH is on Ethereum. That's why your wallet shows a BTC balance on Mezo.
 </Step>
 
 <Step>
-### Get free test BTC
+### Get BTC on Mezo
 
-Open the [Mezo faucet](https://faucet.test.mezo.org), paste your wallet address and request test BTC. It arrives in your wallet on Mezo testnet within a minute or so.
+Bring BTC to Mezo through [mezo.org](https://mezo.org). Once it's there, it shows as your BTC balance on Mezo.
 
 You need BTC for two things:
 
@@ -58,9 +58,9 @@ You need BTC for two things:
 
 Every trade and payout on MEZONK is in MUSD. You have three options:
 
-- **You already hold MUSD on Mezo testnet.** Skip this step.
+- **You already hold MUSD on Mezo.** Skip this step.
 - **Borrow MUSD against your BTC in MEZONK.** Open [Borrow MUSD](/borrow). Your BTC is locked in Mezo's own lending contract, not sold and not sent to MEZONK. Mezo's smallest loan is about 1,800 MUSD, so you need roughly 0.05 BTC or more, depending on the BTC price.
-- **Borrow on Mezo's own testnet app** at [testnet.mezo.org](https://testnet.mezo.org), then come back.
+- **Borrow on Mezo's own app** at [mezo.org](https://mezo.org/feature/borrow), then come back.
 
 This is the step with the most to understand. [Get MUSD](/docs/get-started/get-musd) walks through every field on the borrow page, the fees, and how to avoid liquidation.
 
@@ -101,8 +101,8 @@ The first time, the button says *Approve 40.40 MUSD* (or whatever your amount is
 
 | What you see | What it means | What to do |
 | --- | --- | --- |
-| *Switch to Mezo Testnet* won't go away | Your wallet is on another network | Approve the network switch in your wallet, or add the network by hand with the table above |
-| Your wallet says "insufficient funds" | No BTC for the network fee | Get test BTC from the faucet |
+| *Switch to Mezo Mainnet* won't go away | Your wallet is on another network | Approve the network switch in your wallet, or add the network by hand with the table above |
+| Your wallet says "insufficient funds" | No BTC for the network fee | Add a little BTC to your wallet on Mezo |
 | The ticket says *Not enough MUSD* | Your MUSD balance is lower than the trade | Lower the amount, or use the borrow box that appears under the ticket |
 | The ticket says *No one is selling* | Nobody is offering that side right now | Try the other side, wait, or place a limit order (see [Your first trade](/docs/get-started/first-trade)) |
 | A transaction shows *Transaction failed.* | It was rejected or reverted | Read the message under it and press *Try again* |

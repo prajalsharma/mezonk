@@ -41,20 +41,21 @@ from the contract directly.
 
 ## What's live today
 
-<Callout title="Testnet only, test money only">
-  MEZONK runs on **Mezo testnet** (chain 31611). Test BTC and test MUSD have no cash value, so this is the place to
-  learn the product without risk. There is no mainnet deployment yet.
+<Callout type="warn" title="Real money">
+  MEZONK is live on **Mezo Mainnet** (chain 31612). Trades use real MUSD and loans lock real BTC. The contracts have
+  not had an independent audit, so only trade what you can afford to lose. Want to practise first? Switch to Testnet
+  in the header for free test funds.
 </Callout>
 
 | Part | Status |
 | --- | --- |
-| Order book, seeding and launch, trading, claims | Live on Mezo testnet |
-| Resolution with bonds, challenges and an arbitrator | Live on Mezo testnet |
+| Order book, seeding and launch, trading, claims | Live on Mezo Mainnet |
+| Resolution with bonds, challenges and an arbitrator | Live on Mezo Mainnet |
 | Borrowing MUSD against BTC inside the app, managing the loan | Live in the app (uses Mezo's own contracts) |
 | Bet from your loan, repay from winnings | Live in the app |
-| BTC price markets settled by Mezo's PriceFeed | Built and tested, not deployed yet |
-| BTC up/down rounds, staked in BTC | Built and tested, not deployed yet |
-| Resolution and rebate fixes from the KupiaSec report | Built and tested, not deployed yet |
+| BTC price markets settled by Mezo's PriceFeed | Live on Mezo Mainnet |
+| BTC up/down rounds, staked in BTC | Live on Mezo Mainnet |
+| Resolution and rebate fixes from the KupiaSec report | Live on Mezo Mainnet |
 | Independent security audit | Not done |
 
 The [contract addresses](/docs/developers/contracts) are read from the app's configuration, so the docs always show
@@ -63,7 +64,7 @@ what the site is actually using.
 ## Where to start
 
 <Cards>
-  <Card title="Quick start" href="/docs/get-started/quick-start" description="Wallet, test BTC, MUSD and your first trade, in about five minutes." />
+  <Card title="Quick start" href="/docs/get-started/quick-start" description="Wallet, BTC, MUSD and your first trade, in about five minutes." />
   <Card title="Shares and payouts" href="/docs/how-it-works/shares-and-payouts" description="Why a share pays 1 MUSD, and where that money sits until then." />
   <Card title="Built on Mezo" href="/docs/mezo/overview" description="Every place MEZONK uses Mezo: MUSD, borrowing and the price feed." />
   <Card title="Architecture" href="/docs/developers/architecture" description="Contracts, server, indexer and API, and which one is in charge of what." />

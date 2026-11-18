@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Box, Figure, Flow, Group, Note, StepDot } from "./primitives";
 
 /*
- * MezonkPriceResolver (merged, not deployed): settles "BTC above/below $X" markets from Mezo's PriceFeed.
+ * MezonkPriceResolver (live on mainnet): settles "BTC above/below $X" markets from Mezo's PriceFeed.
  * Left: who acts. Middle: what settle() does, in order. Right: Mezo's price contracts it reads.
  */
 
@@ -46,14 +46,14 @@ export function PriceResolverFlow() {
         </>
       }
     >
-      {/* Not deployed yet */}
+      {/* Live on mainnet */}
       <g>
-        <rect x={R.x} y={Y[1]} width={R.w} height={H} rx={8} fill="none" stroke="var(--border-strong)" strokeDasharray="5 4" />
+        <rect x={R.x} y={Y[1]} width={R.w} height={H} rx={8} fill="none" stroke="var(--border-strong)" />
         <text x={R.x + R.w / 2} y={Y[1] + 22} textAnchor="middle" fontSize={13.5} fontWeight={600} fill="var(--ink)">
-          Next deployment
+          Live
         </text>
         <text x={R.x + R.w / 2} y={Y[1] + 40} textAnchor="middle" fontSize={13} fill="var(--muted)">
-          merged, not on chain yet
+          on Mezo Mainnet
         </text>
       </g>
 
