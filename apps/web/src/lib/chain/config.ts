@@ -158,7 +158,7 @@ export const isMainnet = deployment.chainId === MEZO_MAINNET_ID;
  * between them, keeping the current path. Unset → that network isn't offered.
  */
 export const NETWORK_SITES: { mainnet: string | null; testnet: string | null } = {
-  mainnet: process.env.NEXT_PUBLIC_MAINNET_URL?.replace(/\/+$/, "") || null,
+  mainnet: process.env.NEXT_PUBLIC_MAINNET_URL?.replace(/\/+$/, "") || "https://www.mezonk.xyz",
   testnet: process.env.NEXT_PUBLIC_TESTNET_URL?.replace(/\/+$/, "") || null,
 };
 

@@ -9,8 +9,9 @@ import { useHealth } from "@/hooks/useHealth";
 import { deployment, isMainnet, NETWORK_SITES } from "@/lib/chain/config";
 
 /**
- * Dot + network name, and a switch to the other network when both sites are configured. Each network is its own
- * deployment, so switching is a link to the same page on the other site. The dot colour and tooltip carry the health
+ * Dot + network name, and a switch between Mezo Mainnet and the testnet practice site. Each network is its own
+ * deployment, so switching is a link to the same page on the other site; a site that isn't configured shows as
+ * "coming soon" instead of a dead link. The dot colour and tooltip carry the health
  * state; the banner below the header explains problems.
  */
 export function NetworkStatus({ compact = false }: { compact?: boolean }) {
@@ -42,19 +43,19 @@ export function NetworkStatus({ compact = false }: { compact?: boolean }) {
   }
 
   const other = isMainnet ? NETWORK_SITES.testnet : NETWORK_SITES.mainnet;
-  if (!other || deployment.isLocalFork) {
+  if (deployment.isLocalFork) {
     return (
       <span title={title} className="whitespace-nowrap">
         <Status tone={tone}>{text}</Status>
       </span>
     );
   }
-  return <Switcher tone={tone} text={text} title={title} other={other} />;
+  return <Switcher tone={tone} text={text} title={title} other={other} compact={compact} />;
 }
 
 const SHARED_PATHS = new Set(["/", "/markets", "/btc", "/borrow", "/portfolio", "/suggest", "/discover", "/activity", "/status"]);
 
-function Switcher({ tone, text, title, other }: { tone: "yes" | "warn" | "no" | "muted"; text: string; title: string; other: string }) {
+function Switcher({ tone, text, title, other, compact }: { tone: "yes" | "warn" | "no" | "muted"; text: string; title: string; other: string | null; compact: boolean }) {
   const path = usePathname() ?? "/";
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -71,7 +72,7 @@ function Switcher({ tone, text, title, other }: { tone: "yes" | "warn" | "no" | 
   }, [open]);
   // Market ids, proposals and profiles differ per network; only keep paths that exist on both.
   const keep = SHARED_PATHS.has(path) || path.startsWith("/docs");
-  const href = `${other}${keep ? path : "/"}`;
+  const href = other ? `${other}${keep ? path : "/"}` : null;
   const items = [
     { key: "mainnet", label: "Mezo Mainnet", note: "Real BTC and MUSD", current: isMainnet },
     { key: "testnet", label: "Mezo Testnet", note: "Free test funds", current: !isMainnet },
@@ -84,10 +85,10 @@ function Switcher({ tone, text, title, other }: { tone: "yes" | "warn" | "no" | 
         aria-haspopup="menu"
         aria-expanded={open}
         title={title}
-        className="press inline-flex h-9 items-center gap-1 whitespace-nowrap rounded-md px-2 hover:bg-surface-2"
+        className={cx("press inline-flex h-9 items-center gap-1 whitespace-nowrap rounded-md hover:bg-surface-2", compact ? "px-1.5" : "px-2")}
       >
         <Status tone={tone}>{text}</Status>
-        <ChevronDown className={cx("size-3.5 text-muted transition-transform", open && "rotate-180")} aria-hidden />
+        <ChevronDown className={cx("size-3.5 text-muted transition-transform", open && "rotate-180", compact && "max-[379px]:hidden")} aria-hidden />
       </button>
       {open && (
         <div role="menu" aria-label="Network" className="glass fade absolute right-0 top-11 z-[var(--z-dropdown)] w-60 overflow-hidden rounded-lg border p-1.5 shadow-3">
@@ -100,11 +101,16 @@ function Switcher({ tone, text, title, other }: { tone: "yes" | "warn" | "no" | 
                 </span>
                 <Check className="size-4 text-yes-text" aria-label="Current network" />
               </div>
-            ) : (
+            ) : href ? (
               <a key={it.key} role="menuitemradio" aria-checked="false" href={href} className="block rounded-sm px-3 py-2 text-sm hover:bg-surface-2">
                 <span className="block font-medium">{it.label}</span>
                 <span className="block text-xs text-muted">{it.note}</span>
               </a>
+            ) : (
+              <div key={it.key} role="menuitemradio" aria-checked="false" aria-disabled="true" className="rounded-sm px-3 py-2 text-sm text-muted">
+                <span className="block font-medium">{it.label}</span>
+                <span className="block text-xs">Practice site coming soon</span>
+              </div>
             ),
           )}
         </div>

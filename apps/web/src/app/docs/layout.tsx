@@ -57,7 +57,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 function NetworkCard() {
   const live = deployment.ready && !deployment.isLocalFork;
   const name = deployment.isLocalFork ? `Local fork of ${deployment.chain.name}` : deployment.chain.name;
-  const note = live ? "Contracts live · test money only" : deployment.isLocalFork ? "Local chain · nothing here is public" : "Contracts not configured";
+  const note = live ? (deployment.chain.testnet ? "Practice site · test money only" : "Contracts live · real BTC and MUSD") : deployment.isLocalFork ? "Local chain · nothing here is public" : "Contracts not configured";
   return (
     <div className="docs-network">
       <span aria-hidden className={live ? "docs-network-dot is-live" : "docs-network-dot"} />

@@ -81,8 +81,9 @@ export function Header() {
             <kbd className="mono ml-auto hidden rounded-sm border border-line bg-surface px-1.5 text-[11px] xl:block">⌘K</kbd>
           </button>
           <span className="hidden xl:inline"><NetworkStatus /></span>
-          <span className="hidden min-[380px]:inline xl:hidden"><NetworkStatus compact /></span>
-          <ThemeToggle />
+          <span className="xl:hidden"><NetworkStatus compact /></span>
+          {/* Phones under 430px follow the OS theme; the toggle would push the wallet button off screen. */}
+          <span className="hidden min-[430px]:inline-flex"><ThemeToggle /></span>
           <AccountMenu />
           <WalletButton />
         </div>
